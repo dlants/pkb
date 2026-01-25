@@ -1,20 +1,10 @@
 #!/usr/bin/env npx tsx
-import * as os from "os";
-import * as path from "path";
-import { PKB } from "./pkb/pkb.ts";
-import { PKBManager, type Logger } from "./pkb/pkb-manager.ts";
-import { BedrockCohereEmbedding } from "./pkb/embedding/bedrock-cohere.ts";
-import { BedrockProvider } from "./providers/bedrock.ts";
-
-function expandTilde(filePath: string): string {
-  if (filePath.startsWith("~/")) {
-    return path.join(os.homedir(), filePath.slice(2));
-  }
-  if (filePath === "~") {
-    return os.homedir();
-  }
-  return filePath;
-}
+import { Grimoire, type Spell } from "./grimoire.ts";
+import { InscribeManager, type Logger } from "./inscribe-manager.ts";
+import { BedrockCohereEmbedding } from "./embedding/bedrock-cohere.ts";
+import { createBedrockHaikuLLM } from "./llm.ts";
+import { formatResults } from "./divine.ts";
+import { createContext, DEFAULT_OPTIONS, type GrimoireContext } from "./context.ts";
 
 const logger: Logger = {
   info: (msg: string) => console.log(msg),
@@ -24,92 +14,122 @@ const logger: Logger = {
 
 function printUsage() {
   console.error("Usage:");
-  console.error("  npx tsx scripts/cast.ts sync <pkb-path>");
-  console.error("    Sync all files in the PKB directory");
+  console.error("  npx tsx scripts/cast.ts sync");
+  console.error("    Sync all files in ./spells directory");
   console.error("");
-  console.error("  npx tsx scripts/cast.ts reindex <pkb-path> <file>");
-  console.error("    Force reindex a specific file (deletes and re-embeds)");
+  console.error("  npx tsx scripts/cast.ts inscribe <spell>");
+  console.error(
+    "    Force reindex a specific spell (deletes and re-embeds. Path is relative to the /spells dir)",
+  );
+  console.error("");
+  console.error("  npx tsx scripts/cast.ts divine <query> [topK]");
+  console.error("    Search the grimoire for relevant chunks");
   console.error("");
   console.error("Examples:");
-  console.error("  npx tsx scripts/cast.ts sync ~/.claude/pkb");
-  console.error("  npx tsx scripts/cast.ts reindex ~/pkb benchling-configs.md");
+  console.error("  npx tsx scripts/cast.ts sync");
+  console.error("  npx tsx scripts/cast.ts inscribe benchling-configs.md");
+  console.error('  npx tsx scripts/cast.ts divine "how do I configure X"');
+  console.error('  npx tsx scripts/cast.ts divine "how do I configure X" 5');
 }
 
-function createPKB(pkbPath: string) {
-  const resolvedPath = path.resolve(expandTilde(pkbPath));
+function createGrimoireContext(): GrimoireContext {
   const embeddingModel = new BedrockCohereEmbedding();
-  const provider = new BedrockProvider();
-  return new PKB(
-    resolvedPath,
-    embeddingModel,
-    { provider, model: "us.anthropic.claude-haiku-4-5-20251001-v1:0" },
-    { logger },
-  );
+  const llm = createBedrockHaikuLLM();
+  return createContext(DEFAULT_OPTIONS, embeddingModel, llm);
 }
 
-async function syncCommand(pkbPath: string) {
-  const pkb = createPKB(pkbPath);
-  const manager = new PKBManager(pkb, logger);
+function createGrimoire(ctx: GrimoireContext): Grimoire {
+  return new Grimoire(ctx, { logger });
+}
+
+async function syncCommand() {
+  const ctx = createGrimoireContext();
+  const grimoire = createGrimoire(ctx);
+  const manager = new InscribeManager({ spellsDir: ctx.spellsDir }, grimoire, logger);
 
   try {
     await manager.reindex();
   } finally {
-    pkb.close();
+    grimoire.close();
   }
 }
 
-async function reindexFileCommand(pkbPath: string, filename: string) {
-  const pkb = createPKB(pkbPath);
+async function inscribeCommand(filename: Spell) {
+  const ctx = createGrimoireContext();
+  const grimoire = createGrimoire(ctx);
 
   try {
     // Clean up any orphan vec entries from previous failed indexing attempts
-    const orphansDeleted = pkb.cleanupOrphanVecEntries();
+    const orphansDeleted = grimoire.cleanupOrphanVecEntries();
     if (orphansDeleted > 0) {
       logger.info(`Cleaned up ${orphansDeleted} orphan vector entries`);
     }
 
     // Find all file records matching this filename (including those with empty hash)
-    const fileIds = pkb.getFileIdsByFilename(filename);
+    const fileIds = grimoire.getFileIdsByFilename(filename);
 
     if (fileIds.length > 0) {
       logger.info(
         `Deleting ${fileIds.length} existing record(s) for ${filename}...`,
       );
       for (const fileId of fileIds) {
-        pkb.deleteFile(fileId);
+        grimoire.deleteFile(fileId);
       }
     }
 
     logger.info(`Reindexing ${filename}...`);
-    await pkb.indexFile(filename);
+    await grimoire.indexFile(filename);
     logger.info("Done.");
   } finally {
-    pkb.close();
+    grimoire.close();
+  }
+}
+
+async function divineCommand(query: string, topK: number = 10) {
+  const ctx = createGrimoireContext();
+  const grimoire = createGrimoire(ctx);
+
+  try {
+    const results = await grimoire.search(query, topK);
+    console.log(formatResults(results));
+  } finally {
+    grimoire.close();
   }
 }
 
 async function main() {
   const command = process.argv[2];
-  const pkbPath = process.argv[3];
 
-  if (!command || !pkbPath) {
+  if (!command) {
     printUsage();
     process.exit(1);
   }
 
   switch (command) {
     case "sync":
-      await syncCommand(pkbPath);
+      await syncCommand();
       break;
 
-    case "reindex": {
-      const filename = process.argv[4];
+    case "inscribe": {
+      const filename = process.argv[3];
       if (!filename) {
-        console.error("Error: reindex command requires a filename");
+        console.error("Error: inscribe command requires a filename");
         printUsage();
         process.exit(1);
       }
-      await reindexFileCommand(pkbPath, filename);
+      await inscribeCommand(filename as Spell);
+      break;
+    }
+
+    case "divine": {
+      const query = process.argv[3];
+      if (!query) {
+        console.error("Error: divine command requires a query");
+        printUsage();
+        process.exit(1);
+      }
+      const topK = process.argv[4] ? parseInt(process.argv[4], 10) : 10;
+      await divineCommand(query, topK);
       break;
     }
 
