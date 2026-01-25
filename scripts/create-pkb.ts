@@ -1,4 +1,4 @@
-import { Grimoire } from "./grimoire.ts";
+import { PKB } from "./pkb.ts";
 import { BedrockCohereEmbedding } from "./embedding/bedrock-cohere.ts";
 import type { EmbeddingModel } from "./embedding/types.ts";
 import {
@@ -7,8 +7,8 @@ import {
   setMockEmbeddingModel,
 } from "./embedding/mock.ts";
 import type { LLM } from "./llm.ts";
-import type { Logger } from "./inscribe-manager.ts";
-import { createContext, DEFAULT_OPTIONS, type GrimoireOptions } from "./context.ts";
+import type { Logger } from "./index-manager.ts";
+import { createContext, DEFAULT_OPTIONS, type PKBOptions } from "./context.ts";
 
 export type EmbeddingModelOptions =
   | { provider: "mock" }
@@ -33,17 +33,17 @@ export function createEmbeddingModel(
   throw new Error(`Unknown embedding model: ${JSON.stringify(options)}`);
 }
 
-export type CreateGrimoireFactoryOptions = {
+export type CreatePKBFactoryOptions = {
   embeddingModel: EmbeddingModelOptions;
   llm?: LLM;
   logger?: Logger;
-  grimoireOptions?: GrimoireOptions;
+  pkbOptions?: PKBOptions;
 };
 
-export function createGrimoireFromOptions(options: CreateGrimoireFactoryOptions): Grimoire {
+export function createPKBFromOptions(options: CreatePKBFactoryOptions): PKB {
   const embeddingModel = createEmbeddingModel(options.embeddingModel);
-  const grimoireOptions = options.grimoireOptions ?? DEFAULT_OPTIONS;
-  const ctx = createContext(grimoireOptions, embeddingModel, options.llm);
+  const pkbOptions = options.pkbOptions ?? DEFAULT_OPTIONS;
+  const ctx = createContext(pkbOptions, embeddingModel, options.llm);
 
-  return new Grimoire(ctx, { logger: options.logger });
+  return new PKB(ctx, { logger: options.logger });
 }

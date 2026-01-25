@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { Grimoire } from "./grimoire.ts";
+import { PKB } from "./pkb.ts";
 
-describe("Grimoire", () => {
-  it("should export Grimoire class", () => {
-    expect(Grimoire).toBeDefined();
+describe("PKB", () => {
+  it("should export PKB class", () => {
+    expect(PKB).toBeDefined();
   });
 });
 

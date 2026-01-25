@@ -1,35 +1,35 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { initDatabase, type AbsFilePath } from "./db.ts";
-import { Grimoire } from "./grimoire.ts";
-import { InscribeManager, type Logger } from "./inscribe-manager.ts";
+import { PKB } from "./pkb.ts";
+import { IndexManager, type Logger } from "./index-manager.ts";
 import { MockEmbeddingModel, respondToEmbedRequest } from "./embedding/mock.ts";
 import { MockLLM } from "./llm.ts";
 
 export type TestContext = {
   tmpDir: string;
-  spellsDir: AbsFilePath;
+  filesDir: AbsFilePath;
   dbPath: AbsFilePath;
   mockEmbed: MockEmbeddingModel;
   mockLLM: MockLLM;
-  grimoire: Grimoire;
-  manager: InscribeManager;
+  pkb: PKB;
+  manager: IndexManager;
   logger: Logger;
   logs: string[];
 
-  writeSpell(filename: string, content: string): Promise<void>;
-  deleteSpell(filename: string): Promise<void>;
+  writeFile(filename: string, content: string): Promise<void>;
+  deleteFile(filename: string): Promise<void>;
 };
 
 export async function withTestHarness(
   fn: (ctx: TestContext) => Promise<void>,
 ): Promise<void> {
   const testId = Math.random().toString(36).substring(2, 15);
-  const tmpDir = path.join("/tmp/grimoire-test", testId);
-  const spellsDir = path.join(tmpDir, "spells") as AbsFilePath;
-  const dbPath = path.join(tmpDir, "grimoire.db") as AbsFilePath;
+  const tmpDir = path.join("/tmp/pkb-test", testId);
+  const filesDir = path.join(tmpDir, "files") as AbsFilePath;
+  const dbPath = path.join(tmpDir, "pkb.db") as AbsFilePath;
 
-  await fs.mkdir(spellsDir, { recursive: true });
+  await fs.mkdir(filesDir, { recursive: true });
 
   const db = initDatabase(dbPath);
   const mockEmbed = new MockEmbeddingModel();
@@ -37,42 +37,42 @@ export async function withTestHarness(
 
   const logs: string[] = [];
   const logger: Logger = {
-    info: (msg) => logs.push(`[INFO] ${msg}`),
-    debug: (msg) => logs.push(`[DEBUG] ${msg}`),
-    error: (msg) => logs.push(`[ERROR] ${msg}`),
+    info: (msg: string) => logs.push(`[INFO] ${msg}`),
+    debug: (msg: string) => logs.push(`[DEBUG] ${msg}`),
+    error: (msg: string) => logs.push(`[ERROR] ${msg}`),
   };
 
-  const grimoire = new Grimoire(
-    { db, embeddingModel: mockEmbed, spellsDir, llm: mockLLM },
+  const pkb = new PKB(
+    { db, embeddingModel: mockEmbed, filesDir, llm: mockLLM },
     { logger },
   );
 
-  const manager = new InscribeManager({ spellsDir }, grimoire, logger);
+  const manager = new IndexManager({ filesDir }, pkb, logger);
 
   const ctx: TestContext = {
     tmpDir,
-    spellsDir,
+    filesDir,
     dbPath,
     mockEmbed,
     mockLLM,
-    grimoire,
+    pkb,
     manager,
     logger,
     logs,
 
-    async writeSpell(filename: string, content: string) {
-      await fs.writeFile(path.join(spellsDir, filename), content);
+    async writeFile(filename: string, content: string) {
+      await fs.writeFile(path.join(filesDir, filename), content);
     },
 
-    async deleteSpell(filename: string) {
-      await fs.unlink(path.join(spellsDir, filename));
+    async deleteFile(filename: string) {
+      await fs.unlink(path.join(filesDir, filename));
     },
   };
 
   try {
     await fn(ctx);
   } finally {
-    grimoire.close();
+    pkb.close();
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
 }

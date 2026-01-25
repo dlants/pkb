@@ -1,6 +1,6 @@
-import type { SearchResult } from "./grimoire.ts";
+import type { SearchResult } from "./pkb.ts";
 
-export type DivineInput = {
+export type SearchInput = {
   query: string;
   topK?: number;
 };

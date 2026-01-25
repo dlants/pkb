@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { withTestHarness, respondToEmbedRequest } from "./test-harness.ts";
 
-describe("InscribeManager", () => {
+describe("IndexManager", () => {
   it("should index new markdown files", async () => {
     await withTestHarness(async (ctx) => {
-      await ctx.writeSpell(
+      await ctx.writeFile(
         "test.md",
         "# Test Document\n\nThis is test content.",
       );
@@ -27,18 +27,18 @@ describe("InscribeManager", () => {
 
       await reindexPromise;
 
-      const stats = ctx.grimoire.getStats();
+      const stats = ctx.pkb.getStats();
       expect(stats.totalFiles).toBe(1);
       expect(stats.totalChunks).toBeGreaterThan(0);
 
-      const allChunks = ctx.grimoire.getAllChunks();
+      const allChunks = ctx.pkb.getAllChunks();
       expect(allChunks).toMatchSnapshot();
     });
   });
 
   it("should skip files that haven't changed on reindex", async () => {
     await withTestHarness(async (ctx) => {
-      await ctx.writeSpell(
+      await ctx.writeFile(
         "test.md",
         "# Test Document\n\nThis is test content.",
       );
@@ -91,7 +91,7 @@ This section has been MODIFIED with new content.
 This is the third section content.`;
 
     await withTestHarness(async (ctx) => {
-      await ctx.writeSpell("test.md", originalContent);
+      await ctx.writeFile("test.md", originalContent);
 
       // Initial indexing
       const reindexPromise1 = ctx.manager.reindex();
@@ -120,14 +120,14 @@ This is the third section content.`;
       );
       await reindexPromise1;
 
-      const statsAfterInitial = ctx.grimoire.getStats();
+      const statsAfterInitial = ctx.pkb.getStats();
       expect(statsAfterInitial.totalChunks).toBe(3);
 
-      const chunksAfterInitial = ctx.grimoire.getAllChunks();
+      const chunksAfterInitial = ctx.pkb.getAllChunks();
       expect(chunksAfterInitial).toMatchSnapshot("after initial indexing");
 
       // Modify only section two
-      await ctx.writeSpell("test.md", modifiedContent);
+      await ctx.writeFile("test.md", modifiedContent);
 
       // Trigger reindex again
       const reindexPromise2 = ctx.manager.reindex();
@@ -150,17 +150,17 @@ This is the third section content.`;
       await reindexPromise2;
 
       // Total chunks should still be 3 (2 reused + 1 new, old one deleted)
-      const statsAfterUpdate = ctx.grimoire.getStats();
+      const statsAfterUpdate = ctx.pkb.getStats();
       expect(statsAfterUpdate.totalChunks).toBe(3);
 
-      const chunksAfterUpdate = ctx.grimoire.getAllChunks();
+      const chunksAfterUpdate = ctx.pkb.getAllChunks();
       expect(chunksAfterUpdate).toMatchSnapshot("after modifying section two");
     });
   });
 
   it("should delete embeddings when file is removed", async () => {
     await withTestHarness(async (ctx) => {
-      await ctx.writeSpell(
+      await ctx.writeFile(
         "test.md",
         "# Test Document\n\nThis is test content.",
       );
@@ -177,17 +177,17 @@ This is the third section content.`;
       );
       await reindexPromise;
 
-      const statsAfterIndex = ctx.grimoire.getStats();
+      const statsAfterIndex = ctx.pkb.getStats();
       expect(statsAfterIndex.totalFiles).toBe(1);
       expect(statsAfterIndex.totalChunks).toBeGreaterThan(0);
 
       // Delete the file
-      await ctx.deleteSpell("test.md");
+      await ctx.deleteFile("test.md");
 
       // Trigger reindex
       await ctx.manager.reindex();
 
-      const statsAfterDelete = ctx.grimoire.getStats();
+      const statsAfterDelete = ctx.pkb.getStats();
       expect(statsAfterDelete.totalFiles).toBe(0);
       expect(statsAfterDelete.totalChunks).toBe(0);
     });
