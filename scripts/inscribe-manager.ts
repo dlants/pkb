@@ -1,11 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
-  type PKB,
+  type Grimoire,
   type FileOperation,
   type IndexedFileInfo,
+  type Spell,
+  type MtimeMs,
   computeFileHash,
-} from "./pkb.ts";
+} from "./grimoire.ts";
+import type { AbsFilePath } from "./db.ts";
 
 export type Logger = {
   info: (msg: string) => void;
@@ -15,18 +18,19 @@ export type Logger = {
 
 export type ScanResult = {
   operations: FileOperation[];
-  skipped: string[];
+  skipped: Spell[];
 };
 
 const DEFAULT_UPDATE_INTERVAL_MS = 60000;
 
-export class PKBManager {
+export class InscribeManager {
   private indexQueue: FileOperation[] = [];
   private updateInterval: ReturnType<typeof setInterval> | undefined;
   private isProcessing = false;
 
   constructor(
-    private pkb: PKB,
+    private ctx: { spellsDir: AbsFilePath },
+    private grimoire: Grimoire,
     private logger: Logger,
     private intervalMs: number = DEFAULT_UPDATE_INTERVAL_MS,
   ) {}
@@ -55,7 +59,7 @@ export class PKBManager {
     this.reindex()
       .catch((e) => {
         this.logger.error(
-          `PKB update failed: ${e instanceof Error ? e.message : String(e)}`,
+          `Grimoire update failed: ${e instanceof Error ? e.message : String(e)}`,
         );
       })
       .finally(() => {
@@ -64,16 +68,16 @@ export class PKBManager {
   }
 
   scanForChanges(): ScanResult {
-    const pkbPath = this.pkb.getPkbPath();
     const operations: FileOperation[] = [];
-    const skipped: string[] = [];
+    const skipped: Spell[] = [];
 
-    const files = fs.readdirSync(pkbPath);
-    const mdFiles = files.filter((f) => f.endsWith(".md"));
+    const spellsDir = this.ctx.spellsDir;
+    const files = fs.readdirSync(spellsDir);
+    const mdFiles = files.filter((f) => f.endsWith(".md")) as Spell[];
     const mdFileSet = new Set(mdFiles);
 
-    const indexedFiles = this.pkb.getIndexedFiles();
-    const indexedFileMap = new Map<string, IndexedFileInfo>();
+    const indexedFiles = this.grimoire.getIndexedFiles();
+    const indexedFileMap = new Map<Spell, IndexedFileInfo>();
     for (const file of indexedFiles) {
       indexedFileMap.set(file.filename, file);
     }
@@ -92,9 +96,9 @@ export class PKBManager {
     }
 
     for (const mdFile of mdFiles) {
-      const mdPath = path.join(pkbPath, mdFile);
+      const mdPath = path.join(spellsDir, mdFile) as AbsFilePath;
       const stat = fs.statSync(mdPath);
-      const currentMtime = stat.mtimeMs;
+      const currentMtime = stat.mtimeMs as MtimeMs;
 
       const existingFile = indexedFileMap.get(mdFile);
 
@@ -106,7 +110,7 @@ export class PKBManager {
 
         const currentHash = computeFileHash(mdPath);
         if (existingFile.hash === currentHash) {
-          this.pkb.updateFileMtime(existingFile.id, currentMtime);
+          this.grimoire.updateFileMtime(existingFile.id, currentMtime);
           skipped.push(mdFile);
           continue;
         }
@@ -138,10 +142,10 @@ export class PKBManager {
 
     switch (operation.type) {
       case "delete":
-        this.pkb.deleteFile(operation.fileId);
+        this.grimoire.deleteFile(operation.fileId);
         break;
       case "index":
-        await this.pkb.indexFile(operation.filename);
+        await this.grimoire.indexFile(operation.filename);
         break;
     }
 
@@ -149,14 +153,14 @@ export class PKBManager {
   }
 
   async reindex(): Promise<void> {
-    this.logger.info("PKB: Starting reindex...");
+    this.logger.info("Grimoire: Starting reindex...");
 
     const { operations, skipped } = this.scanForChanges();
     const toIndex = operations.filter((op) => op.type === "index").length;
     const toDelete = operations.filter((op) => op.type === "delete").length;
 
     this.logger.info(
-      `PKB: ${toIndex} files to index, ${skipped.length} unchanged, ${toDelete} to delete`,
+      `Grimoire: ${toIndex} files to index, ${skipped.length} unchanged, ${toDelete} to delete`,
     );
 
     this.queueOperations(operations);
@@ -171,19 +175,19 @@ export class PKBManager {
       const op = result.operation;
       if (op.type === "index") {
         this.logger.info(
-          `PKB: Indexed ${op.filename} (${this.getQueueSize()} remaining)`,
+          `Grimoire: Indexed ${op.filename} (${this.getQueueSize()} remaining)`,
         );
       } else {
         this.logger.info(
-          `PKB: Deleted ${op.filename} (${this.getQueueSize()} remaining)`,
+          `Grimoire: Deleted ${op.filename} (${this.getQueueSize()} remaining)`,
         );
       }
     }
 
-    this.logger.info(`PKB: Reindex complete. Processed ${processed} files.`);
+    this.logger.info(`Grimoire: Reindex complete. Processed ${processed} files.`);
   }
 
-  getPKB(): PKB {
-    return this.pkb;
+  getGrimoire(): Grimoire {
+    return this.grimoire;
   }
 }

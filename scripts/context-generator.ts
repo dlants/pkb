@@ -1,4 +1,4 @@
-import type { Provider, Usage } from "../providers/anthropic.ts";
+import type { LLM, Usage } from "./llm.ts";
 
 export type ContextResult = {
   context: string;
@@ -43,18 +43,16 @@ const CHUNK_PROMPT = `Here is the chunk we want to situate within the whole docu
 Answer only with the output and nothing else.`;
 
 export async function generateContext(
-  provider: Provider,
-  model: string,
+  llm: LLM,
   document: string,
   chunk: string,
 ): Promise<ContextResult> {
   const systemPrompt = DOCUMENT_PROMPT.replace("{{WHOLE_DOCUMENT}}", document);
   const chunkPrompt = CHUNK_PROMPT.replace("{{CHUNK_CONTENT}}", chunk);
 
-  const request = provider.request({
-    model,
+  const request = llm.request({
     systemPrompt,
-    input: [{ type: "text", text: chunkPrompt }],
+    input: chunkPrompt,
   });
 
   const response = await request.promise;

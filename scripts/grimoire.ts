@@ -3,78 +3,81 @@ import * as path from "path";
 import * as crypto from "crypto";
 import {
   MAGENTA_EMBEDDING_VERSION,
-  type EmbeddingModel,
   type ChunkData,
+  type EmbeddingModel,
 } from "./embedding/types.ts";
 import { chunkMarkdown } from "./chunker.ts";
 import { generateContext } from "./context-generator.ts";
-import type { Provider } from "../providers/anthropic.ts";
 import {
-  initDatabase,
   ensureVecTable,
   getVecTableName,
-  type PKBDatabase,
+  type GrimoireDatabase,
+  type AbsFilePath,
 } from "./db.ts";
-import type { Logger } from "./pkb-manager.ts";
+import type { Logger } from "./inscribe-manager.ts";
+import type { LLM } from "./llm.ts";
+
+// Branded types
+export type FileId = number & { __file_id: true };
+export type ChunkId = number & { __chunk_id: true };
+export type Spell = string & { __spell: true };
+export type FileHash = string & { __file_hash: true };
+export type MtimeMs = number & { __mtime_ms: true };
+export type Distance = number & { __distance: true };
+export type Score = number & { __score: true };
 
 export type SearchResult = {
-  file: string;
+  file: Spell;
   chunk: ChunkData;
-  score: number;
+  score: Score;
 };
 
 export type IndexLogEntry = {
-  file: string;
+  file: Spell;
   chunkCount: number;
   timestamp: Date;
 };
 
-export type PKBStats = {
+export type GrimoireStats = {
   totalFiles: number;
   totalChunks: number;
   recentFiles: IndexLogEntry[];
 };
 
 export type FileOperation =
-  | { type: "index"; filename: string }
-  | { type: "delete"; filename: string; fileId: number };
+  | { type: "index"; filename: Spell }
+  | { type: "delete"; filename: Spell; fileId: FileId };
 
 const MAX_INDEX_LOG_ENTRIES = 20;
 
-export function computeFileHash(filePath: string): string {
+export function computeFileHash(filePath: AbsFilePath): FileHash {
   const content = fs.readFileSync(filePath);
-  return crypto.createHash("md5").update(content).digest("hex");
+  return crypto.createHash("md5").update(content).digest("hex") as FileHash;
 }
 
 export type IndexedFileInfo = {
-  id: number;
-  filename: string;
-  mtimeMs: number;
-  hash: string;
+  id: FileId;
+  filename: Spell;
+  mtimeMs: MtimeMs;
+  hash: FileHash;
 };
 
-export type ContextGeneratorConfig = {
-  provider: Provider;
-  model: string;
-};
-
-export type PKBOptions = {
-  logger?: Logger | undefined;
-};
-
-export class PKB {
+export class Grimoire {
   public indexLog: IndexLogEntry[] = [];
-  private db: PKBDatabase;
+  private db: GrimoireDatabase;
   private vecTableInitialized = false;
   private logger?: Logger | undefined;
 
   constructor(
-    private pkbPath: string,
-    private embeddingModel: EmbeddingModel,
-    private contextGeneratorConfig: ContextGeneratorConfig | undefined,
-    options?: PKBOptions,
+    private ctx: {
+      db: GrimoireDatabase;
+      embeddingModel: EmbeddingModel;
+      spellsDir: AbsFilePath;
+      llm?: LLM;
+    },
+    options?: { logger?: Logger },
   ) {
-    this.db = initDatabase(pkbPath);
+    this.db = ctx.db;
     this.logger = options?.logger;
   }
 
@@ -87,9 +90,9 @@ export class PKB {
 
     ensureVecTable(
       this.db,
-      this.embeddingModel.modelName,
+      this.ctx.embeddingModel.modelName,
       MAGENTA_EMBEDDING_VERSION,
-      this.embeddingModel.dimensions,
+      this.ctx.embeddingModel.dimensions,
     );
     this.vecTableInitialized = true;
   }
@@ -103,17 +106,17 @@ export class PKB {
         [string, number],
         { id: number; filename: string; mtime_ms: number; hash: string }
       >("SELECT id, filename, mtime_ms, hash FROM files WHERE model_name = ? AND embedding_version = ? AND hash != ''")
-      .all(this.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
+      .all(this.ctx.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
 
     return rows.map((row) => ({
-      id: row.id,
-      filename: row.filename,
-      mtimeMs: row.mtime_ms,
-      hash: row.hash,
+      id: row.id as FileId,
+      filename: row.filename as Spell,
+      mtimeMs: row.mtime_ms as MtimeMs,
+      hash: row.hash as FileHash,
     }));
   }
 
-  getFileIdsByFilename(filename: string): number[] {
+  getFileIdsByFilename(filename: Spell): FileId[] {
     this.ensureVecTableInitialized();
 
     const rows = this.db
@@ -121,22 +124,22 @@ export class PKB {
         [string, string, number],
         { id: number }
       >("SELECT id FROM files WHERE filename = ? AND model_name = ? AND embedding_version = ?")
-      .all(filename, this.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
+      .all(filename, this.ctx.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
 
-    return rows.map((row) => row.id);
+    return rows.map((row) => row.id as FileId);
   }
 
-  updateFileMtime(fileId: number, mtimeMs: number): void {
+  updateFileMtime(fileId: FileId, mtimeMs: MtimeMs): void {
     this.db
       .prepare<[number, number]>("UPDATE files SET mtime_ms = ? WHERE id = ?")
       .run(mtimeMs, fileId);
   }
 
-  deleteFile(fileId: number): void {
+  deleteFile(fileId: FileId): void {
     this.ensureVecTableInitialized();
 
     const vecTableName = getVecTableName(
-      this.embeddingModel.modelName,
+      this.ctx.embeddingModel.modelName,
       MAGENTA_EMBEDDING_VERSION,
     );
 
@@ -153,7 +156,7 @@ export class PKB {
     this.ensureVecTableInitialized();
 
     const vecTableName = getVecTableName(
-      this.embeddingModel.modelName,
+      this.ctx.embeddingModel.modelName,
       MAGENTA_EMBEDDING_VERSION,
     );
 
@@ -166,17 +169,17 @@ export class PKB {
     return result.changes;
   }
 
-  async indexFile(mdFile: string): Promise<void> {
+  async indexFile(mdFile: Spell): Promise<void> {
     this.ensureVecTableInitialized();
 
-    const mdPath = path.join(this.pkbPath, mdFile);
+    const mdPath = path.join(this.ctx.spellsDir, mdFile) as AbsFilePath;
 
     if (!fs.existsSync(mdPath)) {
       return;
     }
 
     const stat = fs.statSync(mdPath);
-    const currentMtime = stat.mtimeMs;
+    const currentMtime = stat.mtimeMs as MtimeMs;
     const currentHash = computeFileHash(mdPath);
 
     const getFileRecord = this.db.prepare<
@@ -188,13 +191,13 @@ export class PKB {
 
     const existingFile = getFileRecord.get(
       mdFile,
-      this.embeddingModel.modelName,
+      this.ctx.embeddingModel.modelName,
       MAGENTA_EMBEDDING_VERSION,
     );
 
-    let fileId: number;
+    let fileId: FileId;
     if (existingFile) {
-      fileId = existingFile.id;
+      fileId = existingFile.id as FileId;
     } else {
       // Create file record with empty hash to mark as "indexing in progress"
       const result = this.db
@@ -203,29 +206,29 @@ export class PKB {
         >("INSERT INTO files (filename, model_name, embedding_version, mtime_ms, hash) VALUES (?, ?, ?, ?, ?)")
         .run(
           mdFile,
-          this.embeddingModel.modelName,
+          this.ctx.embeddingModel.modelName,
           MAGENTA_EMBEDDING_VERSION,
           0,
           "",
         );
-      fileId = Number(result.lastInsertRowid);
+      fileId = Number(result.lastInsertRowid) as FileId;
     }
 
     await this.embedFile(mdPath, mdFile, currentMtime, currentHash, fileId);
   }
 
   private async embedFile(
-    mdPath: string,
-    mdFile: string,
-    currentMtime: number,
-    currentHash: string,
-    fileId: number,
+    mdPath: AbsFilePath,
+    mdFile: Spell,
+    currentMtime: MtimeMs,
+    currentHash: FileHash,
+    fileId: FileId,
   ): Promise<void> {
     const content = fs.readFileSync(mdPath, "utf-8");
     const chunks = chunkMarkdown(content);
 
     const vecTableName = getVecTableName(
-      this.embeddingModel.modelName,
+      this.ctx.embeddingModel.modelName,
       MAGENTA_EMBEDDING_VERSION,
     );
 
@@ -280,20 +283,20 @@ export class PKB {
           [number, string, number]
         >("UPDATE files SET mtime_ms = ?, hash = ? WHERE id = ?")
         .run(currentMtime, currentHash, fileId);
-      this.indexLog.push({
-        file: mdFile,
-        chunkCount: 0,
-        timestamp: new Date(),
-      });
-      if (this.indexLog.length > MAX_INDEX_LOG_ENTRIES) {
-        this.indexLog = this.indexLog.slice(-MAX_INDEX_LOG_ENTRIES);
-      }
-      return;
+    this.indexLog.push({
+      file: mdFile,
+      chunkCount: 0,
+      timestamp: new Date(),
+    });
+    if (this.indexLog.length > MAX_INDEX_LOG_ENTRIES) {
+      this.indexLog = this.indexLog.slice(-MAX_INDEX_LOG_ENTRIES);
     }
+    return;
+  }
 
-    this.logger?.info(
-      `  ${mdFile}: embedding ${chunksToEmbed.length} new chunks`,
-    );
+  this.logger?.info(
+    `  ${mdFile}: embedding ${chunksToEmbed.length} new chunks`,
+  );
 
     // Generate contextualized text for new chunks only
     const contextualizedTexts: string[] = [];
@@ -305,10 +308,9 @@ export class PKB {
         contextParts.push(chunk.headingContext);
       }
 
-      if (this.contextGeneratorConfig) {
+      if (this.ctx.llm) {
         const result = await generateContext(
-          this.contextGeneratorConfig.provider,
-          this.contextGeneratorConfig.model,
+          this.ctx.llm,
           content,
           chunk.text,
         );
@@ -333,7 +335,7 @@ export class PKB {
     }
 
     const embeddings =
-      await this.embeddingModel.embedChunks(contextualizedTexts);
+      await this.ctx.embeddingModel.embedChunks(contextualizedTexts);
 
     const insertChunk = this.db.prepare(
       `INSERT INTO chunks (file_id, text, contextualized_text, start_line, start_col, end_line, end_col)
@@ -376,20 +378,20 @@ export class PKB {
     }
   }
 
-  getStats(): PKBStats {
+  getStats(): GrimoireStats {
     const fileCount = this.db
       .prepare<
         [string, number],
         { count: number }
       >("SELECT COUNT(*) as count FROM files WHERE model_name = ? AND embedding_version = ?")
-      .get(this.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
+      .get(this.ctx.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
 
     const chunkCount = this.db
       .prepare<
         [string, number],
         { count: number }
       >("SELECT COUNT(*) as count FROM chunks c JOIN files f ON c.file_id = f.id WHERE f.model_name = ? AND f.embedding_version = ?")
-      .get(this.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
+      .get(this.ctx.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
 
     return {
       totalFiles: fileCount?.count ?? 0,
@@ -398,12 +400,8 @@ export class PKB {
     };
   }
 
-  getPkbPath(): string {
-    return this.pkbPath;
-  }
-
   getAllChunks(): Array<{
-    filename: string;
+    filename: Spell;
     text: string;
     contextualizedText: string;
   }> {
@@ -418,10 +416,10 @@ export class PKB {
          WHERE f.model_name = ? AND f.embedding_version = ?
          ORDER BY f.filename, c.start_line, c.start_col`,
       )
-      .all(this.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
+      .all(this.ctx.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
 
     return rows.map((row) => ({
-      filename: row.filename,
+      filename: row.filename as Spell,
       text: row.text,
       contextualizedText: row.contextualized_text,
     }));
@@ -430,9 +428,9 @@ export class PKB {
   async search(query: string, topK: number = 10): Promise<SearchResult[]> {
     this.ensureVecTableInitialized();
 
-    const queryEmbedding = await this.embeddingModel.embedQuery(query);
+    const queryEmbedding = await this.ctx.embeddingModel.embedQuery(query);
     const vecTableName = getVecTableName(
-      this.embeddingModel.modelName,
+      this.ctx.embeddingModel.modelName,
       MAGENTA_EMBEDDING_VERSION,
     );
 
@@ -470,7 +468,7 @@ export class PKB {
       .all(new Float32Array(queryEmbedding), topK);
 
     return results.map((row) => ({
-      file: row.filename,
+      file: row.filename as Spell,
       chunk: {
         text: row.text,
         contextualizedText: row.contextualized_text,
@@ -478,7 +476,7 @@ export class PKB {
         end: { line: row.end_line, col: row.end_col },
         version: row.embedding_version,
       },
-      score: 1 - row.distance,
+      score: (1 - row.distance) as Score,
     }));
   }
 }

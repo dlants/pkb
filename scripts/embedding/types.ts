@@ -1,9 +1,12 @@
 export type Embedding = number[];
 
-export const MAGENTA_EMBEDDING_VERSION = 3;
+export type EmbeddingModelName = "cohere.embed-v4:0" | "mock-embedding";
+export type EmbeddingVersion = 3;
+
+export const MAGENTA_EMBEDDING_VERSION: EmbeddingVersion = 3;
 
 export interface EmbeddingModel {
-  modelName: string;
+  modelName: EmbeddingModelName;
   dimensions: number;
   embedChunk(chunk: string): Promise<Embedding>;
   embedQuery(query: string): Promise<Embedding>;

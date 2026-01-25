@@ -1,3 +1,12 @@
+import { describe, it, expect } from "vitest";
+import { Grimoire } from "./grimoire.ts";
+
+describe("Grimoire", () => {
+  it("should export Grimoire class", () => {
+    expect(Grimoire).toBeDefined();
+  });
+});
+
 // import { it, expect } from "vitest";
 // import * as fs from "fs/promises";
 // import * as path from "path";

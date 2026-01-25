@@ -1,11 +1,21 @@
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import * as path from "path";
+import type {
+  EmbeddingModelName,
+  EmbeddingVersion,
+} from "./embedding/types.ts";
 
-export type PKBDatabase = ReturnType<typeof Database>;
+export type GrimoireDatabase = ReturnType<typeof Database>;
 
-export function initDatabase(pkbPath: string): PKBDatabase {
-  const dbPath = path.join(pkbPath, "pkb.db");
+export type AbsFilePath = string & { __abs_file_path: true };
+export type VecTableName = string & { __vec_table_name: true };
+
+const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
+export const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, "grimoire.db") as AbsFilePath;
+export const DEFAULT_SPELLS_DIR = path.join(PROJECT_ROOT, "spells") as AbsFilePath;
+
+export function initDatabase(dbPath: AbsFilePath): GrimoireDatabase {
   const db = new Database(dbPath);
 
   sqliteVec.load(db);
@@ -39,9 +49,9 @@ export function initDatabase(pkbPath: string): PKBDatabase {
 }
 
 export function ensureVecTable(
-  db: PKBDatabase,
-  modelName: string,
-  embeddingVersion: number,
+  db: GrimoireDatabase,
+  modelName: EmbeddingModelName,
+  embeddingVersion: EmbeddingVersion,
   dimensions: number,
 ): void {
   const tableName = getVecTableName(modelName, embeddingVersion);
@@ -50,7 +60,10 @@ export function ensureVecTable(
   );
 }
 
-export function getVecTableName(modelName: string, embeddingVersion: number): string {
+export function getVecTableName(
+  modelName: EmbeddingModelName,
+  embeddingVersion: EmbeddingVersion,
+): VecTableName {
   const sanitized = modelName.replace(/[^a-zA-Z0-9_]/g, "_");
-  return `vec_${sanitized}_v${embeddingVersion}`;
+  return `vec_${sanitized}_v${embeddingVersion}` as VecTableName;
 }

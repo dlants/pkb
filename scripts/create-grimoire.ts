@@ -1,6 +1,4 @@
-import * as os from "os";
-import * as path from "path";
-import { PKB } from "./pkb.ts";
+import { Grimoire } from "./grimoire.ts";
 import { BedrockCohereEmbedding } from "./embedding/bedrock-cohere.ts";
 import type { EmbeddingModel } from "./embedding/types.ts";
 import {
@@ -8,10 +6,9 @@ import {
   getMockEmbeddingModel,
   setMockEmbeddingModel,
 } from "./embedding/mock.ts";
-import type { Provider } from "../providers/anthropic.ts";
-import type { Logger } from "./pkb-manager.ts";
-
-export const DEFAULT_PKB_PATH = path.join(os.homedir(), "pkb");
+import type { LLM } from "./llm.ts";
+import type { Logger } from "./inscribe-manager.ts";
+import { createContext, DEFAULT_OPTIONS, type GrimoireOptions } from "./context.ts";
 
 export type EmbeddingModelOptions =
   | { provider: "mock" }
@@ -36,33 +33,17 @@ export function createEmbeddingModel(
   throw new Error(`Unknown embedding model: ${JSON.stringify(options)}`);
 }
 
-function expandTilde(filePath: string): string {
-  if (filePath.startsWith("~/")) {
-    return path.join(os.homedir(), filePath.slice(2));
-  }
-  if (filePath === "~") {
-    return os.homedir();
-  }
-  return filePath;
-}
-
-export type CreatePKBOptions = {
-  pkbPath: string;
+export type CreateGrimoireFactoryOptions = {
   embeddingModel: EmbeddingModelOptions;
-  provider: Provider;
-  model: string;
+  llm?: LLM;
   logger?: Logger;
+  grimoireOptions?: GrimoireOptions;
 };
 
-export function createPKB(options: CreatePKBOptions): PKB {
+export function createGrimoireFromOptions(options: CreateGrimoireFactoryOptions): Grimoire {
   const embeddingModel = createEmbeddingModel(options.embeddingModel);
-  const expandedPath = expandTilde(options.pkbPath);
-  const resolvedPath = path.resolve(expandedPath);
+  const grimoireOptions = options.grimoireOptions ?? DEFAULT_OPTIONS;
+  const ctx = createContext(grimoireOptions, embeddingModel, options.llm);
 
-  return new PKB(
-    resolvedPath,
-    embeddingModel,
-    { provider: options.provider, model: options.model },
-    { logger: options.logger },
-  );
+  return new Grimoire(ctx, { logger: options.logger });
 }

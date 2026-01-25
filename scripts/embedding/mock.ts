@@ -1,5 +1,5 @@
 import type { Embedding, EmbeddingModel } from "./types.ts";
-import { Defer, pollUntil } from "../../utils/async.ts";
+import { Defer, pollUntil } from "../utils/async.ts";
 
 export type EmbedRequestType = "chunk" | "query" | "chunks";
 
@@ -22,7 +22,7 @@ export function getMockEmbeddingModel(): MockEmbeddingModel | undefined {
 }
 
 export class MockEmbeddingModel implements EmbeddingModel {
-  public modelName = "mock-embedding";
+  public modelName = "mock-embedding" as const;
   public dimensions = 3;
   public requests: MockEmbedRequest[] = [];
 

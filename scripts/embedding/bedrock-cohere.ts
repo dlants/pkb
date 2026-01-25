@@ -25,7 +25,7 @@ export type BedrockCohereOptions = {
 };
 
 export class BedrockCohereEmbedding implements EmbeddingModel {
-  public readonly modelName = "cohere.embed-v4:0";
+  public readonly modelName = "cohere.embed-v4:0" as const;
   public readonly dimensions = 1536;
   private client: BedrockRuntimeClient;
   private inferenceProfileId: string;
