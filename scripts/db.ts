@@ -12,8 +12,8 @@ export type AbsFilePath = string & { __abs_file_path: true };
 export type VecTableName = string & { __vec_table_name: true };
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
-export const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, "grimoire.db") as AbsFilePath;
-export const DEFAULT_SPELLS_DIR = path.join(PROJECT_ROOT, "spells") as AbsFilePath;
+export const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, "pkb.db") as AbsFilePath;
+export const DEFAULT_FILES_DIR = path.join(PROJECT_ROOT, "files") as AbsFilePath;
 
 export function initDatabase(dbPath: AbsFilePath): GrimoireDatabase {
   const db = new Database(dbPath);

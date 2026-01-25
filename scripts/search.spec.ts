@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatResults } from "./divine.ts";
+import { formatResults } from "./search.ts";
 import { withTestHarness, respondToEmbedRequest } from "./test-harness.ts";
 
 describe("formatResults", () => {
@@ -11,7 +11,7 @@ describe("formatResults", () => {
 describe("search", () => {
   it("should search and return relevant chunks", async () => {
     await withTestHarness(async (ctx) => {
-      await ctx.writeSpell(
+      await ctx.writeFile(
         "notes.md",
         `# Project Documentation
 
@@ -46,7 +46,6 @@ All API endpoints require authentication except for health checks.`,
       // - Chunk 1 (database): [0.3, 0.3, 0.3] - medium similarity
       // - Chunk 2 (security): [0, 0, 1] - orthogonal to query
       const embedReq = await ctx.mockEmbed.awaitPendingRequest();
-      const chunks = embedReq.input as string[];
       respondToEmbedRequest(embedReq, [
         [1, 0, 0],
         [0.3, 0.3, 0.3],
@@ -55,7 +54,7 @@ All API endpoints require authentication except for health checks.`,
       await reindexPromise;
 
       // Now search for architecture
-      const searchPromise = ctx.grimoire.search("architecture", 5);
+      const searchPromise = ctx.pkb.search("architecture", 5);
 
       // Respond to query embedding - similar to architecture chunk
       const queryReq = await ctx.mockEmbed.awaitPendingRequest();
@@ -80,7 +79,7 @@ All API endpoints require authentication except for health checks.`,
 
   it("should re-embed file when content changes", async () => {
     await withTestHarness(async (ctx) => {
-      await ctx.writeSpell(
+      await ctx.writeFile(
         "notes.md",
         "# Original Content\nThis is the initial content.",
       );
@@ -96,7 +95,7 @@ All API endpoints require authentication except for health checks.`,
       await reindexPromise1;
 
       // Modify the file
-      await ctx.writeSpell(
+      await ctx.writeFile(
         "notes.md",
         "# Updated Content\nThis content has been modified.",
       );
@@ -112,7 +111,7 @@ All API endpoints require authentication except for health checks.`,
       await reindexPromise2;
 
       // Verify the updated content is searchable
-      const searchPromise = ctx.grimoire.search("updated", 5);
+      const searchPromise = ctx.pkb.search("updated", 5);
       const queryReq = await ctx.mockEmbed.awaitPendingRequest();
       respondToEmbedRequest(queryReq, [0.4, 0.5, 0.6]);
       const results = await searchPromise;

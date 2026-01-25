@@ -14,39 +14,39 @@ import {
   type GrimoireDatabase,
   type AbsFilePath,
 } from "./db.ts";
-import type { Logger } from "./inscribe-manager.ts";
+import type { Logger } from "./index-manager.ts";
 import type { LLM } from "./llm.ts";
 
 // Branded types
 export type FileId = number & { __file_id: true };
 export type ChunkId = number & { __chunk_id: true };
-export type Spell = string & { __spell: true };
+export type PKBFile = string & { __pkb_file: true };
 export type FileHash = string & { __file_hash: true };
 export type MtimeMs = number & { __mtime_ms: true };
 export type Distance = number & { __distance: true };
 export type Score = number & { __score: true };
 
 export type SearchResult = {
-  file: Spell;
+  file: PKBFile;
   chunk: ChunkData;
   score: Score;
 };
 
 export type IndexLogEntry = {
-  file: Spell;
+  file: PKBFile;
   chunkCount: number;
   timestamp: Date;
 };
 
-export type GrimoireStats = {
+export type PKBStats = {
   totalFiles: number;
   totalChunks: number;
   recentFiles: IndexLogEntry[];
 };
 
 export type FileOperation =
-  | { type: "index"; filename: Spell }
-  | { type: "delete"; filename: Spell; fileId: FileId };
+  | { type: "index"; filename: PKBFile }
+  | { type: "delete"; filename: PKBFile; fileId: FileId };
 
 const MAX_INDEX_LOG_ENTRIES = 20;
 
@@ -57,12 +57,12 @@ export function computeFileHash(filePath: AbsFilePath): FileHash {
 
 export type IndexedFileInfo = {
   id: FileId;
-  filename: Spell;
+  filename: PKBFile;
   mtimeMs: MtimeMs;
   hash: FileHash;
 };
 
-export class Grimoire {
+export class PKB {
   public indexLog: IndexLogEntry[] = [];
   private db: GrimoireDatabase;
   private vecTableInitialized = false;
@@ -72,7 +72,7 @@ export class Grimoire {
     private ctx: {
       db: GrimoireDatabase;
       embeddingModel: EmbeddingModel;
-      spellsDir: AbsFilePath;
+      filesDir: AbsFilePath;
       llm?: LLM;
     },
     options?: { logger?: Logger },
@@ -110,13 +110,13 @@ export class Grimoire {
 
     return rows.map((row) => ({
       id: row.id as FileId,
-      filename: row.filename as Spell,
+      filename: row.filename as PKBFile,
       mtimeMs: row.mtime_ms as MtimeMs,
       hash: row.hash as FileHash,
     }));
   }
 
-  getFileIdsByFilename(filename: Spell): FileId[] {
+  getFileIdsByFilename(filename: PKBFile): FileId[] {
     this.ensureVecTableInitialized();
 
     const rows = this.db
@@ -124,7 +124,11 @@ export class Grimoire {
         [string, string, number],
         { id: number }
       >("SELECT id FROM files WHERE filename = ? AND model_name = ? AND embedding_version = ?")
-      .all(filename, this.ctx.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
+      .all(
+        filename,
+        this.ctx.embeddingModel.modelName,
+        MAGENTA_EMBEDDING_VERSION,
+      );
 
     return rows.map((row) => row.id as FileId);
   }
@@ -169,10 +173,10 @@ export class Grimoire {
     return result.changes;
   }
 
-  async indexFile(mdFile: Spell): Promise<void> {
+  async indexFile(mdFile: PKBFile): Promise<void> {
     this.ensureVecTableInitialized();
 
-    const mdPath = path.join(this.ctx.spellsDir, mdFile) as AbsFilePath;
+    const mdPath = path.join(this.ctx.filesDir, mdFile) as AbsFilePath;
 
     if (!fs.existsSync(mdPath)) {
       return;
@@ -219,7 +223,7 @@ export class Grimoire {
 
   private async embedFile(
     mdPath: AbsFilePath,
-    mdFile: Spell,
+    mdFile: PKBFile,
     currentMtime: MtimeMs,
     currentHash: FileHash,
     fileId: FileId,
@@ -283,20 +287,20 @@ export class Grimoire {
           [number, string, number]
         >("UPDATE files SET mtime_ms = ?, hash = ? WHERE id = ?")
         .run(currentMtime, currentHash, fileId);
-    this.indexLog.push({
-      file: mdFile,
-      chunkCount: 0,
-      timestamp: new Date(),
-    });
-    if (this.indexLog.length > MAX_INDEX_LOG_ENTRIES) {
-      this.indexLog = this.indexLog.slice(-MAX_INDEX_LOG_ENTRIES);
+      this.indexLog.push({
+        file: mdFile,
+        chunkCount: 0,
+        timestamp: new Date(),
+      });
+      if (this.indexLog.length > MAX_INDEX_LOG_ENTRIES) {
+        this.indexLog = this.indexLog.slice(-MAX_INDEX_LOG_ENTRIES);
+      }
+      return;
     }
-    return;
-  }
 
-  this.logger?.info(
-    `  ${mdFile}: embedding ${chunksToEmbed.length} new chunks`,
-  );
+    this.logger?.info(
+      `  ${mdFile}: embedding ${chunksToEmbed.length} new chunks`,
+    );
 
     // Generate contextualized text for new chunks only
     const contextualizedTexts: string[] = [];
@@ -309,11 +313,7 @@ export class Grimoire {
       }
 
       if (this.ctx.llm) {
-        const result = await generateContext(
-          this.ctx.llm,
-          content,
-          chunk.text,
-        );
+        const result = await generateContext(this.ctx.llm, content, chunk.text);
         contextParts.push(result.context);
 
         // Log progress and sample usage every 5 chunks
@@ -378,7 +378,7 @@ export class Grimoire {
     }
   }
 
-  getStats(): GrimoireStats {
+  getStats(): PKBStats {
     const fileCount = this.db
       .prepare<
         [string, number],
@@ -401,7 +401,7 @@ export class Grimoire {
   }
 
   getAllChunks(): Array<{
-    filename: Spell;
+    filename: PKBFile;
     text: string;
     contextualizedText: string;
   }> {
@@ -419,7 +419,7 @@ export class Grimoire {
       .all(this.ctx.embeddingModel.modelName, MAGENTA_EMBEDDING_VERSION);
 
     return rows.map((row) => ({
-      filename: row.filename as Spell,
+      filename: row.filename as PKBFile,
       text: row.text,
       contextualizedText: row.contextualized_text,
     }));
@@ -468,7 +468,7 @@ export class Grimoire {
       .all(new Float32Array(queryEmbedding), topK);
 
     return results.map((row) => ({
-      file: row.filename as Spell,
+      file: row.filename as PKBFile,
       chunk: {
         text: row.text,
         contextualizedText: row.contextualized_text,
