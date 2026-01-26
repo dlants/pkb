@@ -66,7 +66,9 @@ export async function withTestHarness(
     trackedSourceId: trackedSource.id,
 
     async writeFile(filename: string, content: string) {
-      await fs.writeFile(path.join(filesDir, filename), content);
+      const filePath = path.join(filesDir, filename);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, content);
     },
 
     async deleteFile(filename: string) {
