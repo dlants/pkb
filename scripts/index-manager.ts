@@ -25,7 +25,7 @@ export type ScanResult = {
   skipped: AbsFilePath[];
 };
 
-const DEFAULT_UPDATE_INTERVAL_MS = 60000;
+const DEFAULT_UPDATE_INTERVAL_MS = 5000;
 
 export class IndexManager {
   private indexQueue: FileOperation[] = [];
