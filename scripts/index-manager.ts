@@ -2,13 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   type PKB,
-  type FileOperation,
   type IndexedFileInfo,
   type PKBFile,
+  type FileId,
   type MtimeMs,
   computeFileHash,
 } from "./pkb.ts";
-import type { AbsFilePath } from "./db.ts";
+import type { AbsFilePath, TrackedSourceId } from "./db.ts";
 
 export type Logger = {
   info: (msg: string) => void;
@@ -16,9 +16,13 @@ export type Logger = {
   error: (msg: string) => void;
 };
 
+export type FileOperation =
+  | { type: "index"; filePath: AbsFilePath; trackedSourceId: TrackedSourceId }
+  | { type: "delete"; filePath: AbsFilePath; fileId: FileId };
+
 export type ScanResult = {
   operations: FileOperation[];
-  skipped: PKBFile[];
+  skipped: AbsFilePath[];
 };
 
 const DEFAULT_UPDATE_INTERVAL_MS = 60000;
@@ -29,7 +33,6 @@ export class IndexManager {
   private isProcessing = false;
 
   constructor(
-    private ctx: { filesDir: AbsFilePath },
     private pkb: PKB,
     private logger: Logger,
     private intervalMs: number = DEFAULT_UPDATE_INTERVAL_MS,
@@ -69,59 +72,119 @@ export class IndexManager {
 
   scanForChanges(): ScanResult {
     const operations: FileOperation[] = [];
-    const skipped: PKBFile[] = [];
+    const skipped: AbsFilePath[] = [];
 
-    const filesDir = this.ctx.filesDir;
-    const files = fs.readdirSync(filesDir);
-    const mdFiles = files.filter((f) => f.endsWith(".md")) as PKBFile[];
-    const mdFileSet = new Set(mdFiles);
-
+    const trackedSources = this.pkb.getTrackedSources();
     const indexedFiles = this.pkb.getIndexedFiles();
-    const indexedFileMap = new Map<PKBFile, IndexedFileInfo>();
+    const indexedFileMap = new Map<string, IndexedFileInfo>();
     for (const file of indexedFiles) {
       indexedFileMap.set(file.filename, file);
     }
 
+    // Collect all expected files from tracked sources
+    const expectedFiles = new Set<string>();
+
+    for (const source of trackedSources) {
+      const mdFiles = this.getMdFilesForSource(source.path, source.type);
+
+      for (const mdPath of mdFiles) {
+        expectedFiles.add(mdPath);
+
+        const existingFile = indexedFileMap.get(mdPath);
+
+        if (!fs.existsSync(mdPath)) {
+          // File was deleted but tracked source still exists
+          if (existingFile) {
+            this.logger.info(
+              `  ${mdPath}: file deleted, will remove embeddings`,
+            );
+            operations.push({
+              type: "delete",
+              filePath: mdPath as AbsFilePath,
+              fileId: existingFile.id,
+            });
+          }
+          continue;
+        }
+
+        const stat = fs.statSync(mdPath);
+        const currentMtime = stat.mtimeMs as MtimeMs;
+
+        if (existingFile) {
+          if (existingFile.mtimeMs === currentMtime) {
+            skipped.push(mdPath as AbsFilePath);
+            continue;
+          }
+
+          const currentHash = computeFileHash(mdPath as AbsFilePath);
+          if (existingFile.hash === currentHash) {
+            this.pkb.updateFileMtime(existingFile.id, currentMtime);
+            skipped.push(mdPath as AbsFilePath);
+            continue;
+          }
+
+          operations.push({
+            type: "index",
+            filePath: mdPath as AbsFilePath,
+            trackedSourceId: source.id,
+          });
+        } else {
+          operations.push({
+            type: "index",
+            filePath: mdPath as AbsFilePath,
+            trackedSourceId: source.id,
+          });
+        }
+      }
+    }
+
+    // Find indexed files that are no longer in any tracked source
     for (const indexedFile of indexedFiles) {
-      if (!mdFileSet.has(indexedFile.filename)) {
+      if (!expectedFiles.has(indexedFile.filename)) {
         this.logger.info(
-          `  ${indexedFile.filename}: file deleted, will remove embeddings`,
+          `  ${indexedFile.filename}: no longer tracked, will remove embeddings`,
         );
         operations.push({
           type: "delete",
-          filename: indexedFile.filename,
+          filePath: indexedFile.filename as unknown as AbsFilePath,
           fileId: indexedFile.id,
         });
       }
     }
 
-    for (const mdFile of mdFiles) {
-      const mdPath = path.join(filesDir, mdFile) as AbsFilePath;
-      const stat = fs.statSync(mdPath);
-      const currentMtime = stat.mtimeMs as MtimeMs;
+    return { operations, skipped };
+  }
 
-      const existingFile = indexedFileMap.get(mdFile);
-
-      if (existingFile) {
-        if (existingFile.mtimeMs === currentMtime) {
-          skipped.push(mdFile);
-          continue;
-        }
-
-        const currentHash = computeFileHash(mdPath);
-        if (existingFile.hash === currentHash) {
-          this.pkb.updateFileMtime(existingFile.id, currentMtime);
-          skipped.push(mdFile);
-          continue;
-        }
-
-        operations.push({ type: "index", filename: mdFile });
-      } else {
-        operations.push({ type: "index", filename: mdFile });
-      }
+  private getMdFilesForSource(
+    sourcePath: AbsFilePath,
+    sourceType: "file" | "directory",
+  ): string[] {
+    if (!fs.existsSync(sourcePath)) {
+      return [];
     }
 
-    return { operations, skipped };
+    if (sourceType === "file") {
+      if (sourcePath.endsWith(".md")) {
+        return [sourcePath];
+      }
+      return [];
+    }
+
+    // Directory: recursively find all .md files
+    const mdFiles: string[] = [];
+    const findMdFiles = (dir: string) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          findMdFiles(fullPath);
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+          mdFiles.push(fullPath);
+        }
+      }
+    };
+    findMdFiles(sourcePath);
+    return mdFiles;
   }
 
   queueOperations(operations: FileOperation[]): void {
@@ -145,7 +208,7 @@ export class IndexManager {
         this.pkb.deleteFile(operation.fileId);
         break;
       case "index":
-        await this.pkb.indexFile(operation.filename);
+        await this.pkb.indexFile(operation.filePath, operation.trackedSourceId);
         break;
     }
 
@@ -175,11 +238,11 @@ export class IndexManager {
       const op = result.operation;
       if (op.type === "index") {
         this.logger.info(
-          `PKB: Indexed ${op.filename} (${this.getQueueSize()} remaining)`,
+          `PKB: Indexed ${op.filePath} (${this.getQueueSize()} remaining)`,
         );
       } else {
         this.logger.info(
-          `PKB: Deleted ${op.filename} (${this.getQueueSize()} remaining)`,
+          `PKB: Deleted ${op.filePath} (${this.getQueueSize()} remaining)`,
         );
       }
     }

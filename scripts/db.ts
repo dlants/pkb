@@ -15,12 +15,28 @@ const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
 export const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, "pkb.db") as AbsFilePath;
 export const DEFAULT_FILES_DIR = path.join(PROJECT_ROOT, "files") as AbsFilePath;
 
+export type TrackedSourceId = number & { __tracked_source_id: true };
+
+export type TrackedSource = {
+  id: TrackedSourceId;
+  path: AbsFilePath;
+  type: "file" | "directory";
+  createdAt: number;
+};
+
 export function initDatabase(dbPath: AbsFilePath): GrimoireDatabase {
   const db = new Database(dbPath);
 
   sqliteVec.load(db);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS tracked_sources (
+      id INTEGER PRIMARY KEY,
+      path TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL CHECK(type IN ('file', 'directory')),
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS files (
       id INTEGER PRIMARY KEY,
       filename TEXT NOT NULL,
@@ -28,6 +44,7 @@ export function initDatabase(dbPath: AbsFilePath): GrimoireDatabase {
       embedding_version INTEGER NOT NULL,
       mtime_ms INTEGER NOT NULL,
       hash TEXT NOT NULL,
+      tracked_source_id INTEGER REFERENCES tracked_sources(id),
       UNIQUE(filename, model_name, embedding_version)
     );
 

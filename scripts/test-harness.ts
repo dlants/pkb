@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { initDatabase, type AbsFilePath } from "./db.ts";
+import { initDatabase, type AbsFilePath, type TrackedSourceId } from "./db.ts";
 import { PKB } from "./pkb.ts";
 import { IndexManager, type Logger } from "./index-manager.ts";
 import { MockEmbeddingModel, respondToEmbedRequest } from "./embedding/mock.ts";
@@ -16,6 +16,7 @@ export type TestContext = {
   manager: IndexManager;
   logger: Logger;
   logs: string[];
+  trackedSourceId: TrackedSourceId;
 
   writeFile(filename: string, content: string): Promise<void>;
   deleteFile(filename: string): Promise<void>;
@@ -43,11 +44,14 @@ export async function withTestHarness(
   };
 
   const pkb = new PKB(
-    { db, embeddingModel: mockEmbed, filesDir, llm: mockLLM },
+    { db, embeddingModel: mockEmbed, llm: mockLLM },
     { logger },
   );
 
-  const manager = new IndexManager({ filesDir }, pkb, logger);
+  // Track the files directory by default
+  const trackedSource = pkb.addTrackedSource(filesDir, "directory");
+
+  const manager = new IndexManager(pkb, logger);
 
   const ctx: TestContext = {
     tmpDir,
@@ -59,6 +63,7 @@ export async function withTestHarness(
     manager,
     logger,
     logs,
+    trackedSourceId: trackedSource.id,
 
     async writeFile(filename: string, content: string) {
       await fs.writeFile(path.join(filesDir, filename), content);

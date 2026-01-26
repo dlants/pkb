@@ -72,7 +72,7 @@ All API endpoints require authentication except for health checks.`,
       // Format results and verify output
       const formatted = formatResults(results);
       expect(formatted).toContain("## Result 1");
-      expect(formatted).toContain("File: notes.md");
+      expect(formatted).toContain("notes.md");
       expect(formatted).toContain("Architecture");
     });
   });

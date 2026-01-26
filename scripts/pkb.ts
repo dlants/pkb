@@ -13,6 +13,8 @@ import {
   getVecTableName,
   type GrimoireDatabase,
   type AbsFilePath,
+  type TrackedSource,
+  type TrackedSourceId,
 } from "./db.ts";
 import type { Logger } from "./index-manager.ts";
 import type { LLM } from "./llm.ts";
@@ -44,10 +46,6 @@ export type PKBStats = {
   recentFiles: IndexLogEntry[];
 };
 
-export type FileOperation =
-  | { type: "index"; filename: PKBFile }
-  | { type: "delete"; filename: PKBFile; fileId: FileId };
-
 const MAX_INDEX_LOG_ENTRIES = 20;
 
 export function computeFileHash(filePath: AbsFilePath): FileHash {
@@ -72,7 +70,6 @@ export class PKB {
     private ctx: {
       db: GrimoireDatabase;
       embeddingModel: EmbeddingModel;
-      filesDir: AbsFilePath;
       llm?: LLM;
     },
     options?: { logger?: Logger },
@@ -83,6 +80,74 @@ export class PKB {
 
   close(): void {
     this.db.close();
+  }
+
+  addTrackedSource(
+    sourcePath: AbsFilePath,
+    type: "file" | "directory",
+  ): TrackedSource {
+    const now = Date.now();
+    const result = this.db
+      .prepare<
+        [string, string, number]
+      >("INSERT INTO tracked_sources (path, type, created_at) VALUES (?, ?, ?)")
+      .run(sourcePath, type, now);
+
+    return {
+      id: Number(result.lastInsertRowid) as TrackedSourceId,
+      path: sourcePath,
+      type,
+      createdAt: now,
+    };
+  }
+
+  removeTrackedSource(sourcePath: AbsFilePath): void {
+    const source = this.db
+      .prepare<
+        [string],
+        { id: number }
+      >("SELECT id FROM tracked_sources WHERE path = ?")
+      .get(sourcePath);
+
+    if (!source) {
+      return;
+    }
+
+    const trackedSourceId = source.id as TrackedSourceId;
+
+    // Get all files associated with this tracked source
+    const files = this.db
+      .prepare<
+        [number],
+        { id: number }
+      >("SELECT id FROM files WHERE tracked_source_id = ?")
+      .all(trackedSourceId);
+
+    // Delete each file (which cascades to chunks and cleans up vec entries)
+    for (const file of files) {
+      this.deleteFile(file.id as FileId);
+    }
+
+    // Delete the tracked source record
+    this.db
+      .prepare("DELETE FROM tracked_sources WHERE id = ?")
+      .run(trackedSourceId);
+  }
+
+  getTrackedSources(): TrackedSource[] {
+    const rows = this.db
+      .prepare<
+        [],
+        { id: number; path: string; type: string; created_at: number }
+      >("SELECT id, path, type, created_at FROM tracked_sources ORDER BY path")
+      .all();
+
+    return rows.map((row) => ({
+      id: row.id as TrackedSourceId,
+      path: row.path as AbsFilePath,
+      type: row.type as "file" | "directory",
+      createdAt: row.created_at,
+    }));
   }
 
   private ensureVecTableInitialized(): void {
@@ -173,10 +238,11 @@ export class PKB {
     return result.changes;
   }
 
-  async indexFile(mdFile: PKBFile): Promise<void> {
+  async indexFile(
+    mdPath: AbsFilePath,
+    trackedSourceId: TrackedSourceId,
+  ): Promise<void> {
     this.ensureVecTableInitialized();
-
-    const mdPath = path.join(this.ctx.filesDir, mdFile) as AbsFilePath;
 
     if (!fs.existsSync(mdPath)) {
       return;
@@ -194,7 +260,7 @@ export class PKB {
     );
 
     const existingFile = getFileRecord.get(
-      mdFile,
+      mdPath,
       this.ctx.embeddingModel.modelName,
       MAGENTA_EMBEDDING_VERSION,
     );
@@ -206,24 +272,24 @@ export class PKB {
       // Create file record with empty hash to mark as "indexing in progress"
       const result = this.db
         .prepare<
-          [string, string, number, number, string]
-        >("INSERT INTO files (filename, model_name, embedding_version, mtime_ms, hash) VALUES (?, ?, ?, ?, ?)")
+          [string, string, number, number, string, number]
+        >("INSERT INTO files (filename, model_name, embedding_version, mtime_ms, hash, tracked_source_id) VALUES (?, ?, ?, ?, ?, ?)")
         .run(
-          mdFile,
+          mdPath,
           this.ctx.embeddingModel.modelName,
           MAGENTA_EMBEDDING_VERSION,
           0,
           "",
+          trackedSourceId,
         );
       fileId = Number(result.lastInsertRowid) as FileId;
     }
 
-    await this.embedFile(mdPath, mdFile, currentMtime, currentHash, fileId);
+    await this.embedFile(mdPath, currentMtime, currentHash, fileId);
   }
 
   private async embedFile(
     mdPath: AbsFilePath,
-    mdFile: PKBFile,
     currentMtime: MtimeMs,
     currentHash: FileHash,
     fileId: FileId,
@@ -259,7 +325,7 @@ export class PKB {
     );
     if (chunksToDelete.length > 0) {
       this.logger?.debug(
-        `  ${mdFile}: deleting ${chunksToDelete.length} obsolete chunks`,
+        `  ${mdPath}: deleting ${chunksToDelete.length} obsolete chunks`,
       );
       const deleteVec = this.db.prepare(
         `DELETE FROM ${vecTableName} WHERE chunk_id = ?`,
@@ -276,11 +342,11 @@ export class PKB {
     const reusedCount = chunks.length - chunksToEmbed.length;
 
     if (reusedCount > 0) {
-      this.logger?.debug(`  ${mdFile}: reusing ${reusedCount} existing chunks`);
+      this.logger?.debug(`  ${mdPath}: reusing ${reusedCount} existing chunks`);
     }
 
     if (chunksToEmbed.length === 0) {
-      this.logger?.debug(`  ${mdFile}: no new chunks to embed`);
+      this.logger?.debug(`  ${mdPath}: no new chunks to embed`);
       // Update file record with hash/mtime to mark indexing complete
       this.db
         .prepare<
@@ -288,7 +354,7 @@ export class PKB {
         >("UPDATE files SET mtime_ms = ?, hash = ? WHERE id = ?")
         .run(currentMtime, currentHash, fileId);
       this.indexLog.push({
-        file: mdFile,
+        file: mdPath as string as PKBFile,
         chunkCount: 0,
         timestamp: new Date(),
       });
@@ -299,7 +365,7 @@ export class PKB {
     }
 
     this.logger?.info(
-      `  ${mdFile}: embedding ${chunksToEmbed.length} new chunks`,
+      `  ${mdPath}: embedding ${chunksToEmbed.length} new chunks`,
     );
 
     // Generate contextualized text for new chunks only
@@ -320,7 +386,7 @@ export class PKB {
         if ((i + 1) % 5 === 0 || i === chunksToEmbed.length - 1) {
           const usage = result.usage;
           this.logger?.info(
-            `  ${mdFile}: context ${i + 1}/${chunksToEmbed.length} (in: ${usage.inputTokens}, out: ${usage.outputTokens}, cache hits: ${usage.cacheHits ?? 0}, misses: ${usage.cacheMisses ?? 0})`,
+            `  ${mdPath}: context ${i + 1}/${chunksToEmbed.length} (in: ${usage.inputTokens}, out: ${usage.outputTokens}, cache hits: ${usage.cacheHits ?? 0}, misses: ${usage.cacheMisses ?? 0})`,
           );
         }
       }
@@ -368,7 +434,7 @@ export class PKB {
       .run(currentMtime, currentHash, fileId);
 
     this.indexLog.push({
-      file: mdFile,
+      file: mdPath as string as PKBFile,
       chunkCount: chunksToEmbed.length,
       timestamp: new Date(),
     });
