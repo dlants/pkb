@@ -7,10 +7,6 @@ export type PKBOptions = {
   dbPath: AbsFilePath;
 };
 
-export const DEFAULT_OPTIONS: PKBOptions = {
-  dbPath: DEFAULT_DB_PATH,
-};
-
 export type PKBContext = {
   db: GrimoireDatabase;
   embeddingModel: EmbeddingModel;
