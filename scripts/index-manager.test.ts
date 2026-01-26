@@ -191,3 +191,122 @@ it("should delete embeddings when file is removed", async () => {
     expect(statsAfterDelete.totalChunks).toBe(0);
   });
 });
+
+it("should index file in subdirectory", async () => {
+  await withTestHarness(async (ctx) => {
+    await ctx.writeFile(
+      "subdir/nested.md",
+      "# Nested Document\n\nContent in subdirectory.",
+    );
+
+    const reindexPromise = ctx.manager.reindex();
+
+    const llmReq = await ctx.mockLLM.awaitPendingRequest();
+    ctx.mockLLM.respondTo(llmReq, "Context for nested document");
+
+    const embedReq = await ctx.mockEmbed.awaitPendingRequest();
+    const chunks = embedReq.input as string[];
+    respondToEmbedRequest(
+      embedReq,
+      chunks.map(() => [0.1, 0.2, 0.3]),
+    );
+
+    await reindexPromise;
+
+    const stats = ctx.pkb.getStats();
+    expect(stats.totalFiles).toBe(1);
+    expect(stats.totalChunks).toBeGreaterThan(0);
+
+    const allChunks = ctx.pkb.getAllChunks();
+    expect(allChunks[0].filename).toContain("subdir");
+    expect(allChunks[0].filename).toContain("nested.md");
+  });
+});
+
+it("should embed file after it is created when tracking non-existent path", async () => {
+  await withTestHarness(async (ctx) => {
+    // Initial reindex with no files
+    await ctx.manager.reindex();
+
+    const statsEmpty = ctx.pkb.getStats();
+    expect(statsEmpty.totalFiles).toBe(0);
+
+    // Now create the file
+    await ctx.writeFile(
+      "late.md",
+      "# Late Document\n\nCreated after initial reindex.",
+    );
+
+    const reindexPromise = ctx.manager.reindex();
+
+    const llmReq = await ctx.mockLLM.awaitPendingRequest();
+    ctx.mockLLM.respondTo(llmReq, "Context for late document");
+
+    const embedReq = await ctx.mockEmbed.awaitPendingRequest();
+    const chunks = embedReq.input as string[];
+    respondToEmbedRequest(
+      embedReq,
+      chunks.map(() => [0.1, 0.2, 0.3]),
+    );
+
+    await reindexPromise;
+
+    const stats = ctx.pkb.getStats();
+    expect(stats.totalFiles).toBe(1);
+    expect(stats.totalChunks).toBeGreaterThan(0);
+  });
+});
+
+it("should re-embed file after deletion and re-creation", async () => {
+  await withTestHarness(async (ctx) => {
+    await ctx.writeFile("test.md", "# Test Document\n\nOriginal content.");
+
+    // Initial indexing
+    const reindexPromise1 = ctx.manager.reindex();
+    const llmReq1 = await ctx.mockLLM.awaitPendingRequest();
+    ctx.mockLLM.respondTo(llmReq1, "Context for original");
+    const embedReq1 = await ctx.mockEmbed.awaitPendingRequest();
+    const chunks1 = embedReq1.input as string[];
+    respondToEmbedRequest(
+      embedReq1,
+      chunks1.map(() => [0.1, 0.2, 0.3]),
+    );
+    await reindexPromise1;
+
+    expect(ctx.pkb.getStats().totalFiles).toBe(1);
+
+    // Delete the file
+    await ctx.deleteFile("test.md");
+    await ctx.manager.reindex();
+
+    expect(ctx.pkb.getStats().totalFiles).toBe(0);
+    expect(ctx.pkb.getStats().totalChunks).toBe(0);
+
+    // Re-create the file with different content
+    await ctx.writeFile(
+      "test.md",
+      "# Test Document\n\nNew content after re-creation.",
+    );
+
+    const reindexPromise2 = ctx.manager.reindex();
+
+    const llmReq2 = await ctx.mockLLM.awaitPendingRequest();
+    ctx.mockLLM.respondTo(llmReq2, "Context for re-created");
+
+    const embedReq2 = await ctx.mockEmbed.awaitPendingRequest();
+    const chunks2 = embedReq2.input as string[];
+    respondToEmbedRequest(
+      embedReq2,
+      chunks2.map(() => [0.4, 0.5, 0.6]),
+    );
+
+    await reindexPromise2;
+
+    const stats = ctx.pkb.getStats();
+    expect(stats.totalFiles).toBe(1);
+    expect(stats.totalChunks).toBeGreaterThan(0);
+
+    const allChunks = ctx.pkb.getAllChunks();
+    expect(allChunks[0].text).toContain("New content after re-creation");
+  });
+});
