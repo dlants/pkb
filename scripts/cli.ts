@@ -26,11 +26,13 @@ function printUsage() {
   console.error("  npx tsx scripts/cli.ts <dbPath> list");
   console.error("    List all tracked sources");
   console.error("");
-  console.error("  npx tsx scripts/cli.ts <dbPath> sync");
-  console.error("    Sync all tracked sources");
+  console.error("  npx tsx scripts/cli.ts <dbPath> sync [--watch]");
+  console.error(
+    "    Sync all tracked sources (--watch for continuous polling)",
+  );
   console.error("");
-  console.error("  npx tsx scripts/cli.ts <dbPath> reindex <file>");
-  console.error("    Force reindex a specific file (absolute path)");
+  console.error("  npx tsx scripts/cli.ts <dbPath> index <file>");
+  console.error("    Index a specific file (tracks it if not already tracked)");
   console.error("");
   console.error("  npx tsx scripts/cli.ts <dbPath> search <query> [topK]");
   console.error("    Search the PKB for relevant chunks");
@@ -41,7 +43,7 @@ function printUsage() {
   console.error("  npx tsx scripts/cli.ts ./pkb.db list");
   console.error("  npx tsx scripts/cli.ts ./pkb.db sync");
   console.error(
-    "  npx tsx scripts/cli.ts ./pkb.db reindex /home/user/docs/notes.md",
+    "  npx tsx scripts/cli.ts ./pkb.db index /home/user/docs/notes.md",
   );
   console.error(
     '  npx tsx scripts/cli.ts ./pkb.db search "how do I configure X"',
@@ -63,7 +65,7 @@ function resolvePath(inputPath: string): AbsFilePath {
   return path.resolve(inputPath) as AbsFilePath;
 }
 
-async function trackCommand(dbPath: string, inputPath: string) {
+function trackCommand(dbPath: string, inputPath: string) {
   const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
 
@@ -79,12 +81,8 @@ async function trackCommand(dbPath: string, inputPath: string) {
     const type = stat.isDirectory() ? "directory" : "file";
 
     const source = pkb.addTrackedSource(absPath, type);
-    logger.info(`Tracking ${type}: ${absPath}`);
-
-    // Immediately index the tracked source
-    const manager = new IndexManager(pkb, logger);
-    await manager.reindex();
-    logger.info(`Done. Tracked source ID: ${source.id}`);
+    logger.info(`Tracking ${type}: ${absPath} (ID: ${source.id})`);
+    logger.info(`Run 'sync' to index the tracked source.`);
   } finally {
     pkb.close();
   }
@@ -125,24 +123,50 @@ function listCommand(dbPath: string) {
   }
 }
 
-async function syncCommand(dbPath: string) {
+async function syncCommand(dbPath: string, watch: boolean) {
   const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
   const manager = new IndexManager(pkb, logger);
 
-  try {
-    await manager.reindex();
-  } finally {
-    pkb.close();
+  if (watch) {
+    logger.info("Starting watch mode (Ctrl+C to stop)...");
+    manager.start();
+
+    await new Promise<void>((resolve) => {
+      process.on("SIGINT", () => {
+        logger.info("\nStopping watch mode...");
+        manager.stop();
+        pkb.close();
+        resolve();
+      });
+    });
+  } else {
+    try {
+      await manager.reindex();
+    } finally {
+      pkb.close();
+    }
   }
 }
 
-async function reindexCommand(dbPath: string, inputPath: string) {
+async function indexCommand(dbPath: string, inputPath: string) {
   const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
 
   try {
     const absPath = resolvePath(inputPath);
+
+    if (!fs.existsSync(absPath)) {
+      console.error(`Error: Path does not exist: ${absPath}`);
+      process.exit(1);
+    }
+
+    const stat = fs.statSync(absPath);
+    if (stat.isDirectory()) {
+      console.error(`Error: 'index' only works on files, not directories.`);
+      console.error(`Use 'track' followed by 'sync' to index a directory.`);
+      process.exit(1);
+    }
 
     // Clean up any orphan vec entries from previous failed indexing attempts
     const orphansDeleted = pkb.cleanupOrphanVecEntries();
@@ -150,7 +174,7 @@ async function reindexCommand(dbPath: string, inputPath: string) {
       logger.info(`Cleaned up ${orphansDeleted} orphan vector entries`);
     }
 
-    // Find the tracked source for this file
+    // Find or create the tracked source for this file
     const sources = pkb.getTrackedSources();
     let trackedSourceId: TrackedSourceId | undefined;
 
@@ -169,9 +193,9 @@ async function reindexCommand(dbPath: string, inputPath: string) {
     }
 
     if (!trackedSourceId) {
-      console.error(`Error: File is not in a tracked source: ${absPath}`);
-      console.error("Use 'track' to add a tracked source first.");
-      process.exit(1);
+      const source = pkb.addTrackedSource(absPath, "file");
+      trackedSourceId = source.id;
+      logger.info(`Tracking file: ${absPath}`);
     }
 
     // Find all file records matching this path (including those with empty hash)
@@ -188,7 +212,7 @@ async function reindexCommand(dbPath: string, inputPath: string) {
       }
     }
 
-    logger.info(`Reindexing ${absPath}...`);
+    logger.info(`Indexing ${absPath}...`);
     await pkb.indexFile(absPath, trackedSourceId);
     logger.info("Done.");
   } finally {
@@ -225,7 +249,7 @@ async function main() {
         printUsage();
         process.exit(1);
       }
-      await trackCommand(dbPath, inputPath);
+      trackCommand(dbPath, inputPath);
       break;
     }
 
@@ -244,18 +268,20 @@ async function main() {
       listCommand(dbPath);
       break;
 
-    case "sync":
-      await syncCommand(dbPath);
+    case "sync": {
+      const watchFlag = process.argv[4] === "--watch";
+      await syncCommand(dbPath, watchFlag);
       break;
+    }
 
-    case "reindex": {
+    case "index": {
       const inputPath = process.argv[4];
       if (!inputPath) {
-        console.error("Error: reindex command requires a file path");
+        console.error("Error: index command requires a file path");
         printUsage();
         process.exit(1);
       }
-      await reindexCommand(dbPath, inputPath);
+      await indexCommand(dbPath, inputPath);
       break;
     }
 

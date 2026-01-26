@@ -45,8 +45,14 @@ Sync all tracked sources (reindex changed files):
 npx tsx <path to pkb skill>/scripts/cli.ts <dbPath> sync
 ```
 
-Force reindex a specific file:
+Sync with continuous watching:
 
 ```bash
-npx tsx <path to pkb skill>/scripts/cli.ts <dbPath> reindex <file>
+npx tsx <path to pkb skill>/scripts/cli.ts <dbPath> sync --watch
+```
+
+Index a specific file (tracks it if not already tracked):
+
+```bash
+npx tsx <path to pkb skill>/scripts/cli.ts <dbPath> index <file>
 ```
