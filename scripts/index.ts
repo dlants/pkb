@@ -11,6 +11,5 @@ export { chunkMarkdown } from "./chunker.ts";
 export type { ChunkInfo } from "./chunker.ts";
 export { createPKBFromOptions, createEmbeddingModel } from "./create-pkb.ts";
 export { DEFAULT_DB_PATH, DEFAULT_FILES_DIR } from "./db.ts";
-export { createContext, DEFAULT_OPTIONS } from "./context.ts";
 export type { PKBOptions, PKBContext } from "./context.ts";
 export { IndexManager } from "./index-manager.ts";

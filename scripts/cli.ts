@@ -6,7 +6,7 @@ import { IndexManager, type Logger } from "./index-manager.ts";
 import { BedrockCohereEmbedding } from "./embedding/bedrock-cohere.ts";
 import { createBedrockHaikuLLM } from "./llm.ts";
 import { formatResults } from "./search.ts";
-import { createContext, DEFAULT_OPTIONS, type PKBContext } from "./context.ts";
+import { createContext, type PKBContext } from "./context.ts";
 import type { AbsFilePath, TrackedSourceId } from "./db.ts";
 
 const logger: Logger = {
@@ -17,37 +17,42 @@ const logger: Logger = {
 
 function printUsage() {
   console.error("Usage:");
-  console.error("  npx tsx scripts/cli.ts track <path>");
+  console.error("  npx tsx scripts/cli.ts <dbPath> track <path>");
   console.error("    Track a file or directory for indexing");
   console.error("");
-  console.error("  npx tsx scripts/cli.ts untrack <path>");
+  console.error("  npx tsx scripts/cli.ts <dbPath> untrack <path>");
   console.error("    Stop tracking a file or directory");
   console.error("");
-  console.error("  npx tsx scripts/cli.ts list");
+  console.error("  npx tsx scripts/cli.ts <dbPath> list");
   console.error("    List all tracked sources");
   console.error("");
-  console.error("  npx tsx scripts/cli.ts sync");
+  console.error("  npx tsx scripts/cli.ts <dbPath> sync");
   console.error("    Sync all tracked sources");
   console.error("");
-  console.error("  npx tsx scripts/cli.ts reindex <file>");
+  console.error("  npx tsx scripts/cli.ts <dbPath> reindex <file>");
   console.error("    Force reindex a specific file (absolute path)");
   console.error("");
-  console.error("  npx tsx scripts/cli.ts search <query> [topK]");
+  console.error("  npx tsx scripts/cli.ts <dbPath> search <query> [topK]");
   console.error("    Search the PKB for relevant chunks");
   console.error("");
   console.error("Examples:");
-  console.error("  npx tsx scripts/cli.ts track ./files");
-  console.error("  npx tsx scripts/cli.ts track ~/docs/notes.md");
-  console.error("  npx tsx scripts/cli.ts list");
-  console.error("  npx tsx scripts/cli.ts sync");
-  console.error("  npx tsx scripts/cli.ts reindex /home/user/docs/notes.md");
-  console.error('  npx tsx scripts/cli.ts search "how do I configure X"');
+  console.error("  npx tsx scripts/cli.ts ./pkb.db track ./files");
+  console.error("  npx tsx scripts/cli.ts ~/my.db track ~/docs/notes.md");
+  console.error("  npx tsx scripts/cli.ts ./pkb.db list");
+  console.error("  npx tsx scripts/cli.ts ./pkb.db sync");
+  console.error(
+    "  npx tsx scripts/cli.ts ./pkb.db reindex /home/user/docs/notes.md",
+  );
+  console.error(
+    '  npx tsx scripts/cli.ts ./pkb.db search "how do I configure X"',
+  );
 }
 
-function createPKBContext(): PKBContext {
+function createPKBContext(dbPath: string): PKBContext {
   const embeddingModel = new BedrockCohereEmbedding();
   const llm = createBedrockHaikuLLM();
-  return createContext(DEFAULT_OPTIONS, embeddingModel, llm);
+  const options = { dbPath: resolvePath(dbPath) };
+  return createContext(options, embeddingModel, llm);
 }
 
 function createPKB(ctx: PKBContext): PKB {
@@ -58,8 +63,8 @@ function resolvePath(inputPath: string): AbsFilePath {
   return path.resolve(inputPath) as AbsFilePath;
 }
 
-async function trackCommand(inputPath: string) {
-  const ctx = createPKBContext();
+async function trackCommand(dbPath: string, inputPath: string) {
+  const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
 
   try {
@@ -85,8 +90,8 @@ async function trackCommand(inputPath: string) {
   }
 }
 
-async function untrackCommand(inputPath: string) {
-  const ctx = createPKBContext();
+async function untrackCommand(dbPath: string, inputPath: string) {
+  const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
 
   try {
@@ -98,8 +103,8 @@ async function untrackCommand(inputPath: string) {
   }
 }
 
-function listCommand() {
-  const ctx = createPKBContext();
+function listCommand(dbPath: string) {
+  const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
 
   try {
@@ -120,8 +125,8 @@ function listCommand() {
   }
 }
 
-async function syncCommand() {
-  const ctx = createPKBContext();
+async function syncCommand(dbPath: string) {
+  const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
   const manager = new IndexManager(pkb, logger);
 
@@ -132,8 +137,8 @@ async function syncCommand() {
   }
 }
 
-async function reindexCommand(inputPath: string) {
-  const ctx = createPKBContext();
+async function reindexCommand(dbPath: string, inputPath: string) {
+  const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
 
   try {
@@ -191,8 +196,8 @@ async function reindexCommand(inputPath: string) {
   }
 }
 
-async function searchCommand(query: string, topK: number = 10) {
-  const ctx = createPKBContext();
+async function searchCommand(dbPath: string, query: string, topK: number = 10) {
+  const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
 
   try {
@@ -204,64 +209,65 @@ async function searchCommand(query: string, topK: number = 10) {
 }
 
 async function main() {
-  const command = process.argv[2];
+  const dbPath = process.argv[2];
+  const command = process.argv[3];
 
-  if (!command) {
+  if (!dbPath || !command) {
     printUsage();
     process.exit(1);
   }
 
   switch (command) {
     case "track": {
-      const inputPath = process.argv[3];
+      const inputPath = process.argv[4];
       if (!inputPath) {
         console.error("Error: track command requires a path");
         printUsage();
         process.exit(1);
       }
-      await trackCommand(inputPath);
+      await trackCommand(dbPath, inputPath);
       break;
     }
 
     case "untrack": {
-      const inputPath = process.argv[3];
+      const inputPath = process.argv[4];
       if (!inputPath) {
         console.error("Error: untrack command requires a path");
         printUsage();
         process.exit(1);
       }
-      await untrackCommand(inputPath);
+      await untrackCommand(dbPath, inputPath);
       break;
     }
 
     case "list":
-      listCommand();
+      listCommand(dbPath);
       break;
 
     case "sync":
-      await syncCommand();
+      await syncCommand(dbPath);
       break;
 
     case "reindex": {
-      const inputPath = process.argv[3];
+      const inputPath = process.argv[4];
       if (!inputPath) {
         console.error("Error: reindex command requires a file path");
         printUsage();
         process.exit(1);
       }
-      await reindexCommand(inputPath);
+      await reindexCommand(dbPath, inputPath);
       break;
     }
 
     case "search": {
-      const query = process.argv[3];
+      const query = process.argv[4];
       if (!query) {
         console.error("Error: search command requires a query");
         printUsage();
         process.exit(1);
       }
-      const topK = process.argv[4] ? parseInt(process.argv[4], 10) : 10;
-      await searchCommand(query, topK);
+      const topK = process.argv[5] ? parseInt(process.argv[5], 10) : 10;
+      await searchCommand(dbPath, query, topK);
       break;
     }
 

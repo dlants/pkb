@@ -8,7 +8,7 @@ import {
 } from "./embedding/mock.ts";
 import type { LLM } from "./llm.ts";
 import type { Logger } from "./index-manager.ts";
-import { createContext, DEFAULT_OPTIONS, type PKBOptions } from "./context.ts";
+import { createContext, type PKBOptions } from "./context.ts";
 
 export type EmbeddingModelOptions =
   | { provider: "mock" }
@@ -34,15 +34,15 @@ export function createEmbeddingModel(
 }
 
 export type CreatePKBFactoryOptions = {
+  pkbOptions: PKBOptions;
   embeddingModel: EmbeddingModelOptions;
   llm?: LLM;
   logger?: Logger;
-  pkbOptions?: PKBOptions;
 };
 
 export function createPKBFromOptions(options: CreatePKBFactoryOptions): PKB {
   const embeddingModel = createEmbeddingModel(options.embeddingModel);
-  const pkbOptions = options.pkbOptions ?? DEFAULT_OPTIONS;
+  const pkbOptions = options.pkbOptions;
   const ctx = createContext(pkbOptions, embeddingModel, options.llm);
 
   return new PKB(ctx, { logger: options.logger });
