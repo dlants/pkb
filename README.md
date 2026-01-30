@@ -1,6 +1,6 @@
 # PKB (Personal Knowledge Base)
 
-A CLI for managing a local semantic search-based personal knowledge base. Index your markdown documents and search them using natural language queries.
+A CLI for managing a local semantic search-based personal knowledge base. Index your markdown documents and search them using natural language queries. Pairs perfectly with [magenta.nvim](https://github.com/dlants/magenta.nvim) - a coding assistant plugin for neovim.
 
 - **Standalone**: Manage and search your own notes, documentation, and knowledge base via the cli.
 - **Agent Skill**: Expose your knowledge base to AI agents like Claude Code by creating a skill.
