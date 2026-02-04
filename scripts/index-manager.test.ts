@@ -310,3 +310,91 @@ it("should re-embed file after deletion and re-creation", async () => {
     expect(allChunks[0].text).toContain("New content after re-creation");
   });
 });
+
+it("should exclude directories matching exclusion patterns", async () => {
+  await withTestHarness(async (ctx) => {
+    // Create files in various directories
+    await ctx.writeFile("root.md", "# Root\n\nRoot content.");
+    await ctx.writeFile("docs/guide.md", "# Guide\n\nGuide content.");
+    await ctx.writeFile(
+      "node_modules/package/readme.md",
+      "# Package\n\nPackage content.",
+    );
+    await ctx.writeFile(
+      "src/node_modules/nested/readme.md",
+      "# Nested\n\nNested content.",
+    );
+
+    // Add exclusion for node_modules
+    ctx.pkb.addExcludedPattern(ctx.trackedSourceId, "node_modules");
+
+    const reindexPromise = ctx.manager.reindex();
+
+    // Files are processed sequentially - each file gets LLM then embed requests
+    const allEmbeddedChunks: string[] = [];
+
+    for (let i = 0; i < 2; i++) {
+      const llmReq = await ctx.mockLLM.awaitPendingRequest();
+      ctx.mockLLM.respondTo(llmReq, `Context for file ${i}`);
+
+      const embedReq = await ctx.mockEmbed.awaitPendingRequest();
+      const chunks = embedReq.input as string[];
+      allEmbeddedChunks.push(...chunks);
+      respondToEmbedRequest(
+        embedReq,
+        chunks.map(() => [0.1, 0.2, 0.3]),
+      );
+    }
+
+    await reindexPromise;
+
+    // Should only have chunks from root.md and guide.md (not node_modules)
+    expect(allEmbeddedChunks.length).toBe(2);
+    expect(allEmbeddedChunks.some((c) => c.includes("Root content"))).toBe(
+      true,
+    );
+    expect(allEmbeddedChunks.some((c) => c.includes("Guide content"))).toBe(
+      true,
+    );
+    expect(allEmbeddedChunks.some((c) => c.includes("Package content"))).toBe(
+      false,
+    );
+    expect(allEmbeddedChunks.some((c) => c.includes("Nested content"))).toBe(
+      false,
+    );
+
+    const stats = ctx.pkb.getStats();
+    expect(stats.totalFiles).toBe(2);
+  });
+});
+
+it("should exclude directories by relative path pattern", async () => {
+  await withTestHarness(async (ctx) => {
+    await ctx.writeFile("docs/public/readme.md", "# Public\n\nPublic content.");
+    await ctx.writeFile(
+      "docs/private/secret.md",
+      "# Secret\n\nSecret content.",
+    );
+
+    // Exclude only docs/private, not all "private" directories
+    ctx.pkb.addExcludedPattern(ctx.trackedSourceId, "docs/private");
+
+    const reindexPromise = ctx.manager.reindex();
+
+    const llmReq = await ctx.mockLLM.awaitPendingRequest();
+    ctx.mockLLM.respondTo(llmReq, "Context for public");
+
+    const embedReq = await ctx.mockEmbed.awaitPendingRequest();
+    const chunks = embedReq.input as string[];
+
+    expect(chunks.length).toBe(1);
+    expect(chunks[0]).toContain("Public content");
+
+    respondToEmbedRequest(embedReq, [[0.1, 0.2, 0.3]]);
+
+    await reindexPromise;
+
+    const stats = ctx.pkb.getStats();
+    expect(stats.totalFiles).toBe(1);
+  });
+});

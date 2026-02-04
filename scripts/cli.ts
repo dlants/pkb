@@ -23,8 +23,15 @@ function printUsage() {
   console.error("  npx tsx scripts/cli.ts <dbPath> untrack <path>");
   console.error("    Stop tracking a file or directory");
   console.error("");
+  console.error(
+    "  npx tsx scripts/cli.ts <dbPath> exclude <tracked-path> <pattern>",
+  );
+  console.error(
+    "    Exclude a pattern from a tracked directory (e.g., node_modules)",
+  );
+  console.error("");
   console.error("  npx tsx scripts/cli.ts <dbPath> list");
-  console.error("    List all tracked sources");
+  console.error("    List all tracked sources and their exclusions");
   console.error("");
   console.error("  npx tsx scripts/cli.ts <dbPath> sync [--watch]");
   console.error(
@@ -33,6 +40,11 @@ function printUsage() {
   console.error("");
   console.error("  npx tsx scripts/cli.ts <dbPath> index <file>");
   console.error("    Index a specific file (tracks it if not already tracked)");
+  console.error("");
+  console.error("  npx tsx scripts/cli.ts <dbPath> sync-file <file>");
+  console.error(
+    "    Sync a specific file (only re-embeds changed chunks, faster than index)",
+  );
   console.error("");
   console.error("  npx tsx scripts/cli.ts <dbPath> search <query> [topK]");
   console.error("    Search the PKB for relevant chunks");
@@ -44,6 +56,9 @@ function printUsage() {
   console.error("  npx tsx scripts/cli.ts ./pkb.db sync");
   console.error(
     "  npx tsx scripts/cli.ts ./pkb.db index /home/user/docs/notes.md",
+  );
+  console.error(
+    "  npx tsx scripts/cli.ts ./pkb.db sync-file /home/user/docs/notes.md",
   );
   console.error(
     '  npx tsx scripts/cli.ts ./pkb.db search "how do I configure X"',
@@ -62,7 +77,13 @@ function createPKB(ctx: PKBContext): PKB {
 }
 
 function resolvePath(inputPath: string): AbsFilePath {
-  return path.resolve(inputPath) as AbsFilePath;
+  let resolved = inputPath;
+  if (resolved.startsWith("~/")) {
+    resolved = path.join(process.env.HOME || "", resolved.slice(2));
+  } else if (resolved === "~") {
+    resolved = process.env.HOME || "";
+  }
+  return path.resolve(resolved) as AbsFilePath;
 }
 
 function trackCommand(dbPath: string, inputPath: string) {
@@ -117,7 +138,42 @@ function listCommand(dbPath: string) {
     for (const source of sources) {
       const date = new Date(source.createdAt).toISOString();
       console.log(`  [${source.type}] ${source.path} (added ${date})`);
+
+      const exclusions = pkb.getExcludedPatterns(source.id);
+      if (exclusions.length > 0) {
+        console.log("    Exclusions:");
+        for (const exclusion of exclusions) {
+          console.log(`      - ${exclusion.pattern}`);
+        }
+      }
     }
+  } finally {
+    pkb.close();
+  }
+}
+
+function excludeCommand(dbPath: string, trackedPath: string, pattern: string) {
+  const ctx = createPKBContext(dbPath);
+  const pkb = createPKB(ctx);
+
+  try {
+    const absPath = resolvePath(trackedPath);
+    const source = pkb.getTrackedSourceByPath(absPath);
+
+    if (!source) {
+      console.error(`Error: ${absPath} is not a tracked source.`);
+      console.error("Use 'list' to see tracked sources.");
+      process.exit(1);
+    }
+
+    if (source.type !== "directory") {
+      console.error(`Error: Exclusions only apply to directories, not files.`);
+      process.exit(1);
+    }
+
+    pkb.addExcludedPattern(source.id, pattern);
+    logger.info(`Added exclusion pattern "${pattern}" to ${absPath}`);
+    logger.info(`Run 'sync' to update the index.`);
   } finally {
     pkb.close();
   }
@@ -220,6 +276,63 @@ async function indexCommand(dbPath: string, inputPath: string) {
   }
 }
 
+async function syncFileCommand(dbPath: string, inputPath: string) {
+  const ctx = createPKBContext(dbPath);
+  const pkb = createPKB(ctx);
+
+  try {
+    const absPath = resolvePath(inputPath);
+
+    if (!fs.existsSync(absPath)) {
+      console.error(`Error: Path does not exist: ${absPath}`);
+      process.exit(1);
+    }
+
+    const stat = fs.statSync(absPath);
+    if (stat.isDirectory()) {
+      console.error(`Error: 'sync-file' only works on files, not directories.`);
+      console.error(`Use 'sync' to sync all tracked sources.`);
+      process.exit(1);
+    }
+
+    // Clean up any orphan vec entries from previous failed indexing attempts
+    const orphansDeleted = pkb.cleanupOrphanVecEntries();
+    if (orphansDeleted > 0) {
+      logger.info(`Cleaned up ${orphansDeleted} orphan vector entries`);
+    }
+
+    // Find or create the tracked source for this file
+    const sources = pkb.getTrackedSources();
+    let trackedSourceId: TrackedSourceId | undefined;
+
+    for (const source of sources) {
+      if (source.type === "file" && source.path === absPath) {
+        trackedSourceId = source.id;
+        break;
+      }
+      if (
+        source.type === "directory" &&
+        absPath.startsWith(source.path + "/")
+      ) {
+        trackedSourceId = source.id;
+        break;
+      }
+    }
+
+    if (!trackedSourceId) {
+      const source = pkb.addTrackedSource(absPath, "file");
+      trackedSourceId = source.id;
+      logger.info(`Tracking file: ${absPath}`);
+    }
+
+    logger.info(`Syncing ${absPath}...`);
+    await pkb.indexFile(absPath, trackedSourceId);
+    logger.info("Done.");
+  } finally {
+    pkb.close();
+  }
+}
+
 async function searchCommand(dbPath: string, query: string, topK: number = 10) {
   const ctx = createPKBContext(dbPath);
   const pkb = createPKB(ctx);
@@ -268,6 +381,20 @@ async function main() {
       listCommand(dbPath);
       break;
 
+    case "exclude": {
+      const trackedPath = process.argv[4];
+      const pattern = process.argv[5];
+      if (!trackedPath || !pattern) {
+        console.error(
+          "Error: exclude command requires a tracked path and pattern",
+        );
+        printUsage();
+        process.exit(1);
+      }
+      excludeCommand(dbPath, trackedPath, pattern);
+      break;
+    }
+
     case "sync": {
       const watchFlag = process.argv[4] === "--watch";
       await syncCommand(dbPath, watchFlag);
@@ -282,6 +409,17 @@ async function main() {
         process.exit(1);
       }
       await indexCommand(dbPath, inputPath);
+      break;
+    }
+
+    case "sync-file": {
+      const inputPath = process.argv[4];
+      if (!inputPath) {
+        console.error("Error: sync-file command requires a file path");
+        printUsage();
+        process.exit(1);
+      }
+      await syncFileCommand(dbPath, inputPath);
       break;
     }
 

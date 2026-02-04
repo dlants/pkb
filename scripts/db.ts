@@ -24,6 +24,15 @@ export type TrackedSource = {
   createdAt: number;
 };
 
+export type ExcludedPatternId = number & { __excluded_pattern_id: true };
+
+export type ExcludedPattern = {
+  id: ExcludedPatternId;
+  trackedSourceId: TrackedSourceId;
+  pattern: string;
+  createdAt: number;
+};
+
 export function initDatabase(dbPath: AbsFilePath): GrimoireDatabase {
   const db = new Database(dbPath);
 
@@ -57,6 +66,14 @@ export function initDatabase(dbPath: AbsFilePath): GrimoireDatabase {
       start_col INTEGER NOT NULL,
       end_line INTEGER NOT NULL,
       end_col INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS excluded_patterns (
+      id INTEGER PRIMARY KEY,
+      tracked_source_id INTEGER NOT NULL REFERENCES tracked_sources(id) ON DELETE CASCADE,
+      pattern TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE(tracked_source_id, pattern)
     );
   `);
 

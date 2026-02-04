@@ -47,15 +47,22 @@ npx vitest
 
 Track a file or directory for indexing:
 ```bash
-npx tsx scripts/cli.ts track <path>
-# Example: npx tsx scripts/cli.ts track ./files
-# Example: npx tsx scripts/cli.ts track ~/docs/notes.md
+npx tsx scripts/cli.ts <dbPath> track <path>
+# Example: npx tsx scripts/cli.ts ./pkb.db track ./files
+# Example: npx tsx scripts/cli.ts ./pkb.db track ~/docs/notes.md
 ```
 
 Stop tracking a file or directory:
 ```bash
-npx tsx scripts/cli.ts untrack <path>
-# Example: npx tsx scripts/cli.ts untrack ./files
+npx tsx scripts/cli.ts <dbPath> untrack <path>
+# Example: npx tsx scripts/cli.ts ./pkb.db untrack ./files
+```
+
+Exclude a pattern from a tracked directory:
+```bash
+npx tsx scripts/cli.ts <dbPath> exclude <tracked-path> <pattern>
+# Example: npx tsx scripts/cli.ts ./pkb.db exclude ./files node_modules
+# Example: npx tsx scripts/cli.ts ./pkb.db exclude ~/docs .git
 ```
 
 List all tracked sources:

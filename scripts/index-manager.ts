@@ -85,7 +85,14 @@ export class IndexManager {
     const expectedFiles = new Set<string>();
 
     for (const source of trackedSources) {
-      const mdFiles = this.getMdFilesForSource(source.path, source.type);
+      const excludedPatterns = this.pkb
+        .getExcludedPatterns(source.id)
+        .map((p) => p.pattern);
+      const mdFiles = this.getMdFilesForSource(
+        source.path,
+        source.type,
+        excludedPatterns,
+      );
 
       for (const mdPath of mdFiles) {
         expectedFiles.add(mdPath);
@@ -158,6 +165,7 @@ export class IndexManager {
   private getMdFilesForSource(
     sourcePath: AbsFilePath,
     sourceType: "file" | "directory",
+    excludedPatterns: string[] = [],
   ): string[] {
     if (!fs.existsSync(sourcePath)) {
       return [];
@@ -176,6 +184,12 @@ export class IndexManager {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
+        const relativePath = path.relative(sourcePath, fullPath);
+
+        if (this.isExcluded(relativePath, entry.name, excludedPatterns)) {
+          continue;
+        }
+
         if (entry.isDirectory()) {
           findMdFiles(fullPath);
         } else if (entry.isFile() && entry.name.endsWith(".md")) {
@@ -185,6 +199,24 @@ export class IndexManager {
     };
     findMdFiles(sourcePath);
     return mdFiles;
+  }
+
+  private isExcluded(
+    relativePath: string,
+    entryName: string,
+    patterns: string[],
+  ): boolean {
+    for (const pattern of patterns) {
+      // Match against entry name (e.g., "node_modules" matches any node_modules dir)
+      if (entryName === pattern) {
+        return true;
+      }
+      // Match against relative path (e.g., "docs/private" matches that specific path)
+      if (relativePath === pattern || relativePath.startsWith(pattern + "/")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   queueOperations(operations: FileOperation[]): void {
