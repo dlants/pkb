@@ -15,6 +15,8 @@ import {
   type AbsFilePath,
   type TrackedSource,
   type TrackedSourceId,
+  type ExcludedPattern,
+  type ExcludedPatternId,
 } from "./db.ts";
 import type { Logger } from "./index-manager.ts";
 import type { LLM } from "./llm.ts";
@@ -148,6 +150,64 @@ export class PKB {
       type: row.type as "file" | "directory",
       createdAt: row.created_at,
     }));
+  }
+
+  addExcludedPattern(
+    trackedSourceId: TrackedSourceId,
+    pattern: string,
+  ): ExcludedPattern {
+    const now = Date.now();
+    const result = this.db
+      .prepare<
+        [number, string, number]
+      >("INSERT INTO excluded_patterns (tracked_source_id, pattern, created_at) VALUES (?, ?, ?)")
+      .run(trackedSourceId, pattern, now);
+
+    return {
+      id: Number(result.lastInsertRowid) as ExcludedPatternId,
+      trackedSourceId,
+      pattern,
+      createdAt: now,
+    };
+  }
+
+  getExcludedPatterns(trackedSourceId: TrackedSourceId): ExcludedPattern[] {
+    const rows = this.db
+      .prepare<
+        [number],
+        {
+          id: number;
+          tracked_source_id: number;
+          pattern: string;
+          created_at: number;
+        }
+      >("SELECT id, tracked_source_id, pattern, created_at FROM excluded_patterns WHERE tracked_source_id = ? ORDER BY pattern")
+      .all(trackedSourceId);
+
+    return rows.map((row) => ({
+      id: row.id as ExcludedPatternId,
+      trackedSourceId: row.tracked_source_id as TrackedSourceId,
+      pattern: row.pattern,
+      createdAt: row.created_at,
+    }));
+  }
+
+  getTrackedSourceByPath(sourcePath: AbsFilePath): TrackedSource | undefined {
+    const row = this.db
+      .prepare<
+        [string],
+        { id: number; path: string; type: string; created_at: number }
+      >("SELECT id, path, type, created_at FROM tracked_sources WHERE path = ?")
+      .get(sourcePath);
+
+    if (!row) return undefined;
+
+    return {
+      id: row.id as TrackedSourceId,
+      path: row.path as AbsFilePath,
+      type: row.type as "file" | "directory",
+      createdAt: row.created_at,
+    };
   }
 
   private ensureVecTableInitialized(): void {
