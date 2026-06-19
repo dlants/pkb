@@ -1,0 +1,256 @@
+// Package store wraps the sqlite + sqlite-vec database: a files table keyed by
+// (path, model, version), a chunks table, and one vec0 table per
+// (modelName, version). There are no tracked-source/exclusion tables.
+package store
+
+import (
+	"database/sql"
+	"fmt"
+	"regexp"
+
+	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/dlants/pkb/internal/chunk"
+	"github.com/dlants/pkb/internal/embed"
+)
+
+// EmbeddingVersion is the schema/embedding version; bumping it isolates old
+// vectors into separate vec tables.
+const EmbeddingVersion = 3
+
+var vecOnce bool
+
+// Store owns the database connection.
+type Store struct {
+	db *sql.DB
+}
+
+// Open opens (creating if needed) the database at dbPath and ensures the base
+// schema exists.
+func Open(dbPath string) (*Store, error) {
+	if !vecOnce {
+		sqlite_vec.Auto()
+		vecOnce = true
+	}
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	if err := s.init(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+// Close closes the underlying database.
+func (s *Store) Close() error { return s.db.Close() }
+
+func (s *Store) init() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS files (
+			id INTEGER PRIMARY KEY,
+			path TEXT NOT NULL,
+			model_name TEXT NOT NULL,
+			embedding_version INTEGER NOT NULL,
+			blob_sha TEXT NOT NULL,
+			UNIQUE(path, model_name, embedding_version)
+		);
+		CREATE TABLE IF NOT EXISTS chunks (
+			id INTEGER PRIMARY KEY,
+			file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+			text TEXT NOT NULL,
+			contextualized_text TEXT NOT NULL,
+			start_line INTEGER NOT NULL,
+			start_col INTEGER NOT NULL,
+			end_line INTEGER NOT NULL,
+			end_col INTEGER NOT NULL
+		);
+	`)
+	return err
+}
+
+var nonIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+
+func vecTableName(modelName string, version int) string {
+	return fmt.Sprintf("vec_%s_v%d", nonIdent.ReplaceAllString(modelName, "_"), version)
+}
+
+// EnsureVecTable creates the vec0 table for a model if it does not exist.
+func (s *Store) EnsureVecTable(modelName string, dims int) error {
+	name := vecTableName(modelName, EmbeddingVersion)
+	_, err := s.db.Exec(fmt.Sprintf(
+		`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(chunk_id INTEGER PRIMARY KEY, embedding float[%d] distance_metric=cosine)`,
+		name, dims))
+	return err
+}
+
+// IndexedFiles returns a map of relative path -> blob sha for files already
+// indexed by the given model.
+func (s *Store) IndexedFiles(modelName string) (map[string]string, error) {
+	rows, err := s.db.Query(
+		`SELECT path, blob_sha FROM files WHERE model_name = ? AND embedding_version = ?`,
+		modelName, EmbeddingVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var path, sha string
+		if err := rows.Scan(&path, &sha); err != nil {
+			return nil, err
+		}
+		out[path] = sha
+	}
+	return out, rows.Err()
+}
+
+// DeleteFile removes a file's row, its chunks, and its vec entries.
+func (s *Store) DeleteFile(path, modelName string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := deleteFileTx(tx, path, modelName); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func deleteFileTx(tx *sql.Tx, path, modelName string) error {
+	var fileID int64
+	err := tx.QueryRow(
+		`SELECT id FROM files WHERE path = ? AND model_name = ? AND embedding_version = ?`,
+		path, modelName, EmbeddingVersion).Scan(&fileID)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	vec := vecTableName(modelName, EmbeddingVersion)
+	if _, err := tx.Exec(fmt.Sprintf(
+		`DELETE FROM %s WHERE chunk_id IN (SELECT id FROM chunks WHERE file_id = ?)`, vec), fileID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM chunks WHERE file_id = ?`, fileID); err != nil {
+		return err
+	}
+	_, err = tx.Exec(`DELETE FROM files WHERE id = ?`, fileID)
+	return err
+}
+
+// PutFile (re)indexes a single file: it deletes any existing rows for the path
+// and inserts the new chunks + embeddings in one transaction.
+func (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInfo, contextualized []string, embeddings []embed.Embedding) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := deleteFileTx(tx, path, modelName); err != nil {
+		return err
+	}
+
+	res, err := tx.Exec(
+		`INSERT INTO files (path, model_name, embedding_version, blob_sha) VALUES (?, ?, ?, ?)`,
+		path, modelName, EmbeddingVersion, blobSha)
+	if err != nil {
+		return err
+	}
+	fileID, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	vec := vecTableName(modelName, EmbeddingVersion)
+	for i, c := range chunks {
+		cres, err := tx.Exec(
+			`INSERT INTO chunks (file_id, text, contextualized_text, start_line, start_col, end_line, end_col)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			fileID, c.Text, contextualized[i], c.Start.Line, c.Start.Col, c.End.Line, c.End.Col)
+		if err != nil {
+			return err
+		}
+		chunkID, err := cres.LastInsertId()
+		if err != nil {
+			return err
+		}
+		blob, err := sqlite_vec.SerializeFloat32(embeddings[i])
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(fmt.Sprintf(`INSERT INTO %s (chunk_id, embedding) VALUES (?, ?)`, vec), chunkID, blob); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// SearchResult is one hit from a vector search.
+type SearchResult struct {
+	Path  string
+	Text  string
+	Score float64
+}
+
+// Search queries a model's vec table for the topK nearest chunks to the query
+// embedding.
+func (s *Store) Search(modelName string, query embed.Embedding, topK int) ([]SearchResult, error) {
+	vec := vecTableName(modelName, EmbeddingVersion)
+	blob, err := sqlite_vec.SerializeFloat32(query)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(fmt.Sprintf(
+		`SELECT f.path, c.text, v.distance
+		 FROM %s v
+		 JOIN chunks c ON c.id = v.chunk_id
+		 JOIN files f ON f.id = c.file_id
+		 WHERE v.embedding MATCH ? AND v.k = ?
+		 ORDER BY v.distance`, vec), blob, topK)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []SearchResult
+	for rows.Next() {
+		var r SearchResult
+		var distance float64
+		if err := rows.Scan(&r.Path, &r.Text, &distance); err != nil {
+			return nil, err
+		}
+		r.Score = 1 - distance
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
+// Stats holds index counts for a model.
+type Stats struct {
+	Files  int
+	Chunks int
+}
+
+// Stats returns file and chunk counts for a model.
+func (s *Store) Stats(modelName string) (Stats, error) {
+	var st Stats
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM files WHERE model_name = ? AND embedding_version = ?`,
+		modelName, EmbeddingVersion).Scan(&st.Files)
+	if err != nil {
+		return st, err
+	}
+	err = s.db.QueryRow(
+		`SELECT COUNT(*) FROM chunks c JOIN files f ON c.file_id = f.id
+		 WHERE f.model_name = ? AND f.embedding_version = ?`,
+		modelName, EmbeddingVersion).Scan(&st.Chunks)
+	return st, err
+}
