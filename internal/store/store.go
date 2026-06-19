@@ -194,6 +194,83 @@ func (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInf
 	return tx.Commit()
 }
 
+// CleanupOrphans drops vec tables and removes files/chunks rows for any model
+// that is not in activeModels (at the current EmbeddingVersion). This is how a
+// model-name change reclaims storage instead of silently mixing vectors.
+func (s *Store) CleanupOrphans(activeModels []string) error {
+	keep := map[string]struct{}{}
+	for _, m := range activeModels {
+		keep[vecTableName(m, EmbeddingVersion)] = struct{}{}
+	}
+
+	rows, err := s.db.Query(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%USING vec0%'`)
+	if err != nil {
+		return err
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		tables = append(tables, name)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	for _, name := range tables {
+		if _, ok := keep[name]; ok {
+			continue
+		}
+		if _, err := s.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {
+			return err
+		}
+	}
+
+	// Remove files/chunks rows whose model is no longer active.
+	mrows, err := s.db.Query(`SELECT DISTINCT model_name FROM files`)
+	if err != nil {
+		return err
+	}
+	var models []string
+	for mrows.Next() {
+		var m string
+		if err := mrows.Scan(&m); err != nil {
+			mrows.Close()
+			return err
+		}
+		models = append(models, m)
+	}
+	if err := mrows.Err(); err != nil {
+		mrows.Close()
+		return err
+	}
+	mrows.Close()
+
+	active := map[string]struct{}{}
+	for _, m := range activeModels {
+		active[m] = struct{}{}
+	}
+	for _, m := range models {
+		if _, ok := active[m]; ok {
+			continue
+		}
+		if _, err := s.db.Exec(
+			`DELETE FROM chunks WHERE file_id IN (SELECT id FROM files WHERE model_name = ?)`, m); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`DELETE FROM files WHERE model_name = ?`, m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SearchResult is one hit from a vector search.
 type SearchResult struct {
 	Path  string

@@ -76,7 +76,18 @@ func (h *harness) opts(t *testing.T, model embed.EmbeddingModel) (*Options, *sto
 	require.NoError(t, err)
 	ign, err := LoadIgnore(h.root)
 	require.NoError(t, err)
-	return &Options{Repo: repo, Store: st, Model: model, Ignore: ign}, st
+	return &Options{Repo: repo, Store: st, CodeModel: model, TextModel: model, Ignore: ign}, st
+}
+
+func (h *harness) optsDual(t *testing.T, code, text embed.EmbeddingModel) (*Options, *store.Store) {
+	t.Helper()
+	repo, err := git.Open(h.root)
+	require.NoError(t, err)
+	st, err := store.Open(filepath.Join(t.TempDir(), "pkb.db"))
+	require.NoError(t, err)
+	ign, err := LoadIgnore(h.root)
+	require.NoError(t, err)
+	return &Options{Repo: repo, Store: st, CodeModel: code, TextModel: text, Ignore: ign}, st
 }
 
 func TestColdStartIndexesEverything(t *testing.T) {
@@ -188,7 +199,9 @@ func TestPartialRunMarkerSafety(t *testing.T) {
 	require.True(t, os.IsNotExist(statErr), "marker must not be written on failed run")
 
 	// Fix and retry.
-	o.Model = embed.NewMockModel("mock", 3)
+	fixed := embed.NewMockModel("mock", 3)
+	o.CodeModel = fixed
+	o.TextModel = fixed
 	state, err := Reindex(o)
 	require.NoError(t, err)
 	require.Equal(t, h.headSha(), state.Commit)
@@ -273,4 +286,104 @@ func TestPkbignoreExcludesPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, files, "keep.md")
 	require.NotContains(t, files, "private/secret.md")
+}
+
+func TestDualModelRoutesToSeparateTables(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Doc\n\ntext content here")
+	h.write("code.ts", "function foo() {\n  return 1;\n}\n\nfunction bar() {\n  return 2;\n}\n")
+	h.commit("init")
+
+	codeModel := embed.NewMockModel("codemock", 4)
+	textModel := embed.NewMockModel("textmock", 3)
+	o, st := h.optsDual(t, codeModel, textModel)
+	defer st.Close()
+
+	state, err := Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 2, state.FileCount)
+
+	codeFiles, err := st.IndexedFiles("codemock")
+	require.NoError(t, err)
+	require.Contains(t, codeFiles, "code.ts")
+	require.NotContains(t, codeFiles, "doc.md")
+
+	textFiles, err := st.IndexedFiles("textmock")
+	require.NoError(t, err)
+	require.Contains(t, textFiles, "doc.md")
+	require.NotContains(t, textFiles, "code.ts")
+
+	require.Greater(t, codeModel.ChunkCount(), 0)
+	require.Greater(t, textModel.ChunkCount(), 0)
+}
+
+func TestSearchMergesBothModels(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Doc\n\ntext content here")
+	h.write("code.ts", "function foo() {\n  return 1;\n}\n")
+	h.commit("init")
+
+	codeModel := embed.NewMockModel("codemock", 4)
+	textModel := embed.NewMockModel("textmock", 3)
+	o, st := h.optsDual(t, codeModel, textModel)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	results, err := Search(o, "content", 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+
+	paths := map[string]bool{}
+	for _, r := range results {
+		paths[r.Path] = true
+	}
+	require.True(t, paths["doc.md"])
+	require.True(t, paths["code.ts"])
+
+	// Results are ordered by descending score.
+	for i := 1; i < len(results); i++ {
+		require.GreaterOrEqual(t, results[i-1].Score, results[i].Score)
+	}
+}
+
+func TestModelChangeCleansUpOrphanTable(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Doc\n\ntext content here")
+	h.commit("init")
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "pkb.db"))
+	require.NoError(t, err)
+	defer st.Close()
+	repo, err := git.Open(h.root)
+	require.NoError(t, err)
+	ign, err := LoadIgnore(h.root)
+	require.NoError(t, err)
+
+	m1 := embed.NewMockModel("mock-v1", 3)
+	o := &Options{Repo: repo, Store: st, CodeModel: m1, TextModel: m1, Ignore: ign}
+	_, err = Reindex(o)
+	require.NoError(t, err)
+
+	files, err := st.IndexedFiles("mock-v1")
+	require.NoError(t, err)
+	require.Contains(t, files, "doc.md")
+
+	// Switch the configured model; the old model's rows/tables should be purged.
+	m2 := embed.NewMockModel("mock-v2", 3)
+	o.CodeModel = m2
+	o.TextModel = m2
+	// Force a full re-run by clearing the marker.
+	require.NoError(t, os.Remove(filepath.Join(h.root, ".pkb", "state.json")))
+	_, err = Reindex(o)
+	require.NoError(t, err)
+
+	old, err := st.IndexedFiles("mock-v1")
+	require.NoError(t, err)
+	require.Empty(t, old, "orphaned model rows should be cleaned up")
+
+	newFiles, err := st.IndexedFiles("mock-v2")
+	require.NoError(t, err)
+	require.Contains(t, newFiles, "doc.md")
 }

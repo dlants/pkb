@@ -220,6 +220,37 @@ Decisions/notes (DONE):
 
 ## Stage 2 — Two embedding models + file-type routing (still markdown chunker for text; code files embedded as plain text via code model)
 
+Decisions/notes (DONE):
+- `internal/config`: `Config{CodeEmbedding, TextEmbedding ModelConfig, Ref, ExtOverrides}`
+  loaded from `.pkb.json` or `.pkb/config.json` (first found wins); missing file
+  -> `Default()`; JSON unmarshal merges over defaults so unset fields keep
+  defaults. `ModelConfig` records provider/model/dimensions only — actual model
+  construction is deferred (no Bedrock client until later), keeping config a pure
+  selection record. Tested in `config_test.go`.
+- `index.Options` now holds `CodeModel` + `TextModel` (+ optional `ExtOverrides`)
+  instead of a single `Model`. `route()`/`modelFor()` pick the type+model via
+  `filetype.RoutePath` with override support; `activeModels()` dedupes when both
+  point at the same model so single-model callers behave exactly as before.
+- `candidate()` now admits recognized code files (any `filetype.Code`) in addition
+  to the text allowlist. Code files are chunked naively with `ChunkMarkdown` for
+  now (tree-sitter is Stage 3).
+- Change detection is now model-aware: `indexed` maps each path to
+  `{model, blobSha}` built from both models' `IndexedFiles`. Deletes target the
+  recorded model; a routing change (path previously embedded by a different model)
+  purges the stale rows before re-indexing. `Stats` sums across active models.
+- `index.Search` embeds the query with each active model, queries each model's
+  vec table, and merges results by descending score (truncated to topK).
+- `store.CleanupOrphans(activeModels)` drops vec0 tables and deletes files/chunks
+  rows for any model not currently active (model-name change reclaims storage).
+  IMPORTANT: it selects only true vec0 virtual tables via
+  `sql LIKE '%USING vec0%'` — matching on table-name prefix wrongly catches
+  sqlite-vec's shadow tables (`*_rowids`, `*_chunks`, ...) and dropping those
+  corrupts the index ("could not initialize 'insert rowids' statement").
+- CLI wiring still deferred to Stage 4; `cmd/pkb` commands remain stubs.
+- Tests added to `index/manager_test.go`: dual-model routing to separate tables,
+  merged search across both models ordered by score, and orphan cleanup on model
+  change. All existing Stage 1 tests updated for the new Options shape and pass.
+
 - Goal: context holds a code model and a text model; `file-type.ts` routes each file to a type and model; config selects both models. Code files are *discovered and embedded by the code model* (chunked naively for now) so the routing + dual-vec-table path is proven before the tree-sitter chunker exists.
 - Work: `internal/config` loads both model configs; the context builds a code model + text model; `internal/filetype` routes each file; `store`/`index` route indexing + search by model; ensure two vec0 tables coexist and orphaned tables are cleaned up.
 - Verification:
