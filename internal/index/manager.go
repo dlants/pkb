@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -74,23 +75,56 @@ func (i *Ignore) Match(relPath string) bool {
 
 // Options configures a reindex run.
 type Options struct {
-	Repo   *git.Repo
-	Store  *store.Store
-	Model  embed.EmbeddingModel
+	Repo *git.Repo
+	Store *store.Store
+	// CodeModel embeds code files; TextModel embeds text/markdown files.
+	CodeModel embed.EmbeddingModel
+	TextModel embed.EmbeddingModel
 	Ref    string
 	Ignore *Ignore
+	// ExtOverrides forces a file extension to a file type ("code"/"text").
+	ExtOverrides map[string]string
 }
 
-// textExts is the Stage 1 allowlist of indexable text extensions. Stage 2
-// introduces full file-type routing and code support.
+// activeModels returns the distinct embedding models in use, deduped by name.
+func (o *Options) activeModels() []embed.EmbeddingModel {
+	if o.CodeModel.ModelName() == o.TextModel.ModelName() {
+		return []embed.EmbeddingModel{o.TextModel}
+	}
+	return []embed.EmbeddingModel{o.CodeModel, o.TextModel}
+}
+
+// route returns the file type for a path, applying any extension overrides.
+func (o *Options) route(path string) filetype.FileType {
+	ext := strings.ToLower(filepath.Ext(path))
+	if o.ExtOverrides != nil {
+		if t, ok := o.ExtOverrides[ext]; ok {
+			if t == "code" {
+				return filetype.Code
+			}
+			return filetype.Text
+		}
+	}
+	return filetype.RoutePath(path).Type
+}
+
+// modelFor returns the embedding model that should embed the given path.
+func (o *Options) modelFor(path string) embed.EmbeddingModel {
+	if o.route(path) == filetype.Code {
+		return o.CodeModel
+	}
+	return o.TextModel
+}
+
+// textExts is the allowlist of indexable text extensions.
 var textExts = map[string]struct{}{
 	".md":       {},
 	".markdown": {},
 	".txt":      {},
 }
 
-// candidate reports whether a path should be indexed (Stage 1: markdown/text
-// files only, never the .pkb state dir, not ignored).
+// candidate reports whether a path should be indexed: a recognized code file,
+// or an allowlisted text file; never the .pkb state dir; not ignored.
 func (o *Options) candidate(path string) bool {
 	if path == ".pkbignore" || strings.HasPrefix(path, ".pkb/") {
 		return false
@@ -98,8 +132,8 @@ func (o *Options) candidate(path string) bool {
 	if o.Ignore != nil && o.Ignore.Match(path) {
 		return false
 	}
-	if filetype.RoutePath(path).Type != filetype.Text {
-		return false
+	if o.route(path) == filetype.Code {
+		return true
 	}
 	_, ok := textExts[strings.ToLower(filepath.Ext(path))]
 	return ok
@@ -147,13 +181,31 @@ func Reindex(o *Options) (State, error) {
 		return State{}, err
 	}
 
-	if err := o.Store.EnsureVecTable(o.Model.ModelName(), o.Model.Dimensions()); err != nil {
+	models := o.activeModels()
+	for _, m := range models {
+		if err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {
+			return State{}, err
+		}
+	}
+	activeNames := make([]string, len(models))
+	for i, m := range models {
+		activeNames[i] = m.ModelName()
+	}
+	if err := o.Store.CleanupOrphans(activeNames); err != nil {
 		return State{}, err
 	}
 
-	indexed, err := o.Store.IndexedFiles(o.Model.ModelName())
-	if err != nil {
-		return State{}, err
+	// indexed maps each already-indexed path to the model that embedded it and
+	// its stored blob sha.
+	indexed := map[string]indexedEntry{}
+	for _, m := range models {
+		files, err := o.Store.IndexedFiles(m.ModelName())
+		if err != nil {
+			return State{}, err
+		}
+		for path, sha := range files {
+			indexed[path] = indexedEntry{model: m.ModelName(), sha: sha}
+		}
 	}
 
 	treeFiles, err := o.Repo.LsTree(ref)
@@ -177,25 +229,39 @@ func Reindex(o *Options) (State, error) {
 
 	for path := range touched {
 		blobSha, inTree := treeMap[path]
+		prevEntry, wasIndexed := indexed[path]
 		if inTree && o.candidate(path) {
-			if indexed[path] == blobSha {
-				continue // content unchanged; skip embed
+			model := o.modelFor(path)
+			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+				continue // content unchanged, same model; skip embed
 			}
-			if err := o.indexFile(path, blobSha); err != nil {
+			// If a different model previously embedded this path (e.g. routing
+			// changed), purge the stale rows first.
+			if wasIndexed && prevEntry.model != model.ModelName() {
+				if err := o.Store.DeleteFile(path, prevEntry.model); err != nil {
+					return State{}, err
+				}
+			}
+			if err := o.indexFile(path, blobSha, model); err != nil {
 				return State{}, err
 			}
 		} else {
-			if _, ok := indexed[path]; ok {
-				if err := o.Store.DeleteFile(path, o.Model.ModelName()); err != nil {
+			if wasIndexed {
+				if err := o.Store.DeleteFile(path, prevEntry.model); err != nil {
 					return State{}, err
 				}
 			}
 		}
 	}
 
-	stats, err := o.Store.Stats(o.Model.ModelName())
-	if err != nil {
-		return State{}, err
+	var stats store.Stats
+	for _, m := range models {
+		s, err := o.Store.Stats(m.ModelName())
+		if err != nil {
+			return State{}, err
+		}
+		stats.Files += s.Files
+		stats.Chunks += s.Chunks
 	}
 	st := State{
 		Commit:     targetSha,
@@ -211,7 +277,7 @@ func Reindex(o *Options) (State, error) {
 
 // touchedPaths computes the set of paths that might need work, choosing the
 // incremental, divergence, or full strategy.
-func (o *Options) touchedPaths(prev *State, targetSha string, treeMap, indexed map[string]string) (map[string]struct{}, error) {
+func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[string]string, indexed map[string]indexedEntry) (map[string]struct{}, error) {
 	touched := map[string]struct{}{}
 
 	full := prev == nil || prev.Commit == "" || !o.Repo.ObjectExists(prev.Commit)
@@ -268,11 +334,13 @@ func (o *Options) touchedPaths(prev *State, targetSha string, treeMap, indexed m
 	return touched, nil
 }
 
-func (o *Options) indexFile(path, blobSha string) error {
+func (o *Options) indexFile(path, blobSha string, model embed.EmbeddingModel) error {
 	content, err := os.ReadFile(filepath.Join(o.Repo.Root, path))
 	if err != nil {
 		return err
 	}
+	// Stage 2 chunks code naively with the generic text chunker; Stage 3 adds
+	// tree-sitter chunking for recognized languages.
 	chunks := chunk.ChunkMarkdown(string(content), chunk.TargetChunkSize)
 
 	contextualized := make([]string, len(chunks))
@@ -286,11 +354,39 @@ func (o *Options) indexFile(path, blobSha string) error {
 
 	var embeddings []embed.Embedding
 	if len(contextualized) > 0 {
-		embeddings, err = o.Model.EmbedChunks(contextualized)
+		embeddings, err = model.EmbedChunks(contextualized)
 		if err != nil {
 			return err
 		}
 	}
 
-	return o.Store.PutFile(path, o.Model.ModelName(), blobSha, chunks, contextualized, embeddings)
+	return o.Store.PutFile(path, model.ModelName(), blobSha, chunks, contextualized, embeddings)
+}
+
+// indexedEntry records which model embedded a path and the stored blob sha.
+type indexedEntry struct {
+	model string
+	sha   string
+}
+
+// Search embeds the query with every active model, queries each model's vec
+// table, and merges results by descending score (truncated to topK).
+func Search(o *Options, query string, topK int) ([]store.SearchResult, error) {
+	var all []store.SearchResult
+	for _, m := range o.activeModels() {
+		qe, err := m.EmbedQuery(query)
+		if err != nil {
+			return nil, err
+		}
+		res, err := o.Store.Search(m.ModelName(), qe, topK)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, res...)
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].Score > all[j].Score })
+	if topK > 0 && len(all) > topK {
+		all = all[:topK]
+	}
+	return all, nil
 }
