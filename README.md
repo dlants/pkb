@@ -1,118 +1,104 @@
-# PKB (Personal Knowledge Base)
+# PKB — git-repo-rooted code + docs search
 
-A CLI for managing a local semantic search-based personal knowledge base. Index your markdown documents and search them using natural language queries. Pairs perfectly with [magenta.nvim](https://github.com/dlants/magenta.nvim) - a coding assistant plugin for neovim.
+PKB builds a semantic search index over the code and docs in a git repository.
+It is meant to sit at the root of a repo, be refreshed at a single well-defined
+moment — when code lands on the default branch (via a commit hook or CI step) —
+and expose a CLI that an agent can use to answer broad orientation questions
+("how do we handle auth here?") against the state of the repo in dev.
 
-- **Standalone**: Manage and search your own notes, documentation, and knowledge base via the cli.
-- **Agent Skill**: Expose your knowledge base to AI agents like Claude Code by creating a skill.
-- **Single Db file**: Commit the db to git to turn your repo's markdown docs into a searchable knowledge base for your whole team—just run sync (maybe in CI/CD) to keep everything up to date.
+It is **not** a live view of the working tree: there is no watcher. Reindexing
+happens only when you run `pkb reindex`.
 
-Currently only Markdown files (`.md`) are supported. Uses brute-force search to get the nearest neighbors (no approximate nearest neighbors), so this is best suited for small to medium document collections (not full codebases).
+## How it works
 
-## Quick Start
+- **Git is the source of truth.** PKB records the commit it was last indexed
+  against in `.pkb/state.json` and asks `git diff` for the delta to the target
+  ref. `.gitignore` is honored for free (git only tracks non-ignored files);
+  `.pkbignore` (gitignore-ish, segment/prefix matching) filters further.
+- **Two embedding models.** Code files are chunked along syntactic boundaries
+  with tree-sitter and embedded by a *code* model; markdown/text files use a
+  structural chunker and a *text* model. Each file is embedded by exactly one
+  model, and chunks live in that model's vector table.
+- **Single binary.** PKB is a Go binary that statically links SQLite +
+  sqlite-vec and the tree-sitter grammars (cgo). No node/npm runtime.
 
-### Requirements
-
-- Node.js 18+
-- AWS credentials configured (access to Bedrock for cohere embed v4 model and anthropic haiku 4.5)
-- `us-east-1` or `eu-west-1` region access for Cohere Embed v4
-- SQLite3 with [sqlite-vec](https://github.com/asg017/sqlite-vec) extension
+## Build
 
 ```bash
-# Install dependencies
-npm install
-
-# Track a directory of markdown files
-npx tsx scripts/cli.ts ~/pkb.db track ~/docs
-
-# Index all tracked sources
-npx tsx scripts/cli.ts ~/pkb.db sync
-
-# Search your knowledge base
-npx tsx scripts/cli.ts ~/pkb.db search "how to configure X"
+go build -o pkb ./cmd/pkb
 ```
 
-## Exposing to Claude Code
+Requires a C toolchain (cgo) and AWS credentials with Bedrock access for the
+configured embedding models.
 
-You can expose your PKB to Claude Code (or similar agents) by creating a skill:
+## Usage
 
-1. Create a skill directory:
+Run from anywhere inside the git repository. PKB discovers the repo root, reads
+`.pkb.json` / `.pkb/config.json` and `.pkbignore`, and stores the index at
+`.pkb/pkb.db`.
 
-   ```bash
-   mkdir -p ~/.claude/skills/my-knowledge
-   ```
+```bash
+pkb reindex            # bring the index in sync with the target ref (default HEAD)
+pkb search "<query>"   # search; -k N controls result count (default 5)
+pkb stats              # print the current index marker (commit, file/chunk counts)
+```
 
-2. Clone this repo into the skill directory:
+`reindex` is idempotent: running it twice with no git changes performs zero
+embedding calls.
 
-   ```bash
-   git clone <repo-url> ~/.claude/skills/my-knowledge/pkb
-   cd ~/.claude/skills/my-knowledge/pkb
-   npm install
-   ```
+### Search output contract
 
-3. Create `~/.claude/skills/my-knowledge/skill.md`:
-
-   ```markdown
-   ---
-   name: my-knowledge
-   description: My personal knowledge base containing notes on <topics>. Search here for <what kind of information>.
-   ---
-
-   ## Searching
-
-   \`\`\`bash
-   npx tsx ~/.claude/skills/my-knowledge/pkb/scripts/cli.ts ~/.pkb/knowledge.db search "<query>" [topK]
-   \`\`\`
-   ...
-   ```
-
-4. Track your files and sync:
-
-   ```bash
-   npx tsx ~/.claude/skills/my-knowledge/pkb/scripts/cli.ts ~/.pkb/knowledge.db track ~/notes
-   npx tsx ~/.claude/skills/my-knowledge/pkb/scripts/cli.ts ~/.pkb/knowledge.db sync
-   ```
-
-5. (Optional) Run sync in watch mode to automatically reindex tracked sources on file changes:
-   ```bash
-   npx tsx ~/.claude/skills/my-knowledge/pkb/scripts/cli.ts ~/.pkb/knowledge.db sync --watch
-   ```
-
-## How It Works
-
-### Chunking
-
-Markdown documents are split into chunks for indexing:
-
-1. **Hard splits** on headings (h1-h6) - each section becomes a separate unit
-2. **Soft splits** on paragraphs and code blocks when sections exceed ~2000 characters (~500 tokens)
-3. **Sentence-level splits** for very long paragraphs
-4. **Character-level splits** with overlap as a last resort
-
-Each chunk preserves its heading hierarchy context (e.g., `# Guide > ## Configuration > ### AWS`).
-
-### Contextual Retrieval
-
-PKB implements [Contextual Retrieval](https://www.anthropic.com/engineering/contextual-retrieval) to improve search accuracy. Before embedding each chunk, an LLM generates additional context that situates the chunk within the full document.
-
-For example, a chunk containing:
-
-> Set the ACL to private to restrict access.
-
-Gets augmented with context like:
-
-> This chunk describes AWS S3 bucket access control configuration. ACL refers to Access Control List.
-
-This context is prepended to the chunk before embedding, helping the vector search understand ambiguous references and acronyms.
-
-### Models
-
-**Embeddings**: Cohere Embed v4 via AWS Bedrock
-**Context Generation**: Claude 4.5 Haiku via AWS Bedrock
-
-Other models are easily implemented by extending the existing interfaces.
-
-## CLI Reference
+`search` prints score-ordered markdown sections to stdout, one per result:
 
 ```
-npx tsx scripts/cli.ts --help
+## Result 1 (score: 0.873)
+File: path/to/file.go
+
+<chunk text>
+
+---
+
+## Result 2 (score: 0.812)
+...
 ```
+
+If there are no matches it prints `No results found.`. Consumers (skills,
+agent integrations) can parse these sections or feed the raw output to an LLM.
+
+## Configuration
+
+A repo-root config file — `.pkb.json` or `.pkb/config.json` (first found wins) —
+selects the two embedding models and the target ref. Any unset field falls back
+to defaults, and a missing file uses defaults entirely.
+
+```json
+{
+  "codeEmbedding": { "provider": "bedrock", "model": "us.cohere.embed-v4:0", "dimensions": 1536 },
+  "textEmbedding": { "provider": "bedrock", "model": "us.cohere.embed-v4:0", "dimensions": 1536 },
+  "ref": "HEAD",
+  "extOverrides": { ".tsx": "code" }
+}
+```
+
+- `provider`: `bedrock` (Cohere on AWS Bedrock) or `mock` (deterministic, for tests).
+- `ref`: git ref to index; defaults to `HEAD` (the default branch in CI).
+- `extOverrides`: force an extension to `code` or `text`.
+
+`.pkbignore` is a separate gitignore-style file at the repo root.
+
+## Refreshing on merge (commit hook / CI)
+
+Reindex at the moment code lands on the default branch. A minimal CI step:
+
+```bash
+# after checkout of the default branch
+go build -o pkb ./cmd/pkb
+./pkb reindex
+# commit the refreshed index so consumers get it on pull
+git add .pkb/pkb.db .pkb/state.json
+git commit -m "pkb: reindex" || true
+```
+
+Because the marker is written only after the DB transaction commits, a crash
+mid-run leaves the marker stale (behind the DB), never ahead — the next run
+re-diffs from the older commit and reprocesses already-current files harmlessly.

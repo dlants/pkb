@@ -300,7 +300,35 @@ Decisions/notes (DONE):
   - Behavior: unsupported/parse-error file degrades gracefully. Expected: falls back to line-based chunking rather than throwing.
 - Before moving on: confirm `go build ./...`, `go vet ./...`, and `go test ./...` all pass.
 
-## Stage 4 — CLI and config surface
+## Stage 4 — CLI and config surface  ✅ DONE
+
+Decisions/notes (DONE):
+- `cmd/pkb/main.go`: real `reindex`/`search`/`stats`. A shared `setup()`
+  discovers the repo root from cwd via `git.Open`, loads `config.Load` +
+  `index.LoadIgnore`, builds both embedding models via `embed.Build`, opens the
+  db at the fixed repo-relative `.pkb/pkb.db`, and assembles `index.Options`.
+  No `<dbPath>` argument. `search` takes `-k` (default 5) + a free-text query;
+  `stats` reads `.pkb/state.json`.
+- `embed.Build(provider, model, dims)` is the model factory: `bedrock`/`""` ->
+  `NewBedrockCohere`, `mock` -> `NewMockModel` (lets the CLI be exercised
+  end-to-end in tests without AWS). `internal/embed/bedrock.go` implements the
+  Cohere-on-Bedrock `EmbeddingModel` via aws-sdk-go-v2 `bedrockruntime`
+  `InvokeModel` (ported request/response shape from `bedrock-cohere.ts`).
+  ModelName == the Bedrock modelId, so vec tables key off the configured model.
+- Added deps: `github.com/aws/aws-sdk-go-v2/config` +
+  `.../service/bedrockruntime` (+ transitive). anthropic-sdk-go/LLM context
+  generation remains unwired (code uses breadcrumb context; out of scope here).
+- Search output contract (documented in README): score-ordered markdown
+  sections `## Result N (score: X)\nFile: <path>\n\n<text>` joined by `---`,
+  or `No results found.`. `main.formatResults` renders it.
+- `cmd/pkb/main_test.go`: integration tests with a temp git repo + mock-model
+  `.pkb.json`, chdir into it, capturing stdout: reindex→no-op→search→stats
+  happy path, missing-query error, and stats-before-index. Config fallback to
+  defaults is already covered in `config_test.go`.
+- Deleted the legacy TypeScript tree (`scripts/`, `package.json`,
+  `package-lock.json`, `tsconfig.json`) and the legacy TS-based `skill.md`
+  (no skill is shipped from this repo per plan). Rewrote `README.md` and
+  `context.md` for the Go CLI.
 
 - Goal: the CLI matches the new model: run from a repo root, no `<dbPath>` arg, commands `reindex`, `search`, `stats`; reads `.pkb` config + `.pkbignore`; db at fixed repo-relative path. Provide CLI usage docs and a sample commit-hook/CI invocation. No skill/plugin is shipped from this repo — consumers wrap the CLI however they like.
 - Work: finalize `cmd/pkb` command surface (`reindex`, `search`, `stats`); repo-root + config discovery from cwd; fixed db path; document the `search` output contract for consumers; update `README.md`/`context.md`; delete the legacy TypeScript tree once Go reaches parity.

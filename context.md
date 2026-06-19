@@ -1,97 +1,68 @@
-# PKB (Personal Knowledge Base)
+# PKB (git-repo-rooted code + docs search)
 
-A personal knowledge base tool with semantic search capabilities, using embeddings and vector storage.
+A semantic search index over the code and docs of a git repository. It sits at
+the repo root, is refreshed out-of-band (commit hook / CI when code lands on the
+default branch), and exposes a CLI for agents to ask broad orientation
+questions. Written in Go; statically links SQLite + sqlite-vec and tree-sitter
+grammars via cgo. No watcher, no node runtime.
 
 ## Project Structure
 
 ```
-scripts/
-├── cli.ts               # CLI entry point for sync/reindex/search commands
-├── search.ts            # Search result formatting utilities
-├── pkb.ts               # Core PKB class - indexing, search, database operations
-├── index.ts             # Main exports/barrel file
-├── index-manager.ts     # High-level manager for file watching and reindexing
-├── db.ts                # SQLite database initialization and vec table setup
-├── chunker.ts           # Markdown chunking logic
-├── context-generator.ts # LLM-based context generation for chunks
-├── create-pkb.ts        # Factory function for creating PKB instances
-├── llm.ts               # Bedrock Haiku LLM client for context generation
-├── embedding/
-│   ├── types.ts         # Embedding model interface
-│   ├── bedrock-cohere.ts  # Cohere embeddings via AWS Bedrock
-│   └── mock.ts          # Mock embedding model for testing
-└── utils/
-    └── async.ts         # Async utilities (pollUntil, Defer, delay)
-
-files/                   # Markdown documents to be indexed
+cmd/pkb/main.go          # CLI entry (stdlib flag): reindex, search, stats
+internal/
+  git/git.go             # repo root, ref sha, ls-tree, diff --name-status, cat-file -e, merge-base
+  index/manager.go       # change detection (incremental/divergence/full) + reindex flow
+  store/store.go         # sqlite + sqlite-vec: vec0 table per (modelName,version), files table, CRUD, search
+  chunk/chunk.go         # ChunkInfo + Position types + shared split helpers
+  chunk/markdown.go      # markdown/text chunker
+  chunk/code.go          # tree-sitter code chunker (ChunkCode)
+  chunk/grammars.go      # grammar registry (go, js, ts, tsx, python, rust)
+  embed/embed.go         # EmbeddingModel interface
+  embed/bedrock.go       # Cohere-on-Bedrock embeddings (aws-sdk-go-v2 InvokeModel)
+  embed/factory.go       # Build(provider, model, dims) -> EmbeddingModel ("bedrock" | "mock")
+  embed/mock.go          # deterministic test model
+  filetype/filetype.go   # ext -> {type, grammar}
+  config/config.go       # load .pkb.json / .pkb/config.json + Default()
 ```
+
+At runtime, `.pkb/state.json` (marker) and `.pkb/pkb.db` live at the repo root.
 
 ## Commands
 
-### Type Checking
+### Build
 ```bash
-npx tsc --noEmit
+go build -o pkb ./cmd/pkb
 ```
 
-### Run Tests
+### Type Check / Vet / Test
 ```bash
-npx vitest run
-```
-
-### Watch Tests
-```bash
-npx vitest
+go build ./...
+go vet ./...
+go test ./...
 ```
 
 ### CLI Usage
 
-Track a file or directory for indexing:
+Run from anywhere inside the git repo (it discovers the repo root). No `<dbPath>`
+argument — the db lives at `.pkb/pkb.db`.
+
 ```bash
-npx tsx scripts/cli.ts <dbPath> track <path>
-# Example: npx tsx scripts/cli.ts ./pkb.db track ./files
-# Example: npx tsx scripts/cli.ts ./pkb.db track ~/docs/notes.md
+pkb reindex            # sync the index with the target ref (default HEAD)
+pkb search "<query>"   # search; -k N sets result count (default 5)
+pkb stats              # print the marker (commit, indexedAt, file/chunk counts)
 ```
 
-Stop tracking a file or directory:
-```bash
-npx tsx scripts/cli.ts <dbPath> untrack <path>
-# Example: npx tsx scripts/cli.ts ./pkb.db untrack ./files
-```
+## Configuration
 
-Exclude a pattern from a tracked directory:
-```bash
-npx tsx scripts/cli.ts <dbPath> exclude <tracked-path> <pattern>
-# Example: npx tsx scripts/cli.ts ./pkb.db exclude ./files node_modules
-# Example: npx tsx scripts/cli.ts ./pkb.db exclude ~/docs .git
-```
-
-List all tracked sources:
-```bash
-npx tsx scripts/cli.ts list
-```
-
-Sync all tracked sources:
-```bash
-npx tsx scripts/cli.ts sync
-```
-
-Force reindex a specific file (must be within a tracked source):
-```bash
-npx tsx scripts/cli.ts reindex <file>
-# Example: npx tsx scripts/cli.ts reindex /home/user/docs/notes.md
-```
-
-Search the PKB:
-```bash
-npx tsx scripts/cli.ts search "<query>" [topK]
-# Example: npx tsx scripts/cli.ts search "how do I configure X" 5
-```
-
-Database is stored at `./pkb.db`. Tracked sources can be from any location.
+`.pkb.json` or `.pkb/config.json` at the repo root selects `codeEmbedding` and
+`textEmbedding` models (`provider`/`model`/`dimensions`), an optional `ref`, and
+optional `extOverrides` (ext -> "code"|"text"). Missing fields use defaults;
+`provider` is `bedrock` or `mock`. `.pkbignore` filters paths.
 
 ## Dependencies
 
-- `@anthropic-ai/sdk` / `@anthropic-ai/bedrock-sdk` - LLM API for context generation
-- `@aws-sdk/client-bedrock-runtime` - AWS Bedrock for Cohere embeddings
-- `better-sqlite3` - SQLite database
-- `sqlite-vec` - Vector similarity search extension for SQLite
+- `github.com/tree-sitter/go-tree-sitter` + per-grammar modules - code chunking
+- `github.com/mattn/go-sqlite3` + `github.com/asg017/sqlite-vec-go-bindings` - storage + vector search
+- `github.com/aws/aws-sdk-go-v2` (config + bedrockruntime) - Bedrock embeddings
+- `github.com/stretchr/testify` - tests
