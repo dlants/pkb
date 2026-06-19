@@ -181,6 +181,30 @@ Decisions/notes:
 
 ## Stage 1 — Git-driven discovery & change detection (markdown only, single model)
 
+Decisions/notes (DONE):
+- Ported the markdown chunker to Go (`internal/chunk/markdown.go`) since Stage 0
+  didn't; it mirrors `chunker.ts` heading/paragraph/char-split behavior.
+- `internal/git` shells out to `git` (plumbing: rev-parse, ls-tree -r,
+  diff --name-status, cat-file -e, merge-base[--is-ancestor]). Working-tree reads
+  are plain `os.ReadFile` at repo root + path.
+- `internal/store`: `files(path, model_name, embedding_version, blob_sha)` +
+  `chunks` + one `vec0` table per (modelName,version). No tracked-source tables.
+  Embeddings serialized via `sqlite_vec.SerializeFloat32`.
+- `internal/index`: unified change detection. All three strategies reduce to a
+  single "touched paths" set, then each path is index (in tree + candidate) vs
+  delete (indexed but gone). Blob-sha equality short-circuits re-embed. Renames
+  fall out naturally (old path absent from tree → delete; new path → index).
+  `.pkb/state.json` written only after all ops succeed (stale-not-ahead safety).
+- Stage 1 candidate filter restricts to markdown/text extensions (.md/.markdown/
+  .txt) and always excludes `.pkb/` + `.pkbignore`; full file-type/code routing
+  is Stage 2.
+- Tests: `internal/index/manager_test.go` git-repo harness covers cold start,
+  no-op, incremental add/modify/delete, rename, partial-run marker safety,
+  divergence via merge-base, total recovery, and .pkbignore. Test DB lives
+  outside the repo tree to avoid git-tracking interference.
+- CLI wiring (reindex/search/stats commands) deferred to Stage 4 as planned;
+  main.go still stubs them (no real embedding model exists until Stage 2/Bedrock).
+
 - Goal: `reindex` indexes/updates/deletes files based on the git diff between the marker commit (`.pkb/state.json`) and the target ref (with a full `ls-tree` cold-start/recovery path) + `.pkbignore`, with no tracked-source tables and no watcher. Markdown chunker and a single embedding model are still in use, so behavior is verifiable end-to-end before code support lands.
 - Work: `internal/git` (resolve repo root + ref sha, `ls-tree -r` listing, `diff --name-status` between commits, `cat-file -e` reachability check, read file content from working tree); `internal/store` schema with `files` keyed by (relativePath, blobSha, model) + vec0 tables, no tracked-source tables; `internal/index` builds operations from the diff (or full listing) and writes `.pkb/state.json` only after the DB transaction commits and the run succeeds; no timer/watcher; extend the test harness to create temp git repos.
 - Verification:
