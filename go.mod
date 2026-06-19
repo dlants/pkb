@@ -1,0 +1,15 @@
+module github.com/dlants/pkb
+
+go 1.26.2
+
+require (
+	github.com/asg017/sqlite-vec-go-bindings v0.1.6
+	github.com/mattn/go-sqlite3 v1.14.46
+	github.com/tree-sitter/go-tree-sitter v0.25.0
+	github.com/tree-sitter/tree-sitter-typescript v0.23.2
+)
+
+require (
+	github.com/mattn/go-pointer v0.0.1 // indirect
+	github.com/stretchr/testify v1.11.1 // indirect
+)
