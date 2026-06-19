@@ -262,6 +262,35 @@ Decisions/notes (DONE):
 ## Stage 3 — Tree-sitter code chunker
 
 - Goal: code files are chunked along syntactic boundaries with structural breadcrumbs, replacing naive chunking for recognized languages.
+
+Decisions/notes (DONE):
+- `internal/chunk/grammars.go`: registry `map[string]func() *tree_sitter.Language`
+  keyed by grammar name (go, javascript, python, rust, typescript, tsx). Grammars
+  are cgo Go-module deps compiled into the binary; `HasGrammar`/`languageFor`
+  helpers. Added grammar deps: tree-sitter-go, -python, -rust, -javascript.
+- `internal/chunk/code.go`: `ChunkCode(content, grammar, pathContext, maxChunkSize)`.
+  Walks named children, grouping non-declaration nodes (imports, top-level
+  consts, statements) into "filler" chunks and emitting each declaration.
+  Oversized declarations recurse into their `body` field when it has nested
+  declarations (class → per-method); leaf declarations over budget fall back to
+  line-splitting (`splitCodeByLines`, ported from `splitCodeBlockByLines`,
+  reusing `splitByCharacters`). Filler over budget is also line-split.
+  `HeadingContext` is `path > class Foo > method bar`; positions from node
+  Start/EndPosition (0-based → 1-based).
+- Declaration kinds are an explicit allowlist (`declKinds`);
+  `export_statement`/`decorated_definition` unwrap to the inner declaration.
+  Top-level consts/lexical_declaration are intentionally filler.
+- Graceful degradation: unknown grammar, SetLanguage failure, nil tree, root
+  `HasError()`, or zero chunks all fall back to line-based chunking of the whole
+  file (breadcrumb = file path).
+- Wiring (`internal/index/manager.go`): `indexFile` routes code files through
+  `ChunkCode` with `o.grammarFor(path)`; text/markdown keep `ChunkMarkdown`.
+- LLM context generation: no LLM is wired into the index path yet, so code files
+  already get breadcrumb-only context; "restrict LLM to text" is satisfied
+  structurally and will be enforced when the `llm` package is integrated.
+- Tests: `internal/chunk/code_test.go` covers two-functions, top-level filler,
+  oversized class → per-method, oversized function → line-split, parse-error and
+  unknown-grammar fallbacks. `go build/vet/test ./...` all green.
 - Work: add grammar module deps + `chunk/grammars.go` registry (`map[string]func() *tree_sitter.Language`); implement `chunk.ChunkCode` producing `[]ChunkInfo` with symbol-path `HeadingContext`; wire routing so `code` files use `ChunkCode`; restrict LLM context generation to `text` files.
 - Verification:
   - Behavior: a file with two functions yields one chunk per function with correct line ranges. Setup: small fixture in one language (e.g. TS). Actions: `chunkCode`. Expected: chunk count + positions match; `headingContext` contains file path + symbol name.

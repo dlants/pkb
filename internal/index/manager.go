@@ -75,13 +75,13 @@ func (i *Ignore) Match(relPath string) bool {
 
 // Options configures a reindex run.
 type Options struct {
-	Repo *git.Repo
+	Repo  *git.Repo
 	Store *store.Store
 	// CodeModel embeds code files; TextModel embeds text/markdown files.
 	CodeModel embed.EmbeddingModel
 	TextModel embed.EmbeddingModel
-	Ref    string
-	Ignore *Ignore
+	Ref       string
+	Ignore    *Ignore
 	// ExtOverrides forces a file extension to a file type ("code"/"text").
 	ExtOverrides map[string]string
 }
@@ -114,6 +114,13 @@ func (o *Options) modelFor(path string) embed.EmbeddingModel {
 		return o.CodeModel
 	}
 	return o.TextModel
+}
+
+// grammarFor returns the tree-sitter grammar name for a code path (empty if the
+// extension has no recognized grammar, in which case ChunkCode falls back to
+// line-based chunking).
+func (o *Options) grammarFor(path string) string {
+	return filetype.RoutePath(path).Grammar
 }
 
 // textExts is the allowlist of indexable text extensions.
@@ -339,9 +346,20 @@ func (o *Options) indexFile(path, blobSha string, model embed.EmbeddingModel) er
 	if err != nil {
 		return err
 	}
-	// Stage 2 chunks code naively with the generic text chunker; Stage 3 adds
-	// tree-sitter chunking for recognized languages.
-	chunks := chunk.ChunkMarkdown(string(content), chunk.TargetChunkSize)
+	// Code files are chunked along syntactic boundaries via tree-sitter (with a
+	// line-based fallback); text/markdown files use the structural markdown
+	// chunker.
+	var chunks []chunk.ChunkInfo
+	if o.route(path) == filetype.Code {
+		grammar := o.grammarFor(path)
+		var err error
+		chunks, err = chunk.ChunkCode(content, grammar, path, chunk.TargetChunkSize)
+		if err != nil {
+			return err
+		}
+	} else {
+		chunks = chunk.ChunkMarkdown(string(content), chunk.TargetChunkSize)
+	}
 
 	contextualized := make([]string, len(chunks))
 	for i, c := range chunks {
