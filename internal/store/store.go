@@ -67,6 +67,7 @@ func (s *Store) init() error {
 			model_name TEXT NOT NULL,
 			embedding_version INTEGER NOT NULL,
 			blob_sha TEXT NOT NULL,
+			inference_model TEXT NOT NULL DEFAULT '',
 			UNIQUE(path, model_name, embedding_version)
 		);
 		CREATE TABLE IF NOT EXISTS chunks (
@@ -88,6 +89,10 @@ func (s *Store) init() error {
 	if _, aerr := s.db.Exec(`ALTER TABLE chunks ADD COLUMN heading_context TEXT NOT NULL DEFAULT ''`); aerr != nil && !strings.Contains(aerr.Error(), "duplicate column name") {
 		return aerr
 	}
+	// Migrate pre-existing databases that lack inference_model.
+	if _, aerr := s.db.Exec(`ALTER TABLE files ADD COLUMN inference_model TEXT NOT NULL DEFAULT ''`); aerr != nil && !strings.Contains(aerr.Error(), "duplicate column name") {
+		return aerr
+	}
 	return err
 }
 
@@ -106,23 +111,31 @@ func (s *Store) EnsureVecTable(modelName string, dims int) error {
 	return err
 }
 
-// IndexedFiles returns a map of relative path -> blob sha for files already
+// FileMeta records the reuse-relevant metadata stored for an indexed file: the
+// blob sha and the inference-model identity that produced its augmented
+// embeddings (empty when augmentation was disabled).
+type FileMeta struct {
+	Sha            string
+	InferenceModel string
+}
+
+// IndexedFiles returns a map of relative path -> FileMeta for files already
 // indexed by the given model.
-func (s *Store) IndexedFiles(modelName string) (map[string]string, error) {
+func (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {
 	rows, err := s.db.Query(
-		`SELECT path, blob_sha FROM files WHERE model_name = ? AND embedding_version = ?`,
+		`SELECT path, blob_sha, inference_model FROM files WHERE model_name = ? AND embedding_version = ?`,
 		modelName, EmbeddingVersion)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string]string{}
+	out := map[string]FileMeta{}
 	for rows.Next() {
-		var path, sha string
-		if err := rows.Scan(&path, &sha); err != nil {
+		var path, sha, inferenceModel string
+		if err := rows.Scan(&path, &sha, &inferenceModel); err != nil {
 			return nil, err
 		}
-		out[path] = sha
+		out[path] = FileMeta{Sha: sha, InferenceModel: inferenceModel}
 	}
 	return out, rows.Err()
 }
@@ -165,7 +178,7 @@ func deleteFileTx(tx *sql.Tx, path, modelName string) error {
 
 // PutFile (re)indexes a single file: it deletes any existing rows for the path
 // and inserts the new chunks + embeddings in one transaction.
-func (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInfo, contextualized []string, embeddings []embed.Embedding) error {
+func (s *Store) PutFile(path, modelName, blobSha, inferenceModel string, chunks []chunk.ChunkInfo, contextualized []string, embeddings []embed.Embedding) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -177,8 +190,8 @@ func (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInf
 	}
 
 	res, err := tx.Exec(
-		`INSERT INTO files (path, model_name, embedding_version, blob_sha) VALUES (?, ?, ?, ?)`,
-		path, modelName, EmbeddingVersion, blobSha)
+		`INSERT INTO files (path, model_name, embedding_version, blob_sha, inference_model) VALUES (?, ?, ?, ?, ?)`,
+		path, modelName, EmbeddingVersion, blobSha, inferenceModel)
 	if err != nil {
 		return err
 	}

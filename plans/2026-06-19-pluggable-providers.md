@@ -272,7 +272,26 @@ Decisions/notes:
   - Expected outcome: correct text extraction per provider; clear errors.
 - Before moving on: tests, vet, build pass.
 
-## Stage 5 — Reindex granularity: whole-file for text, per-chunk for code
+## Stage 5 — Reindex granularity: whole-file for text, per-chunk for code  ✅ DONE
+
+Decisions/notes:
+- `store`: added `inference_model` column to `files` (with migration);
+  `IndexedFiles` now returns `map[string]store.FileMeta{Sha, InferenceModel}`;
+  `PutFile` takes an `inferenceModel` arg and persists it.
+- `index.Options`: added `Inference infer.InferenceModel` (nil = augmentation
+  disabled) and an `inferenceName()` helper returning "" when nil. Not yet
+  populated by main.go (Stage 7); indexer still produces deterministic text in
+  Stage 5 (augmentation prompt wiring is Stage 6).
+- Reuse split in `Reindex`/`indexFile`: code files keep per-chunk `ChunkKey`
+  reuse via `reuseEmbeddings`; text files re-embed every chunk (all-or-nothing)
+  via `model.EmbedChunks`. The blob-sha skip short-circuit now additionally
+  requires the stored inference identity to match for text files (code files
+  ignore it), so an inference-model switch invalidates a text file's vectors.
+- Tests (manager_test.go): replaced the old per-chunk markdown-reuse test with
+  `TestTextFileWholeFileReembedOnChange` (any edit re-embeds all chunks),
+  `TestTextFileUnchangedBlobReusesAll` (no change → no embed), and
+  `TestTextFileInferenceIdentityChangeReembeds` (model switch + forced full run
+  re-embeds). Code per-chunk reuse tests unchanged.
 
 - Goal: split the reuse path by file type before any real inference runs. Code
   files keep today's per-chunk `ChunkKey` reuse. Text/markdown files reuse only
