@@ -6,6 +6,18 @@ default branch), and exposes a CLI for agents to ask broad orientation
 questions. Written in Go; statically links SQLite + sqlite-vec and tree-sitter
 grammars via cgo.
 
+## Providers
+
+PKB uses a pluggable **embedding** model (all files) and an optional
+**inference** model (augments markdown/text chunks before embedding; code is
+never augmented). Both are selected in `pkb.toml` via `[embedding]` /
+`[inference]` blocks. Providers: `bedrock` (corporate default — Cohere embed-v4
++ Claude Haiku, IAM creds), `openai`/`openai-compatible` (OpenAI cloud or local
+servers like Ollama via `baseurl`), `gemini`, `none` (inference only — disables
+augmentation), and `mock` (tests). HTTP providers read the API key from the env
+var named by `apikeyenv` (`OPENAI_API_KEY` / `GEMINI_API_KEY` defaults). See
+README.md for the full config reference.
+
 ## Commands
 
 ### Build

@@ -14,6 +14,7 @@ import (
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/index"
+	"github.com/dlants/pkb/internal/infer"
 	"github.com/dlants/pkb/internal/paths"
 	"github.com/dlants/pkb/internal/store"
 )
@@ -90,6 +91,11 @@ func setup() (*index.Options, func(), error) {
 		return nil, nil, fmt.Errorf("building embedding model: %w", err)
 	}
 
+	inferenceModel, err := infer.Build(cfg.Inference.Provider, cfg.Inference.Model, cfg.Inference.Region, cfg.Inference.Profile, cfg.Inference.BaseURL, cfg.Inference.APIKeyEnv)
+	if err != nil {
+		return nil, nil, fmt.Errorf("building inference model: %w", err)
+	}
+
 	st, err := store.Open(filepath.Join(string(repo.Root), dbRelPath))
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening database: %w", err)
@@ -99,6 +105,7 @@ func setup() (*index.Options, func(), error) {
 		Repo:         repo,
 		Store:        st,
 		Model:        model,
+		Inference:    inferenceModel,
 		Ignore:       ignore,
 		ExtOverrides: cfg.ExtOverrides,
 	}
