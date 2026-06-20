@@ -48,6 +48,8 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
           git add -- pkb.db pkb-state.toml
           git commit -m "pkb: reindex for ${GITHUB_SHA} [skip ci]"
+          git lfs push origin HEAD
           git push
