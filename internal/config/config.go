@@ -1,6 +1,6 @@
 // Package config loads the repo-root PKB configuration (pkb.toml or
-// .pkb/config.toml), which selects a code embedding model and a text embedding
-// model, an optional target ref, and optional extension routing overrides.
+// .pkb/config.toml), which selects an embedding model, an optional target ref,
+// and optional extension routing overrides.
 package config
 
 import (
@@ -26,10 +26,8 @@ type ModelConfig struct {
 
 // Config is the parsed repo-root configuration.
 type Config struct {
-	// CodeEmbedding embeds source-code files.
-	CodeEmbedding ModelConfig `toml:"codeEmbedding"`
-	// TextEmbedding embeds prose/markdown files.
-	TextEmbedding ModelConfig `toml:"textEmbedding"`
+	// Embedding selects the model used to embed all files (code and text).
+	Embedding ModelConfig `toml:"embedding"`
 	// Ref is the target git ref to index (default "HEAD").
 	Ref string `toml:"ref"`
 	// ExtOverrides maps a file extension (including the leading dot) to a
@@ -40,12 +38,7 @@ type Config struct {
 // Default returns the built-in configuration used when no config file exists.
 func Default() Config {
 	return Config{
-		CodeEmbedding: ModelConfig{
-			Provider:   "bedrock",
-			Model:      "us.cohere.embed-v4:0",
-			Dimensions: 1536,
-		},
-		TextEmbedding: ModelConfig{
+		Embedding: ModelConfig{
 			Provider:   "bedrock",
 			Model:      "us.cohere.embed-v4:0",
 			Dimensions: 1536,

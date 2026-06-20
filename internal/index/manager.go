@@ -79,21 +79,17 @@ func (i *Ignore) Match(rel paths.GitRootRelativePath) bool {
 type Options struct {
 	Repo  *git.Repo
 	Store *store.Store
-	// CodeModel embeds code files; TextModel embeds text/markdown files.
-	CodeModel embed.EmbeddingModel
-	TextModel embed.EmbeddingModel
-	Ref       string
-	Ignore    *Ignore
+	// Model embeds all files (code and text).
+	Model  embed.EmbeddingModel
+	Ref    string
+	Ignore *Ignore
 	// ExtOverrides forces a file extension to a file type ("code"/"text").
 	ExtOverrides map[string]string
 }
 
-// activeModels returns the distinct embedding models in use, deduped by name.
+// activeModels returns the embedding models in use.
 func (o *Options) activeModels() []embed.EmbeddingModel {
-	if o.CodeModel.ModelName() == o.TextModel.ModelName() {
-		return []embed.EmbeddingModel{o.TextModel}
-	}
-	return []embed.EmbeddingModel{o.CodeModel, o.TextModel}
+	return []embed.EmbeddingModel{o.Model}
 }
 
 // route returns the file type for a path, applying any extension overrides.
@@ -108,14 +104,6 @@ func (o *Options) route(path paths.GitRootRelativePath) filetype.FileType {
 		}
 	}
 	return filetype.RoutePath(string(path)).Type
-}
-
-// modelFor returns the embedding model that should embed the given path.
-func (o *Options) modelFor(path paths.GitRootRelativePath) embed.EmbeddingModel {
-	if o.route(path) == filetype.Code {
-		return o.CodeModel
-	}
-	return o.TextModel
 }
 
 // grammarFor returns the tree-sitter grammar name for a code path (empty if the
@@ -240,7 +228,7 @@ func Reindex(o *Options) (State, error) {
 		blobSha, inTree := treeMap[path]
 		prevEntry, wasIndexed := indexed[path]
 		if inTree && o.candidate(path) {
-			model := o.modelFor(path)
+			model := o.Model
 			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 				continue // content unchanged, same model; skip embed
 			}
