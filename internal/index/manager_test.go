@@ -10,6 +10,7 @@ import (
 
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
+	"github.com/dlants/pkb/internal/infer"
 	"github.com/dlants/pkb/internal/store"
 	"github.com/stretchr/testify/require"
 )
@@ -149,7 +150,7 @@ func TestIncrementalAddModifyDelete(t *testing.T) {
 	require.NotContains(t, files, "del.md")
 }
 
-func TestReusesUnchangedChunksMarkdown(t *testing.T) {
+func TestTextFileWholeFileReembedOnChange(t *testing.T) {
 	h := newHarness(t)
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
 	h.commit("init")
@@ -163,13 +164,60 @@ func TestReusesUnchangedChunksMarkdown(t *testing.T) {
 	total := model.ChunkCount()
 	require.Equal(t, 2, total, "fixture should produce two chunks")
 
-	// Change only the body of the second section.
+	// Change only the body of the second section. Text files are LLM-augmented
+	// from the whole file, so reuse is all-or-nothing per file: every chunk
+	// re-embeds, not just the edited one.
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nrewritten nested paragraph")
 	h.commit("edit body")
 
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	require.Equal(t, total+1, model.ChunkCount(), "only the changed chunk should re-embed")
+	require.Equal(t, total+2, model.ChunkCount(), "any change re-embeds the whole text file")
+}
+
+func TestTextFileUnchangedBlobReusesAll(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	calls := model.ChunkCalls()
+
+	// No change at all: the whole file's vectors are reused, nothing re-embeds.
+	h.commit("empty")
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, calls, model.ChunkCalls(), "unchanged text file should embed nothing")
+}
+
+func TestTextFileInferenceIdentityChangeReembeds(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	o.Inference = infer.NewMockModel("infer-v1")
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	total := model.ChunkCount()
+	require.Equal(t, 2, total)
+
+	// Switch the inference model without touching file content: the text file's
+	// augmented vectors are stale and must be re-embedded. Force a full revisit
+	// (a config-only change leaves no git diff) by clearing the marker.
+	o.Inference = infer.NewMockModel("infer-v2")
+	require.NoError(t, os.Remove(filepath.Join(h.root, ".pkb", "state.json")))
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, total+2, model.ChunkCount(), "inference-model switch invalidates text-file vectors")
 }
 
 func TestReindexOnHeadingChangeMarkdown(t *testing.T) {
