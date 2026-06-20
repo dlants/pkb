@@ -30,9 +30,27 @@ Commit `.gitattributes` along with `pkb.db`. If `pkb.db` is already in your hist
 
 `pkb reindex` indexes the current `HEAD` and writes the indexed commit sha to `pkb-state.toml`. Because the refreshed `pkb.db` / `pkb-state.toml` then need to be committed, the index is always delivered one commit *behind* the code it represents — the index commit on `main` contains an index that reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer.
 
-The recommended trigger is **CI on merge to the default branch**, not a client-side git hook (a `pre-push` hook can't add a commit to the push that's already in flight, and would clobber the Git LFS pre-push hook). This repo ships such a workflow at [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml): on push to `main` it builds `pkb`, runs `pkb reindex`, and commits the refreshed index back. The follow-up commit only touches `pkb.db` / `pkb-state.toml` (both in `paths-ignore`, and `GITHUB_TOKEN` pushes don't trigger workflows), so it does not loop. It needs `VOYAGE_API_KEY` and `ANTHROPIC_API_KEY` as repository secrets.
+The recommended trigger is **CI on merge to the default branch**, not a client-side git hook (a `pre-push` hook can't add a commit to the push that's already in flight, and would clobber the Git LFS pre-push hook). This repo ships such a workflow at [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml) — use it as the reference for your own setup. On push to `main` it:
 
-Locally you can always run `pkb reindex` by hand and commit the result.
+1. checks out with `lfs: true` and full history (`fetch-depth: 0`), so reindex can diff against the last indexed commit;
+2. builds `pkb` and runs `pkb reindex`;
+3. commits the refreshed `pkb.db` / `pkb-state.toml` and pushes them back.
+
+Two details keep this robust:
+
+- **LFS uploads must be explicit.** The commit step runs `git lfs install --local` and `git lfs push origin HEAD` *before* `git push`, so the new `pkb.db` blob lands in LFS storage before its pointer is pushed. Relying on the implicit pre-push hook is fragile — if the blob is missing from LFS storage, later `lfs: true` checkouts fail with a `404`.
+- **No re-trigger loop.** The workflow has `paths-ignore: [pkb.db, pkb-state.toml]`, and `GITHUB_TOKEN` pushes don't trigger workflows anyway, so the index commit doesn't start another run. The commit message also carries `[skip ci]`.
+
+It needs `VOYAGE_API_KEY` and `ANTHROPIC_API_KEY` set as **repository secrets** (Settings → Secrets and variables → Actions), and `contents: write` permission (already declared in the workflow).
+
+Locally you can always run `pkb reindex` by hand and commit the result — just make sure `git lfs install` has been run in your clone (see the Git LFS setup above) so the blob uploads on `git push`.
+
+See these files in this repo for a complete working configuration:
+
+- [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml) — the CI reindex + LFS-aware commit workflow.
+- [`pkb.toml`](pkb.toml) — model/provider configuration (Voyage embeddings + Anthropic augmentation).
+- [`.gitattributes`](.gitattributes) — the Git LFS tracking rule for `pkb.db`.
+- [`pkb-state.toml`](pkb-state.toml) — the tracked index marker (indexed commit sha + file/chunk counts).
 
 Run the pkb binary from anywhere inside the git repository. PKB discovers the repo root based on cwd, and runs against `pkb.db` at the repo root.
 
