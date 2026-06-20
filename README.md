@@ -10,7 +10,7 @@ pkb search "<query>"   # search; -k N controls result count (default 5)
 pkb stats              # print the current index marker (commit, file/chunk counts)
 ```
 
-`pkb reindex` is meant to be run at a single well-defined moment — when code lands on the default branch (via a git hook or CI step). PKB keeps track of the last commit that was indexed, and uses git to identify changed files, then brings the index up to date with the current commit.
+`pkb reindex` is meant to be run at a single well-defined moment — when code lands on the default branch (typically a CI step). PKB keeps track of the last commit that was indexed (in `pkb-state.toml`), and uses git to identify changed files, then brings the index up to date with the current commit.
 
 This will create a pkb.db sql file at the root of your repo. Check that into your repo. Now, everyone in your repo has access to the full index, while you only pay the embedding cost once.
 
@@ -25,6 +25,14 @@ git add .gitattributes pkb.db
 Commit `.gitattributes` along with `pkb.db`. If `pkb.db` is already in your history as a regular blob, rewrite it with `git lfs migrate import --include="pkb.db"`.
 
 `reindex` is idempotent: running it twice with no git changes performs zero embedding calls.
+
+## Keeping the index fresh
+
+`pkb reindex` indexes the current `HEAD` and writes the indexed commit sha to `pkb-state.toml`. Because the refreshed `pkb.db` / `pkb-state.toml` then need to be committed, the index is always delivered one commit *behind* the code it represents — the index commit on `main` contains an index that reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer.
+
+The recommended trigger is **CI on merge to the default branch**, not a client-side git hook (a `pre-push` hook can't add a commit to the push that's already in flight, and would clobber the Git LFS pre-push hook). This repo ships such a workflow at [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml): on push to `main` it builds `pkb`, runs `pkb reindex`, and commits the refreshed index back. The follow-up commit only touches `pkb.db` / `pkb-state.toml` (both in `paths-ignore`, and `GITHUB_TOKEN` pushes don't trigger workflows), so it does not loop. It needs `VOYAGE_API_KEY` and `ANTHROPIC_API_KEY` as repository secrets.
+
+Locally you can always run `pkb reindex` by hand and commit the result.
 
 Run the pkb binary from anywhere inside the git repository. PKB discovers the repo root based on cwd, and runs against `pkb.db` at the repo root.
 
