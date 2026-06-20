@@ -177,7 +177,6 @@ func runStats(args []string) error {
 		return nil
 	}
 	fmt.Printf("commit:    %s\n", st.Commit)
-	fmt.Printf("indexedAt: %s\n", st.IndexedAt)
 	fmt.Printf("files:     %d\n", st.FileCount)
 	fmt.Printf("chunks:    %d\n", st.ChunkCount)
 	return nil
@@ -202,7 +201,6 @@ func formatResults(root paths.AbsPath, results []store.SearchResult) string {
 // state mirrors index.State for reading the marker file in `stats`.
 type state struct {
 	Commit     string `toml:"commit"`
-	IndexedAt  string `toml:"indexedAt"`
 	FileCount  int    `toml:"fileCount"`
 	ChunkCount int    `toml:"chunkCount"`
 }

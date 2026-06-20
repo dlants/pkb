@@ -28,7 +28,6 @@ import (
 // State is the persisted marker recording how far indexing has progressed.
 type State struct {
 	Commit     string `toml:"commit"`
-	IndexedAt  string `toml:"indexedAt"`
 	FileCount  int    `toml:"fileCount"`
 	ChunkCount int    `toml:"chunkCount"`
 }
@@ -291,7 +290,6 @@ func Reindex(o *Options) (State, error) {
 	}
 	st := State{
 		Commit:     targetSha,
-		IndexedAt:  time.Now().UTC().Format(time.RFC3339),
 		FileCount:  stats.Files,
 		ChunkCount: stats.Chunks,
 	}
