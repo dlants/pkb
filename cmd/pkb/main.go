@@ -3,13 +3,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/dlants/pkb/internal/config"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
@@ -201,14 +201,14 @@ func formatResults(root paths.AbsPath, results []store.SearchResult) string {
 
 // state mirrors index.State for reading the marker file in `stats`.
 type state struct {
-	Commit     string `json:"commit"`
-	IndexedAt  string `json:"indexedAt"`
-	FileCount  int    `json:"fileCount"`
-	ChunkCount int    `json:"chunkCount"`
+	Commit     string `toml:"commit"`
+	IndexedAt  string `toml:"indexedAt"`
+	FileCount  int    `toml:"fileCount"`
+	ChunkCount int    `toml:"chunkCount"`
 }
 
 func readState(repoRoot string) (*state, error) {
-	data, err := os.ReadFile(filepath.Join(repoRoot, ".pkb", "state.json"))
+	data, err := os.ReadFile(filepath.Join(repoRoot, "pkb-state.toml"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -216,7 +216,7 @@ func readState(repoRoot string) (*state, error) {
 		return nil, err
 	}
 	var s state
-	if err := json.Unmarshal(data, &s); err != nil {
+	if err := toml.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}
 	return &s, nil
