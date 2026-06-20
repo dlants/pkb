@@ -45,6 +45,8 @@ var codeExts = map[string]string{
 	".go":  "go",
 	".py":  "python",
 	".rs":  "rust",
+	".hcl": "hcl",
+	".tf":  "hcl",
 }
 
 // RouteExt returns the Route for a file extension (including the leading dot).

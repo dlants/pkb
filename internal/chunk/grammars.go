@@ -7,6 +7,7 @@ import (
 	tspy "github.com/tree-sitter/tree-sitter-python/bindings/go"
 	tsrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
+	tshcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
 )
 
 // grammars maps a grammar name (as produced by filetype routing) to a factory
@@ -19,6 +20,7 @@ var grammars = map[string]func() *tree_sitter.Language{
 	"rust":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsrust.Language()) },
 	"typescript": func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTypescript()) },
 	"tsx":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTSX()) },
+	"hcl":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tshcl.Language()) },
 }
 
 // HasGrammar reports whether a tree-sitter grammar is available for the name.

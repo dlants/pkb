@@ -31,6 +31,10 @@ var declKinds = map[string]struct{}{
 	"namespace_declaration":          {},
 	"type_alias_declaration":         {},
 	"type_declaration":               {},
+	// HCL: top-level blocks (resource/variable/...) are the chunkable units.
+	// HCL has no vendored tags.scm, so it always uses this heuristic path; the
+	// generic "block" kind is otherwise unused by the query-driven grammars.
+	"block": {},
 }
 
 func isDeclKind(kind string) bool {
@@ -90,8 +94,20 @@ func ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([
 		idx = nil
 	}
 
+	// HCL wraps top-level blocks in a `config_file > body` node, so descend to
+	// the body to expose the blocks as direct children for chunking.
+	container := root
+	if container.Kind() == "config_file" {
+		for i := uint(0); i < container.NamedChildCount(); i++ {
+			if c := container.NamedChild(i); c.Kind() == "body" {
+				container = c
+				break
+			}
+		}
+	}
+
 	var out []ChunkInfo
-	chunkContainer(root, content, pathContext, maxChunkSize, idx, &out)
+	chunkContainer(container, content, pathContext, maxChunkSize, idx, &out)
 	if len(out) == 0 {
 		return lineChunks(content, pathContext, maxChunkSize), nil
 	}
@@ -175,6 +191,8 @@ func emitDecl(outer, decl *tree_sitter.Node, source []byte, prefix string, maxCh
 	var label, name string
 	if hasEntry {
 		label, name = entry.label, entry.name
+	} else if decl.Kind() == "block" {
+		label, name = hclBlockParts(decl, source)
 	} else {
 		label = labelFromKind(decl.Kind())
 		name = declName(decl, source)
@@ -194,6 +212,19 @@ func emitDecl(outer, decl *tree_sitter.Node, source []byte, prefix string, maxCh
 
 	body := decl.ChildByFieldName("body")
 	if body != nil && hasDeclChild(body, idx) {
+		// The declaration's own text (doc comment + header, e.g.
+		// `// doc\nclass Foo {`) won't appear in any child chunk, so emit it as
+		// a standalone header chunk before recursing into the members.
+		headerEnd := int(body.StartByte())
+		header := strings.TrimRight(string(source[start:headerEnd]), " \t\n")
+		if strings.TrimSpace(header) != "" {
+			*out = append(*out, ChunkInfo{
+				Text:           header,
+				HeadingContext: childPrefix,
+				Start:          startPos,
+				End:            posFromByte(source, start+len(header)),
+			})
+		}
 		chunkContainer(body, source, childPrefix, maxChunkSize, idx, out)
 		return
 	}
@@ -260,6 +291,26 @@ func posFromByte(source []byte, off int) Position {
 		}
 	}
 	return Position{Line: line, Col: col}
+}
+
+// hclBlockParts derives the breadcrumb label and name for an HCL block: the
+// label is the block keyword (e.g. "resource"), and the name is its quoted
+// labels joined (e.g. `"aws_instance" "web"`).
+func hclBlockParts(node *tree_sitter.Node, source []byte) (label, name string) {
+	count := node.NamedChildCount()
+	var labels []string
+	for i := uint(0); i < count; i++ {
+		child := node.NamedChild(i)
+		switch child.Kind() {
+		case "identifier":
+			if label == "" {
+				label = child.Utf8Text(source)
+			}
+		case "string_lit":
+			labels = append(labels, child.Utf8Text(source))
+		}
+	}
+	return label, strings.Join(labels, " ")
 }
 
 func declName(node *tree_sitter.Node, source []byte) string {
