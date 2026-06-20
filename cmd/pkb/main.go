@@ -88,13 +88,9 @@ func setup() (*index.Options, func(), error) {
 		return nil, nil, fmt.Errorf("loading .pkbignore: %w", err)
 	}
 
-	codeModel, err := embed.Build(cfg.CodeEmbedding.Provider, cfg.CodeEmbedding.Model, cfg.CodeEmbedding.Dimensions, cfg.CodeEmbedding.Region, cfg.CodeEmbedding.Profile)
+	model, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.Region, cfg.Embedding.Profile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("building code model: %w", err)
-	}
-	textModel, err := embed.Build(cfg.TextEmbedding.Provider, cfg.TextEmbedding.Model, cfg.TextEmbedding.Dimensions, cfg.TextEmbedding.Region, cfg.TextEmbedding.Profile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("building text model: %w", err)
+		return nil, nil, fmt.Errorf("building embedding model: %w", err)
 	}
 
 	st, err := store.Open(filepath.Join(string(repo.Root), dbRelPath))
@@ -105,8 +101,7 @@ func setup() (*index.Options, func(), error) {
 	opts := &index.Options{
 		Repo:         repo,
 		Store:        st,
-		CodeModel:    codeModel,
-		TextModel:    textModel,
+		Model:        model,
 		Ref:          cfg.Ref,
 		Ignore:       ignore,
 		ExtOverrides: cfg.ExtOverrides,

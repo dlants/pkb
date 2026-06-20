@@ -23,7 +23,7 @@ internal/
   embed/factory.go       # Build(provider, model, dims) -> EmbeddingModel ("bedrock" | "mock")
   embed/mock.go          # deterministic test model
   filetype/filetype.go   # ext -> {type, grammar}
-  config/config.go       # load .pkb.json / .pkb/config.json + Default()
+  config/config.go       # load pkb.toml / .pkb/config.toml + Default()
 ```
 
 At runtime, `.pkb/state.json` (marker) and `.pkb/pkb.db` live at the repo root.
@@ -55,10 +55,11 @@ pkb stats              # print the marker (commit, indexedAt, file/chunk counts)
 
 ## Configuration
 
-`.pkb.json` or `.pkb/config.json` at the repo root selects `codeEmbedding` and
-`textEmbedding` models (`provider`/`model`/`dimensions`), an optional `ref`, and
-optional `extOverrides` (ext -> "code"|"text"). Missing fields use defaults;
-`provider` is `bedrock` or `mock`. `.pkbignore` filters paths.
+`pkb.toml` or `.pkb/config.toml` at the repo root selects a single `embedding`
+model (`provider`/`model`/`dimensions`/`region`/`profile`) used for both code
+and text, an optional `ref`, and optional `extOverrides` (ext -> "code"|"text").
+Missing fields use defaults; `provider` is `bedrock` or `mock`. `.pkbignore`
+filters paths.
 
 ## Dependencies
 
