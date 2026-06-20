@@ -23,7 +23,8 @@ type InferenceModel interface {
 // recorded in the repo config). "bedrock" returns a Claude-on-Bedrock model;
 // "openai"/"openai-compatible" returns an OpenAI chat-completions model (OpenAI
 // cloud, Ollama, etc.); "gemini" returns a Google Generative Language model;
-// "mock" returns a deterministic test model. "none" (or empty) disables
+// "anthropic" returns an Anthropic Messages API (Claude) model; "mock" returns
+// a deterministic test model. "none" (or empty) disables
 // inference and returns a nil model with no error so callers fall back to the
 // deterministic heading-prefix path.
 func Build(provider, model, region, profile, baseURL, apiKeyEnv string) (InferenceModel, error) {
@@ -36,6 +37,8 @@ func Build(provider, model, region, profile, baseURL, apiKeyEnv string) (Inferen
 		return NewOpenAICompatible(baseURL, apiKeyEnv, model)
 	case "gemini":
 		return NewGemini(baseURL, apiKeyEnv, model)
+	case "anthropic":
+		return NewAnthropic(baseURL, apiKeyEnv, model)
 	case "mock":
 		return NewMockModel(model), nil
 	default:

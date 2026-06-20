@@ -9,8 +9,8 @@ import (
 // selection (as recorded in the repo config). The "bedrock" provider returns a
 // Cohere-on-Bedrock model; "openai"/"openai-compatible" returns an
 // OpenAI-shaped HTTP model (OpenAI cloud, Ollama, etc.); "gemini" returns a
-// Google Generative Language model; "mock" returns a
-// deterministic test model.
+// Google Generative Language model; "voyage" returns a Voyage AI model; "mock"
+// returns a deterministic test model.
 func Build(provider, model string, dims int, region, profile, baseURL, apiKeyEnv string) (EmbeddingModel, error) {
 	switch provider {
 	case "bedrock", "":
@@ -19,6 +19,8 @@ func Build(provider, model string, dims int, region, profile, baseURL, apiKeyEnv
 		return NewOpenAICompatible(baseURL, apiKeyEnv, model, dims)
 	case "gemini":
 		return NewGemini(baseURL, apiKeyEnv, model, dims)
+	case "voyage":
+		return NewVoyage(baseURL, apiKeyEnv, model, dims)
 	case "mock":
 		return NewMockModel(model, dims), nil
 	default:

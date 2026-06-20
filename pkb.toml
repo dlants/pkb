@@ -1,10 +1,10 @@
 [embedding]
-provider = "openai"
-baseurl = "http://localhost:8788"
-model = "mlx-community/Qwen3-Embedding-0.6B-mxfp8"
-dimensions = 1024
+provider = "voyage"
+model = "voyage-code-3"
+dimensions = 256
+apikeyenv = "VOYAGE_API_KEY"
 
 [inference]
-provider = "openai"
-baseurl = "http://localhost:11434"
-model = "qwen3:4b-instruct-2507-q4_K_M"
+provider = "anthropic"
+model = "claude-haiku-4-5"
+apikeyenv = "ANTHROPIC_API_KEY"
