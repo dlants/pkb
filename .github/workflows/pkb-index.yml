@@ -52,4 +52,7 @@ jobs:
           git add -- pkb.db pkb-state.toml
           git commit -m "pkb: reindex for ${GITHUB_SHA} [skip ci]"
           git lfs push origin HEAD
+          # If main advanced while indexing, this push fails by design: the
+          # commit that advanced main triggers its own reindex run, which will
+          # produce an up-to-date index.
           git push
