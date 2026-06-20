@@ -371,6 +371,26 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 		}
 	}
 
+	// Text/markdown files are LLM-augmented (the contextual-retrieval pattern):
+	// each chunk gets a short blurb situating it within the whole document,
+	// prepended before embedding. Code files keep the deterministic prefix.
+	// Inference failures degrade to the deterministic text with a warning and
+	// never abort the run.
+	if o.Inference != nil && o.route(path) != filetype.Code {
+		for i, c := range chunks {
+			blurb, err := o.Inference.Complete(augmentPrompt(string(content), c.Text))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: inference failed for %s chunk %d, using deterministic context: %v\n", path, i, err)
+				continue
+			}
+			blurb = strings.TrimSpace(blurb)
+			if blurb == "" {
+				continue
+			}
+			contextualized[i] = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", blurb, contextualized[i])
+		}
+	}
+
 	// Code files are deterministic: reuse per-chunk vectors keyed on the
 	// heading breadcrumb + raw text so a small edit re-embeds only the affected
 	// chunks. Text files are LLM-augmented from the whole file, so a chunk's
@@ -388,6 +408,23 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 	}
 
 	return o.Store.PutFile(string(path), model.ModelName(), blobSha, o.inferenceName(), chunks, contextualized, embeddings)
+}
+
+// augmentPrompt builds the contextual-retrieval prompt asking the inference
+// model for a short paragraph situating a chunk within its whole document.
+func augmentPrompt(document, chunkText string) string {
+	return fmt.Sprintf(`<document>
+%s
+</document>
+
+Here is a chunk taken from the document above:
+<chunk>
+%s
+</chunk>
+
+Give a short, single-paragraph context that situates this chunk within the
+overall document to improve search retrieval. Answer only with the context and
+nothing else.`, document, chunkText)
 }
 
 // reuseEmbeddings returns an embedding for every chunk, carrying over vectors
