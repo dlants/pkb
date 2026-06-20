@@ -46,6 +46,11 @@ type Config struct {
 	// Exclude lists paths to skip during indexing, matched by basename or path
 	// prefix (see internal/index.Ignore).
 	Exclude []string `toml:"exclude"`
+	// MaxParallelism bounds how many inference (augmentation) calls run
+	// concurrently during indexing. Augmentation against a remote model is the
+	// slowest part of a run, so issuing several requests at once speeds it up.
+	// Defaults to 4; values below 1 are treated as 1.
+	MaxParallelism int `toml:"maxparallelism"`
 }
 
 // Default returns the built-in configuration used when no config file exists.
@@ -60,6 +65,7 @@ func Default() Config {
 			Provider: "bedrock",
 			Model:    "us.anthropic.claude-3-5-haiku-20241022-v1:0",
 		},
+		MaxParallelism: 4,
 	}
 }
 

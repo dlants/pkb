@@ -552,3 +552,24 @@ func TestModelChangeCleansUpOrphanTable(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, newFiles, "doc.md")
 }
+
+func TestStripThinking(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"no thinking", "just context", "just context"},
+		{"full block", "<think>reason here</think>\n\nthe context", "the context"},
+		{"dangling close", "reasoning...\n</think>\nthe context", "the context"},
+		{"multiline block", "<think>\nline1\nline2\n</think>\nctx", "ctx"},
+		{"only thinking", "<think>nothing else</think>", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := stripThinking(c.in); got != c.want {
+				t.Errorf("stripThinking(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
