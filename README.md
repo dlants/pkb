@@ -22,14 +22,30 @@ happens only when you run `pkb reindex`.
 - **Single binary.** PKB is a Go binary that statically links SQLite +
   sqlite-vec and the tree-sitter grammars (cgo). No node/npm runtime.
 
-## Build
+## Install
+
+PKB uses cgo (it statically links SQLite + sqlite-vec and the tree-sitter
+grammars), so you need a C toolchain in addition to Go:
+
+- **macOS:** `xcode-select --install` (Clang).
+- **Debian/Ubuntu:** `sudo apt-get install build-essential`.
+- **Fedora/RHEL:** `sudo dnf install gcc`.
+
+Then install the binary onto your `$PATH` (it lands in `$GOBIN`, or
+`$(go env GOPATH)/bin`):
+
+```bash
+go install github.com/dlants/pkb/cmd/pkb@latest
+```
+
+At runtime PKB needs AWS credentials with Bedrock access for the configured
+embedding models.
+
+## Build (from a checkout)
 
 ```bash
 go build -o pkb ./cmd/pkb
 ```
-
-Requires a C toolchain (cgo) and AWS credentials with Bedrock access for the
-configured embedding models.
 
 ## Usage
 

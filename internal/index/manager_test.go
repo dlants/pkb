@@ -1,9 +1,11 @@
 package index
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dlants/pkb/internal/embed"
@@ -147,6 +149,116 @@ func TestIncrementalAddModifyDelete(t *testing.T) {
 	require.Contains(t, files, "mod.md")
 	require.Contains(t, files, "keep.md")
 	require.NotContains(t, files, "del.md")
+}
+
+func TestReusesUnchangedChunksMarkdown(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	total := model.ChunkCount()
+	require.Equal(t, 2, total, "fixture should produce two chunks")
+
+	// Change only the body of the second section.
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nrewritten nested paragraph")
+	h.commit("edit body")
+
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, total+1, model.ChunkCount(), "only the changed chunk should re-embed")
+}
+
+func TestReindexOnHeadingChangeMarkdown(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	total := model.ChunkCount()
+	require.Equal(t, 2, total, "fixture should produce two chunks")
+
+	// Rename the top heading: it is a parent breadcrumb of both chunks, so both
+	// must re-embed even though no chunk body text changed.
+	h.write("doc.md", "# Topic\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("rename heading")
+
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, total+2, model.ChunkCount(), "heading change must re-embed descendant chunks")
+}
+
+func TestReusesUnchangedChunksCode(t *testing.T) {
+	h := newHarness(t)
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 2\n}\n\nfunc Gamma() int {\n\treturn 3\n}\n")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	total := model.ChunkCount()
+	require.Greater(t, total, 1, "fixture should produce multiple chunks")
+
+	// Change only the body of one function.
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 22\n}\n\nfunc Gamma() int {\n\treturn 3\n}\n")
+	h.commit("edit beta")
+
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	delta := model.ChunkCount() - total
+	require.Greater(t, delta, 0, "changed function must re-embed")
+	require.Less(t, delta, total, "unchanged functions must be reused")
+}
+
+func bigClass(name string) string {
+	var b strings.Builder
+	b.WriteString("class " + name + " {\n")
+	for i := 0; i < 12; i++ {
+		fmt.Fprintf(&b, "  method%c() {\n", 'a'+i)
+		for j := 0; j < 6; j++ {
+			b.WriteString("    const x = 'padding padding padding padding padding';\n")
+		}
+		b.WriteString("    return 1;\n  }\n")
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func TestReindexOnParentClassRenameCode(t *testing.T) {
+	h := newHarness(t)
+	h.write("f.ts", bigClass("Foo"))
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	total := model.ChunkCount()
+	require.Greater(t, total, 2, "fixture should split into many method chunks")
+
+	// Rename the enclosing class. Method-body text is identical, but the class
+	// is a parent breadcrumb of every method chunk, so all must re-embed.
+	h.write("f.ts", bigClass("Bar"))
+	h.commit("rename class")
+
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, total*2, model.ChunkCount(), "renaming parent class must re-embed all chunks")
 }
 
 func TestRenameHandled(t *testing.T) {
