@@ -12,13 +12,11 @@ func TestMissingConfigReturnsDefaults(t *testing.T) {
 	cfg, err := Load(t.TempDir())
 	require.NoError(t, err)
 	require.Equal(t, Default(), cfg)
-	require.Equal(t, "HEAD", cfg.Ref)
 }
 
 func TestLoadMergesOverDefaults(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"), []byte(`
-ref = "main"
 [embedding]
 provider = "bedrock"
 model = "my-model"
@@ -29,7 +27,6 @@ dimensions = 512
 	require.NoError(t, err)
 	require.Equal(t, "my-model", cfg.Embedding.Model)
 	require.Equal(t, 512, cfg.Embedding.Dimensions)
-	require.Equal(t, "main", cfg.Ref)
 }
 
 func TestNestedConfigPath(t *testing.T) {

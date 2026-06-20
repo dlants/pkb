@@ -1,3 +1,0 @@
-@anthropic-ai/bedrock-sdk @anthropic-ai/sdk @aws-sdk/client-bedrock-runtime better-sqlite3 sqlite-vec
-
-@types/better-sqlite3 @types/node tsx typescript vitest
