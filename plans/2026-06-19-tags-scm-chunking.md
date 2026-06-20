@@ -179,6 +179,20 @@ Invariants:
   - Expected outcome: no compile error; query has > 0 patterns; resources closed.
 - Before moving on: confirm tests, type checks, and linting all pass.
 
+> Status: DONE. Added `internal/chunk/defindex.go` with `defEntry`
+> {name,label,docStartByte} and `defIndex` {nodes set, info map}, plus
+> `buildDefIndex(root, source, grammar)` which runs the vendored tags.scm via
+> `NewQuery` + `QueryCursor.Matches` (both Close()d). Node identity uses
+> `Node.Id()` (uintptr, stable within a parsed tree). Per match we pick the
+> `@definition.*` node (label = suffix), its `@name` text, and the earliest
+> `@doc` start byte (-1 when absent). Returns (nil,nil) when no query is
+> vendored (heuristic-fallback signal) and a non-nil error on query compile
+> failure. Verified by `defindex_test.go`: Go (Foo function carries `//` doc;
+> Bar type has docStartByte == -1), TypeScript (foo function, Bar class, alpha
+> method indexed), and the no-query grammar returns nil. Not yet wired into
+> traversal. Note: the `defIndex.has` accessor was deferred to Stage 3 to avoid
+> an unused-symbol lint error.
+
 ## Stage 2: Definition index builder
 
 - Goal: a function that, given a tree + source + grammar, returns the
