@@ -244,7 +244,23 @@ Decisions/notes:
   response; assert dimension handling (no small-dim truncation reliance).
 - Before moving on: tests, vet, build pass.
 
-## Stage 4 — Inference package + providers (no indexing wiring yet)
+## Stage 4 — Inference package + providers (no indexing wiring yet)  ✅ DONE
+
+Decisions/notes:
+- Added `internal/infer` with `InferenceModel` (ModelName + Complete) and a
+  `Build` provider switch mirroring `embed.Build`
+  (signature `Build(provider, model, region, profile, baseURL, apiKeyEnv)`).
+- `Build` returns `(nil, nil)` for provider `none`/empty so callers fall back to
+  the deterministic heading-prefix path; unknown providers error.
+- Providers: `mock.go` (deterministic `"context: "+prompt`), `openai.go`
+  (POST `{base}/v1/chat/completions`, key from APIKeyEnv default OPENAI_API_KEY,
+  empty key tolerated for Ollama), `gemini.go` (POST
+  `{base}/v1beta/models/<id>:generateContent`, key as `key` query param,
+  default GEMINI_API_KEY), `bedrock.go` (InvokeModel with Anthropic Messages
+  format, eager credential check matching embed/bedrock.go).
+- Tests: httptest fakes for openai/gemini (success, error status, empty
+  choices/candidates), mock + Build coverage in infer_test.go. Not yet wired
+  into the indexer (that is Stage 6).
 
 - Goal: new `internal/infer` with `InferenceModel`, `Build`, a `mock`, an
   OpenAI-compatible impl (`/v1/chat/completions`), a Gemini impl, and a Bedrock
