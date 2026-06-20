@@ -38,7 +38,7 @@ Or, checkout this repo and build from source, then make the binary available in 
 go build -o pkb ./cmd/pkb
 ```
 
-## Configuration
+# Configuration
 
 At runtime PKB needs AWS credentials with Bedrock access for the configured embedding models.
 
