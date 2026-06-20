@@ -76,9 +76,7 @@ func (h *harness) opts(t *testing.T, model embed.EmbeddingModel) (*Options, *sto
 	require.NoError(t, err)
 	st, err := store.Open(filepath.Join(t.TempDir(), "pkb.db"))
 	require.NoError(t, err)
-	ign, err := LoadIgnore(h.root)
-	require.NoError(t, err)
-	return &Options{Repo: repo, Store: st, Model: model, Ignore: ign}, st
+	return &Options{Repo: repo, Store: st, Model: model, Ignore: NewIgnore(nil)}, st
 }
 
 func TestColdStartIndexesEverything(t *testing.T) {
@@ -331,7 +329,6 @@ func TestDivergenceViaMergeBase(t *testing.T) {
 	cSha := h.commit("main change")
 
 	// Now reindex against master (C). S is not an ancestor of C.
-	o.Ref = "master"
 	state, err := Reindex(o)
 	require.NoError(t, err)
 	require.Equal(t, cSha, state.Commit)
@@ -367,15 +364,15 @@ func TestTotalRecoveryWhenCommitGone(t *testing.T) {
 	require.Equal(t, callsBefore, model.ChunkCalls())
 }
 
-func TestPkbignoreExcludesPath(t *testing.T) {
+func TestExcludeGlobExcludesPath(t *testing.T) {
 	h := newHarness(t)
 	h.write("keep.md", "# Keep\n\nkeep content")
 	h.write("private/secret.md", "# Secret\n\nsecret content")
-	h.write(".pkbignore", "private\n")
 	h.commit("init")
 
 	model := embed.NewMockModel("mock", 3)
 	o, st := h.opts(t, model)
+	o.Ignore = NewIgnore([]string{"private"})
 	defer st.Close()
 
 	state, err := Reindex(o)
@@ -398,11 +395,8 @@ func TestModelChangeCleansUpOrphanTable(t *testing.T) {
 	defer st.Close()
 	repo, err := git.Open(h.root)
 	require.NoError(t, err)
-	ign, err := LoadIgnore(h.root)
-	require.NoError(t, err)
-
 	m1 := embed.NewMockModel("mock-v1", 3)
-	o := &Options{Repo: repo, Store: st, Model: m1, Ignore: ign}
+	o := &Options{Repo: repo, Store: st, Model: m1, Ignore: NewIgnore(nil)}
 	_, err = Reindex(o)
 	require.NoError(t, err)
 

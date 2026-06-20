@@ -1,11 +1,10 @@
 // Package index implements the reindex flow: it diffs the marker commit
-// (.pkb/state.json) against a target ref (or does a full ls-tree on cold
+// (.pkb/state.json) against HEAD (or does a full ls-tree on cold
 // start/recovery), then indexes/updates/deletes files. There is no watcher;
 // reindex runs to completion and exits.
 package index
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,32 +31,24 @@ type State struct {
 
 const statePath = ".pkb/state.json"
 
-// Ignore matches paths against .pkbignore patterns using simple segment/prefix
-// matching (full gitignore semantics are out of scope for v1).
+// Ignore matches paths against the configured exclude globs using simple
+// segment/prefix matching (full gitignore semantics are out of scope for v1).
 type Ignore struct {
 	patterns []string
 }
 
-// LoadIgnore reads .pkbignore from the repo root (missing file -> empty Ignore).
-func LoadIgnore(repoRoot string) (*Ignore, error) {
-	f, err := os.Open(filepath.Join(repoRoot, ".pkbignore"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &Ignore{}, nil
-		}
-		return nil, err
-	}
-	defer f.Close()
-	var patterns []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+// NewIgnore builds an Ignore from the configured exclude patterns. Blank lines
+// and leading/trailing whitespace or trailing slashes are normalized away.
+func NewIgnore(patterns []string) *Ignore {
+	var cleaned []string
+	for _, p := range patterns {
+		p = strings.TrimSpace(p)
+		if p == "" || strings.HasPrefix(p, "#") {
 			continue
 		}
-		patterns = append(patterns, strings.TrimRight(line, "/"))
+		cleaned = append(cleaned, strings.TrimRight(p, "/"))
 	}
-	return &Ignore{patterns: patterns}, scanner.Err()
+	return &Ignore{patterns: cleaned}
 }
 
 // Match reports whether relPath is excluded by any pattern.
@@ -81,7 +72,6 @@ type Options struct {
 	Store *store.Store
 	// Model embeds all files (code and text).
 	Model  embed.EmbeddingModel
-	Ref    string
 	Ignore *Ignore
 	// ExtOverrides forces a file extension to a file type ("code"/"text").
 	ExtOverrides map[string]string
@@ -123,7 +113,7 @@ var textExts = map[string]struct{}{
 // candidate reports whether a path should be indexed: a recognized code file,
 // or an allowlisted text file; never the .pkb state dir; not ignored.
 func (o *Options) candidate(path paths.GitRootRelativePath) bool {
-	if path == ".pkbignore" || strings.HasPrefix(string(path), ".pkb/") {
+	if strings.HasPrefix(string(path), ".pkb/") {
 		return false
 	}
 	if o.Ignore != nil && o.Ignore.Match(path) {
@@ -164,13 +154,10 @@ func writeState(repoRoot string, s State) error {
 	return os.WriteFile(filepath.Join(repoRoot, statePath), data, 0o644)
 }
 
-// Reindex brings the index in sync with the target ref and, only on success,
-// advances the marker.
+// Reindex brings the index in sync with HEAD and, only on success, advances
+// the marker.
 func Reindex(o *Options) (State, error) {
-	ref := o.Ref
-	if ref == "" {
-		ref = "HEAD"
-	}
+	ref := "HEAD"
 	repoRoot := string(o.Repo.Root)
 
 	targetSha, err := o.Repo.ResolveRef(ref)

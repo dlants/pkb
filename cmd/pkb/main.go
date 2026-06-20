@@ -52,7 +52,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `pkb - git-repo-rooted code+docs search index
 
 usage:
-  pkb reindex          reindex the repo against the target ref
+  pkb reindex          reindex the repo against HEAD
   pkb search <query>   search the index
   pkb stats            print index statistics
 
@@ -83,10 +83,7 @@ func setup() (*index.Options, func(), error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading config: %w", err)
 	}
-	ignore, err := index.LoadIgnore(string(repo.Root))
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading .pkbignore: %w", err)
-	}
+	ignore := index.NewIgnore(cfg.Exclude)
 
 	model, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.Region, cfg.Embedding.Profile)
 	if err != nil {
@@ -102,7 +99,6 @@ func setup() (*index.Options, func(), error) {
 		Repo:         repo,
 		Store:        st,
 		Model:        model,
-		Ref:          cfg.Ref,
 		Ignore:       ignore,
 		ExtOverrides: cfg.ExtOverrides,
 	}
