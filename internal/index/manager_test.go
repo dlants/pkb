@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dlants/pkb/internal/embed"
@@ -218,6 +219,89 @@ func TestTextFileInferenceIdentityChangeReembeds(t *testing.T) {
 	_, err = Reindex(o)
 	require.NoError(t, err)
 	require.Equal(t, total+2, model.ChunkCount(), "inference-model switch invalidates text-file vectors")
+}
+
+// recordingModel wraps a mock embedding model and captures the exact chunk
+// strings passed to EmbedChunks so tests can assert what was embedded.
+type recordingModel struct {
+	*embed.MockModel
+	mu       sync.Mutex
+	embedded []string
+}
+
+func (r *recordingModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {
+	r.mu.Lock()
+	r.embedded = append(r.embedded, chunks...)
+	r.mu.Unlock()
+	return r.MockModel.EmbedChunks(chunks)
+}
+
+func (r *recordingModel) inputs() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.embedded...)
+}
+
+// failingInfer always errors, exercising the graceful-degradation path.
+type failingInfer struct{ name string }
+
+func (f *failingInfer) ModelName() string               { return f.name }
+func (f *failingInfer) Complete(string) (string, error) { return "", fmt.Errorf("boom") }
+
+func TestAugmentationPrependsBlurbForTextFiles(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph")
+	h.commit("init")
+
+	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, st := h.opts(t, rec)
+	inf := infer.NewMockModel("infer-v1")
+	o.Inference = inf
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	require.Greater(t, inf.Calls(), 0, "inference should run for text chunks")
+	inputs := rec.inputs()
+	require.NotEmpty(t, inputs)
+	for _, in := range inputs {
+		require.Contains(t, in, "context:", "embedded text should include the augmentation blurb")
+	}
+}
+
+func TestAugmentationSkipsCodeFiles(t *testing.T) {
+	h := newHarness(t)
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	inf := infer.NewMockModel("infer-v1")
+	o.Inference = inf
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 0, inf.Calls(), "code files must not be augmented")
+}
+
+func TestAugmentationFailureDegradesGracefully(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph")
+	h.commit("init")
+
+	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, st := h.opts(t, rec)
+	o.Inference = &failingInfer{name: "infer-v1"}
+	defer st.Close()
+
+	state, err := Reindex(o)
+	require.NoError(t, err, "inference failure must not abort the run")
+	require.Equal(t, 1, state.FileCount)
+	for _, in := range rec.inputs() {
+		require.NotContains(t, in, "context:", "failed inference falls back to deterministic text")
+	}
 }
 
 func TestReindexOnHeadingChangeMarkdown(t *testing.T) {

@@ -313,7 +313,25 @@ Decisions/notes:
     for text keyed on blob sha + inference-model identity.
 - Before moving on: tests, vet, build pass.
 
-## Stage 6 — Wire augmentation into indexing
+## Stage 6 — Wire augmentation into indexing  ✅ DONE
+
+Decisions/notes:
+- `indexFile` now augments text/markdown chunks when `o.Inference != nil`:
+  for each chunk it calls `Inference.Complete(augmentPrompt(fileContent,
+  chunkText))` and prepends the returned blurb (wrapped in a `<context>` block)
+  to the already deterministically-prefixed `contextualized[i]` before
+  embedding. Code files are never augmented (guarded by `o.route != Code`).
+- Added `augmentPrompt` helper building the contextual-retrieval prompt
+  (whole document + chunk → one-paragraph context).
+- Graceful degradation: an inference error (or empty blurb) logs a warning to
+  stderr and keeps the deterministic text; the run is never aborted. Reuse
+  semantics from Stage 5 are unchanged (augmented text still embedded via the
+  whole-file `EmbedChunks` path).
+- Tests (manager_test.go): `recordingModel` captures embedded strings;
+  `TestAugmentationPrependsBlurbForTextFiles` (blurb embedded for text),
+  `TestAugmentationSkipsCodeFiles` (no inference calls for code),
+  `TestAugmentationFailureDegradesGracefully` (failing infer → deterministic
+  fallback, run succeeds).
 
 - Goal: when `[inference]` is configured, `indexFile` builds an augmentation
   prompt per chunk, calls the inference model, prepends the result to the chunk
