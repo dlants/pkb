@@ -1,0 +1,13 @@
+ref = "HEAD"
+
+[codeEmbedding]
+provider = "bedrock"
+model = "us.cohere.embed-v4:0"
+dimensions = 1536
+profile = "dev.ai-inference"
+
+[textEmbedding]
+provider = "bedrock"
+model = "us.cohere.embed-v4:0"
+dimensions = 1536
+profile = "dev.ai-inference"

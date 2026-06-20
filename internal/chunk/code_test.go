@@ -3,6 +3,8 @@ package chunk
 import (
 	"strings"
 	"testing"
+
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 func TestChunkCodeTwoFunctions(t *testing.T) {
@@ -102,6 +104,58 @@ func TestChunkCodeUnknownGrammarFallback(t *testing.T) {
 	}
 	if len(chunks) != 1 || chunks[0].HeadingContext != "x.cbl" {
 		t.Fatalf("expected single fallback chunk, got %+v", chunks)
+	}
+}
+
+func TestChunkCodeDocCommentAttachedToDecl(t *testing.T) {
+	src := "package p\n\n// Foo does a thing.\nfunc Foo() int {\n\treturn 1\n}\n"
+	chunks, err := ChunkCode([]byte(src), "go", "p.go", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fooChunk *ChunkInfo
+	for i := range chunks {
+		if chunks[i].HeadingContext == "p.go > function Foo" {
+			fooChunk = &chunks[i]
+		}
+		if strings.Contains(chunks[i].HeadingContext, "Foo") == false &&
+			strings.Contains(chunks[i].Text, "// Foo does a thing.") {
+			t.Fatalf("doc comment leaked into filler chunk: %q", chunks[i].HeadingContext)
+		}
+	}
+	if fooChunk == nil {
+		t.Fatalf("no Foo chunk: %+v", breadcrumbs(chunks))
+	}
+	if !strings.Contains(fooChunk.Text, "// Foo does a thing.") {
+		t.Fatalf("expected doc comment in Foo chunk, got %q", fooChunk.Text)
+	}
+	if fooChunk.Start.Line != 3 {
+		t.Fatalf("expected Foo chunk to start at doc comment (line 3), got %d", fooChunk.Start.Line)
+	}
+}
+
+func TestChunkContainerHeuristicFallback(t *testing.T) {
+	src := "function foo() {\n  return 1;\n}\n\nfunction bar() {\n  return 2;\n}\n"
+	lang := languageFor("typescript")
+	parser := tree_sitter.NewParser()
+	defer parser.Close()
+	if err := parser.SetLanguage(lang); err != nil {
+		t.Fatal(err)
+	}
+	tree := parser.Parse([]byte(src), nil)
+	defer tree.Close()
+
+	var out []ChunkInfo
+	chunkContainer(tree.RootNode(), []byte(src), "a/b.ts", TargetChunkSize, nil, &out)
+	got := breadcrumbs(out)
+	want := []string{"a/b.ts > function foo", "a/b.ts > function bar"}
+	if len(got) != len(want) {
+		t.Fatalf("heuristic fallback breadcrumbs = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("heuristic fallback breadcrumbs = %v, want %v", got, want)
+		}
 	}
 }
 

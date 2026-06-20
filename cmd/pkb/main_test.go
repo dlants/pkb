@@ -57,10 +57,17 @@ func setupRepo(t *testing.T) string {
 		require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))
 		require.NoError(t, os.WriteFile(full, []byte(content), 0o644))
 	}
-	write(".pkb.json", `{
-  "codeEmbedding": {"provider": "mock", "model": "mock-code", "dimensions": 16},
-  "textEmbedding": {"provider": "mock", "model": "mock-text", "dimensions": 16}
-}`)
+	write("pkb.toml", `
+[codeEmbedding]
+provider = "mock"
+model = "mock-code"
+dimensions = 16
+
+[textEmbedding]
+provider = "mock"
+model = "mock-text"
+dimensions = 16
+`)
 	write("README.md", "# Title\n\nThis project handles authentication and authorization.\n")
 	write("main.go", "package main\n\nfunc Authenticate(user string) bool {\n\treturn user != \"\"\n}\n")
 

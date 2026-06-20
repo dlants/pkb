@@ -1,34 +1,40 @@
-// Package config loads the repo-root PKB configuration (.pkb.json or
-// .pkb/config.json), which selects a code embedding model and a text embedding
+// Package config loads the repo-root PKB configuration (pkb.toml or
+// .pkb/config.toml), which selects a code embedding model and a text embedding
 // model, an optional target ref, and optional extension routing overrides.
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/BurntSushi/toml"
 )
 
 // ModelConfig selects an embedding model: the Bedrock provider/model id plus
 // the embedding dimensionality. (Model construction lives in the embed package;
 // config only records the selection.)
 type ModelConfig struct {
-	Provider   string `json:"provider"`
-	Model      string `json:"model"`
-	Dimensions int    `json:"dimensions"`
+	Provider   string `toml:"provider"`
+	Model      string `toml:"model"`
+	Dimensions int    `toml:"dimensions"`
+	// Region is the AWS region for the Bedrock provider (default us-east-1).
+	Region string `toml:"region"`
+	// Profile is the shared-config AWS profile for the Bedrock provider; empty
+	// uses the default credential chain.
+	Profile string `toml:"profile"`
 }
 
 // Config is the parsed repo-root configuration.
 type Config struct {
 	// CodeEmbedding embeds source-code files.
-	CodeEmbedding ModelConfig `json:"codeEmbedding"`
+	CodeEmbedding ModelConfig `toml:"codeEmbedding"`
 	// TextEmbedding embeds prose/markdown files.
-	TextEmbedding ModelConfig `json:"textEmbedding"`
+	TextEmbedding ModelConfig `toml:"textEmbedding"`
 	// Ref is the target git ref to index (default "HEAD").
-	Ref string `json:"ref,omitempty"`
+	Ref string `toml:"ref"`
 	// ExtOverrides maps a file extension (including the leading dot) to a
 	// file-type name ("code" or "text").
-	ExtOverrides map[string]string `json:"extOverrides,omitempty"`
+	ExtOverrides map[string]string `toml:"extOverrides"`
 }
 
 // Default returns the built-in configuration used when no config file exists.
@@ -36,13 +42,13 @@ func Default() Config {
 	return Config{
 		CodeEmbedding: ModelConfig{
 			Provider:   "bedrock",
-			Model:      "cohere.embed-english-v3",
-			Dimensions: 1024,
+			Model:      "us.cohere.embed-v4:0",
+			Dimensions: 1536,
 		},
 		TextEmbedding: ModelConfig{
 			Provider:   "bedrock",
-			Model:      "cohere.embed-english-v3",
-			Dimensions: 1024,
+			Model:      "us.cohere.embed-v4:0",
+			Dimensions: 1536,
 		},
 		Ref: "HEAD",
 	}
@@ -51,8 +57,8 @@ func Default() Config {
 // configPaths returns the candidate config file locations, in priority order.
 func configPaths(repoRoot string) []string {
 	return []string{
-		filepath.Join(repoRoot, ".pkb.json"),
-		filepath.Join(repoRoot, ".pkb", "config.json"),
+		filepath.Join(repoRoot, "pkb.toml"),
+		filepath.Join(repoRoot, ".pkb", "config.toml"),
 	}
 }
 
@@ -68,7 +74,7 @@ func Load(repoRoot string) (Config, error) {
 			}
 			return cfg, err
 		}
-		if err := json.Unmarshal(data, &cfg); err != nil {
+		if err := toml.Unmarshal(data, &cfg); err != nil {
 			return cfg, err
 		}
 		break

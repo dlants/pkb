@@ -87,3 +87,21 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 
 	return idx, nil
 }
+
+// has reports whether node was captured as a @definition.* by the query.
+func (d *defIndex) has(node *tree_sitter.Node) bool {
+	if d == nil {
+		return false
+	}
+	_, ok := d.nodes[node.Id()]
+	return ok
+}
+
+// entry returns the defEntry for node, if it was captured as a @definition.*.
+func (d *defIndex) entry(node *tree_sitter.Node) (defEntry, bool) {
+	if d == nil {
+		return defEntry{}, false
+	}
+	e, ok := d.info[node.Id()]
+	return e, ok
+}

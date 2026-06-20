@@ -208,6 +208,25 @@ Invariants:
     a decl with no doc comment has zero `docStartByte`.
 - Before moving on: confirm tests, type checks, and linting all pass.
 
+> Status: DONE. `ChunkCode` now builds the defIndex (via `buildDefIndex`) once
+> per file after the root check; a query compile error sets idx=nil so the
+> heuristic path runs. Threaded `*defIndex` through `chunkContainer`, `emitDecl`,
+> and `hasDeclChild`. New `isDecl(node, idx)` predicate consults the index when
+> non-nil, else `isDeclKind`. `unwrap` is retained as-is (tags.scm captures the
+> inner decl; peeling export/decorated wrappers via isDeclKind still finds the
+> node whose Id we look up). `emitDecl` uses `defEntry.{label,name}` when indexed
+> (falling back to `labelFromKind`/`declName`), and when `docStartByte >= 0`
+> extends the chunk start backward to the doc comment (start Position via new
+> `posFromByte`). `chunkContainer` now accumulates filler as a node slice and,
+> before flushing for a doc-carrying decl, trims trailing filler nodes at/after
+> docStartByte so the comment isn't double-emitted. `declKinds`/`declName`/
+> `labelFromKind` retained as the no-query fallback. Added accessors
+> `defIndex.has`/`defIndex.entry` (nil-safe). Tests added to `code_test.go`:
+> TestChunkCodeDocCommentAttachedToDecl (Go doc travels with Foo, absent from
+> filler, chunk starts at line 3) and TestChunkContainerHeuristicFallback
+> (nil idx reproduces the two-function breadcrumbs). Existing cases unchanged.
+> Full `go build/vet/test ./...` green.
+
 ## Stage 3: Wire index into traversal with heuristic fallback
 
 - Goal: `chunkContainer`/`emitDecl` use the index when a query exists; retain

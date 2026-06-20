@@ -84,8 +84,14 @@ func ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([
 		return lineChunks(content, pathContext, maxChunkSize), nil
 	}
 
+	idx, idxErr := buildDefIndex(root, content, grammar)
+	if idxErr != nil {
+		// Query failed to compile: fall back to the heuristic path.
+		idx = nil
+	}
+
 	var out []ChunkInfo
-	chunkContainer(root, content, pathContext, maxChunkSize, &out)
+	chunkContainer(root, content, pathContext, maxChunkSize, idx, &out)
 	if len(out) == 0 {
 		return lineChunks(content, pathContext, maxChunkSize), nil
 	}
@@ -110,43 +116,69 @@ func unwrap(node *tree_sitter.Node) *tree_sitter.Node {
 
 // chunkContainer walks the named children of container, grouping non-declaration
 // nodes into filler chunks and emitting each declaration via emitDecl.
-func chunkContainer(container *tree_sitter.Node, source []byte, prefix string, maxChunkSize int, out *[]ChunkInfo) {
+func chunkContainer(container *tree_sitter.Node, source []byte, prefix string, maxChunkSize int, idx *defIndex, out *[]ChunkInfo) {
 	count := container.NamedChildCount()
-	var fillerStart, fillerEnd *tree_sitter.Node
+	var filler []*tree_sitter.Node
 
 	flushFiller := func() {
-		if fillerStart == nil {
+		if len(filler) == 0 {
 			return
 		}
-		emitRange(fillerStart, fillerEnd, source, prefix, maxChunkSize, out)
-		fillerStart, fillerEnd = nil, nil
+		emitRange(filler[0], filler[len(filler)-1], source, prefix, maxChunkSize, out)
+		filler = nil
 	}
 
 	for i := uint(0); i < count; i++ {
 		child := container.NamedChild(i)
 		decl := unwrap(child)
-		if isDeclKind(decl.Kind()) {
+		if isDecl(decl, idx) {
+			// A doc comment claimed by this declaration may have been
+			// accumulated as trailing filler; drop it so it travels with the
+			// declaration instead of being emitted twice.
+			if e, ok := idx.entry(decl); ok && e.docStartByte >= 0 {
+				for len(filler) > 0 && int(filler[len(filler)-1].StartByte()) >= e.docStartByte {
+					filler = filler[:len(filler)-1]
+				}
+			}
 			flushFiller()
-			emitDecl(child, decl, source, prefix, maxChunkSize, out)
+			emitDecl(child, decl, source, prefix, maxChunkSize, idx, out)
 			continue
 		}
-		if fillerStart == nil {
-			fillerStart = child
-		}
-		fillerEnd = child
+		filler = append(filler, child)
 	}
 	flushFiller()
 }
 
+// isDecl reports whether node is a chunkable declaration: via the definition
+// index when one is available, otherwise via the kind heuristic.
+func isDecl(node *tree_sitter.Node, idx *defIndex) bool {
+	if idx != nil {
+		return idx.has(node)
+	}
+	return isDeclKind(node.Kind())
+}
+
 // emitDecl emits a declaration: as a single chunk if it fits, otherwise by
 // recursing into nested declarations, or by line-splitting if it is a leaf.
-func emitDecl(outer, decl *tree_sitter.Node, source []byte, prefix string, maxChunkSize int, out *[]ChunkInfo) {
+func emitDecl(outer, decl *tree_sitter.Node, source []byte, prefix string, maxChunkSize int, idx *defIndex, out *[]ChunkInfo) {
 	start := int(outer.StartByte())
 	end := int(outer.EndByte())
+	startPos := posOf(outer.StartPosition())
+
+	entry, hasEntry := idx.entry(decl)
+	if hasEntry && entry.docStartByte >= 0 && entry.docStartByte < start {
+		start = entry.docStartByte
+		startPos = posFromByte(source, start)
+	}
 	text := string(source[start:end])
 
-	label := labelFromKind(decl.Kind())
-	name := declName(decl, source)
+	var label, name string
+	if hasEntry {
+		label, name = entry.label, entry.name
+	} else {
+		label = labelFromKind(decl.Kind())
+		name = declName(decl, source)
+	}
 	desc := strings.TrimSpace(label + " " + name)
 	childPrefix := joinBreadcrumb(prefix, desc)
 
@@ -154,20 +186,20 @@ func emitDecl(outer, decl *tree_sitter.Node, source []byte, prefix string, maxCh
 		*out = append(*out, ChunkInfo{
 			Text:           text,
 			HeadingContext: childPrefix,
-			Start:          posOf(outer.StartPosition()),
+			Start:          startPos,
 			End:            posOf(outer.EndPosition()),
 		})
 		return
 	}
 
 	body := decl.ChildByFieldName("body")
-	if body != nil && hasDeclChild(body) {
-		chunkContainer(body, source, childPrefix, maxChunkSize, out)
+	if body != nil && hasDeclChild(body, idx) {
+		chunkContainer(body, source, childPrefix, maxChunkSize, idx, out)
 		return
 	}
 
 	// Leaf declaration over budget: line-split the whole declaration.
-	for _, sc := range splitCodeByLines(text, posOf(outer.StartPosition()), maxChunkSize) {
+	for _, sc := range splitCodeByLines(text, startPos, maxChunkSize) {
 		*out = append(*out, ChunkInfo{
 			Text:           sc.text,
 			HeadingContext: childPrefix,
@@ -206,14 +238,28 @@ func emitRange(first, last *tree_sitter.Node, source []byte, prefix string, maxC
 	}
 }
 
-func hasDeclChild(container *tree_sitter.Node) bool {
+func hasDeclChild(container *tree_sitter.Node, idx *defIndex) bool {
 	count := container.NamedChildCount()
 	for i := uint(0); i < count; i++ {
-		if isDeclKind(unwrap(container.NamedChild(i)).Kind()) {
+		if isDecl(unwrap(container.NamedChild(i)), idx) {
 			return true
 		}
 	}
 	return false
+}
+
+// posFromByte computes a 1-based line/col Position for a byte offset in source.
+func posFromByte(source []byte, off int) Position {
+	line, col := 1, 1
+	for i := 0; i < off && i < len(source); i++ {
+		if source[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+	return Position{Line: line, Col: col}
 }
 
 func declName(node *tree_sitter.Node, source []byte) string {

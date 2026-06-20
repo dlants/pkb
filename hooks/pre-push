@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# pkb pre-push hook: when pushing to the default branch, refresh the search
+# index (.pkb/pkb.db)
+# so it stays in sync with what lands on the default branch.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PKB="$REPO_ROOT/pkb"
+if [ ! -x "$PKB" ]; then
+  echo "pkb: binary not found at $PKB; run 'go build -o pkb ./cmd/pkb'" >&2
+  exit 0
+fi
+
+# Resolve the remote's default branch (e.g. refs/heads/main or refs/heads/master).
+default_ref="$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
+  | sed 's#^refs/remotes/origin/#refs/heads/#')"
+if [ -z "$default_ref" ]; then
+  default_ref="refs/heads/main"
+fi
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha>
+pushing_default=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "$default_ref" ]; then
+    pushing_default=1
+  fi
+done
+if [ "$pushing_default" -ne 1 ]; then
+  exit 0
+fi
+echo "pkb: reindexing for push to $default_ref..."
+if ! "$PKB" reindex; then
+  echo "pkb: reindex failed (continuing push). Check AWS/Bedrock credentials." >&2
+  exit 0
+fi
+
+if ! git diff --quiet -- pkb.db 2>/dev/null; then
+  echo "pkb: index changed — commit pkb.db before/after this push to share it." >&2
+fi
