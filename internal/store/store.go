@@ -5,8 +5,11 @@ package store
 
 import (
 	"database/sql"
+	"encoding/binary"
 	"fmt"
+	"math"
 	"regexp"
+	"strings"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"
@@ -49,6 +52,13 @@ func Open(dbPath string) (*Store, error) {
 // Close closes the underlying database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// Vacuum reclaims free pages left behind by reindex churn, shrinking the db
+// file to its live size.
+func (s *Store) Vacuum() error {
+	_, err := s.db.Exec("VACUUM")
+	return err
+}
+
 func (s *Store) init() error {
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS files (
@@ -64,12 +74,20 @@ func (s *Store) init() error {
 			file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
 			text TEXT NOT NULL,
 			contextualized_text TEXT NOT NULL,
+			heading_context TEXT NOT NULL DEFAULT '',
 			start_line INTEGER NOT NULL,
 			start_col INTEGER NOT NULL,
 			end_line INTEGER NOT NULL,
 			end_col INTEGER NOT NULL
 		);
 	`)
+	if err != nil {
+		return err
+	}
+	// Migrate pre-existing databases that lack heading_context.
+	if _, aerr := s.db.Exec(`ALTER TABLE chunks ADD COLUMN heading_context TEXT NOT NULL DEFAULT ''`); aerr != nil && !strings.Contains(aerr.Error(), "duplicate column name") {
+		return aerr
+	}
 	return err
 }
 
@@ -172,9 +190,9 @@ func (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInf
 	vec := vecTableName(modelName, EmbeddingVersion)
 	for i, c := range chunks {
 		cres, err := tx.Exec(
-			`INSERT INTO chunks (file_id, text, contextualized_text, start_line, start_col, end_line, end_col)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			fileID, c.Text, contextualized[i], c.Start.Line, c.Start.Col, c.End.Line, c.End.Col)
+			`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			fileID, c.Text, contextualized[i], c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col)
 		if err != nil {
 			return err
 		}
@@ -192,6 +210,51 @@ func (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInf
 	}
 
 	return tx.Commit()
+}
+
+// ChunkKey is the reuse key for a chunk: the deterministic inputs to its
+// embedding (heading breadcrumb + raw text). It deliberately excludes any
+// non-deterministic augmentation, so a chunk re-embeds when its text or any
+// parent heading/breadcrumb changes, but is reused otherwise.
+func ChunkKey(headingContext, text string) string {
+	return headingContext + "\x00" + text
+}
+
+// ChunkEmbeddings returns a map of ChunkKey -> stored embedding for a
+// path/model, so an incremental reindex can reuse vectors for unchanged chunks
+// instead of re-embedding them. Duplicate keys collapse harmlessly (identical
+// deterministic input yields an identical embedding).
+func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]embed.Embedding, error) {
+	vec := vecTableName(modelName, EmbeddingVersion)
+	rows, err := s.db.Query(fmt.Sprintf(
+		`SELECT c.heading_context, c.text, v.embedding
+		 FROM chunks c
+		 JOIN files f ON f.id = c.file_id
+		 JOIN %s v ON v.chunk_id = c.id
+		 WHERE f.path = ? AND f.model_name = ? AND f.embedding_version = ?`, vec),
+		path, modelName, EmbeddingVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]embed.Embedding{}
+	for rows.Next() {
+		var headingContext, text string
+		var blob []byte
+		if err := rows.Scan(&headingContext, &text, &blob); err != nil {
+			return nil, err
+		}
+		out[ChunkKey(headingContext, text)] = deserializeFloat32(blob)
+	}
+	return out, rows.Err()
+}
+
+func deserializeFloat32(b []byte) embed.Embedding {
+	out := make(embed.Embedding, len(b)/4)
+	for i := range out {
+		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[i*4:]))
+	}
+	return out
 }
 
 // CleanupOrphans drops vec tables and removes files/chunks rows for any model

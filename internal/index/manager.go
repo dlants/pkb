@@ -269,6 +269,9 @@ func Reindex(o *Options) (State, error) {
 	if err := writeState(repoRoot, st); err != nil {
 		return State{}, err
 	}
+	if err := o.Store.Vacuum(); err != nil {
+		return State{}, err
+	}
 	return st, nil
 }
 
@@ -360,15 +363,49 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 		}
 	}
 
-	var embeddings []embed.Embedding
-	if len(contextualized) > 0 {
-		embeddings, err = model.EmbedChunks(contextualized)
-		if err != nil {
-			return err
-		}
+	embeddings, err := o.reuseEmbeddings(path, model, chunks, contextualized)
+	if err != nil {
+		return err
 	}
 
 	return o.Store.PutFile(string(path), model.ModelName(), blobSha, chunks, contextualized, embeddings)
+}
+
+// reuseEmbeddings returns an embedding for every chunk, carrying over vectors
+// for chunks whose deterministic key (heading breadcrumb + raw text) is
+// unchanged and embedding only the rest in a single batched call. This keeps a
+// small edit to a large file from re-embedding every chunk.
+func (o *Options) reuseEmbeddings(path paths.GitRootRelativePath, model embed.EmbeddingModel, chunks []chunk.ChunkInfo, contextualized []string) ([]embed.Embedding, error) {
+	if len(contextualized) == 0 {
+		return nil, nil
+	}
+	existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
+	if err != nil {
+		return nil, err
+	}
+
+	embeddings := make([]embed.Embedding, len(contextualized))
+	var toEmbed []string
+	var toEmbedIdx []int
+	for i, c := range chunks {
+		if e, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
+			embeddings[i] = e
+			continue
+		}
+		toEmbed = append(toEmbed, contextualized[i])
+		toEmbedIdx = append(toEmbedIdx, i)
+	}
+
+	if len(toEmbed) > 0 {
+		fresh, err := model.EmbedChunks(toEmbed)
+		if err != nil {
+			return nil, err
+		}
+		for j, e := range fresh {
+			embeddings[toEmbedIdx[j]] = e
+		}
+	}
+	return embeddings, nil
 }
 
 // indexedEntry records which model embedded a path and the stored blob sha.
