@@ -64,7 +64,7 @@ func TestDefaultInferenceWhenAbsent(t *testing.T) {
 	cfg, err := Load(dir)
 	require.NoError(t, err)
 	require.Equal(t, Default().Inference, cfg.Inference)
-	require.Equal(t, "bedrock", cfg.Inference.Provider)
+	require.Equal(t, "anthropic", cfg.Inference.Provider)
 }
 
 func TestNestedConfigPath(t *testing.T) {

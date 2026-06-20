@@ -55,9 +55,9 @@ PKB uses two models: an **embedding** model (embeds all files) and an optional
 before embedding — the contextual-retrieval pattern; code files are never
 augmented). Both are pluggable across providers.
 
-The default configuration is the corporate-friendly turnkey path: **Bedrock**
-embeddings (Cohere embed-v4) plus **Bedrock** Claude Haiku augmentation, both
-covered by a single IAM credential with Bedrock access.
+The default configuration uses **Voyage AI** embeddings (`voyage-code-3`,
+authenticated with `VOYAGE_API_KEY`) plus **Anthropic** Claude Haiku
+augmentation (authenticated with `ANTHROPIC_API_KEY`).
 
 A repo-root config file — `pkb.toml` or `.pkb/config.toml` (first found wins) —
 selects the embedding and inference models. Any unset field falls back to
@@ -70,15 +70,15 @@ out (e.g. in CI after checkout) so the index tracks the default branch.
 exclude = ["node_modules", "dist", "vendor/generated"]
 
 [embedding]
-provider = "bedrock"
-model = "us.cohere.embed-v4:0"
-dimensions = 256
-awsregion = "us-east-1"
-awsprofile = "my-sso-profile"
+provider = "voyage"
+model = "voyage-code-3"
+dimensions = 1024
+apikeyenv = "VOYAGE_API_KEY"
 
 [inference]
-provider = "bedrock"
-model = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+provider = "anthropic"
+model = "claude-haiku-4-5"
+apikeyenv = "ANTHROPIC_API_KEY"
 
 [extOverrides]
 ".tsx" = "code"
@@ -97,22 +97,28 @@ model = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
     throughput guidance), see [LOCAL.md](LOCAL.md).
   - `gemini`: Google Generative Language API (good free all-rounder for mixed
     code + markdown).
+  - `voyage` (embedding only): Voyage AI (`{baseurl}/v1/embeddings`). Default
+    embedding provider; `voyage-code-3` is tuned for code retrieval. Chunks and
+    queries are tagged with Voyage's `document`/`query` input types.
+  - `anthropic` (inference only): Anthropic's native Messages API
+    (`{baseurl}/v1/messages`). Default augmentation provider (Claude Haiku).
   - `none` (inference only): disables LLM augmentation, falling back to the
     deterministic heading-prefix path with no inference calls.
   - `mock`: deterministic, for tests.
-- `baseurl`: API base URL for `openai`/`openai-compatible`/`gemini` providers
-  (defaults: `https://api.openai.com`, `https://generativelanguage.googleapis.com`).
-  Ignored by Bedrock.
+- `baseurl`: API base URL for `openai`/`openai-compatible`/`gemini`/`voyage`/
+  `anthropic` providers (defaults: `https://api.openai.com`,
+  `https://generativelanguage.googleapis.com`, `https://api.voyageai.com`,
+  `https://api.anthropic.com`). Ignored by Bedrock.
 - `apikeyenv`: name of the environment variable holding the API key for HTTP
   providers (defaults: `OPENAI_API_KEY` for OpenAI, `GEMINI_API_KEY` for
-  Gemini). An empty key is tolerated for local servers like Ollama. Ignored by
-  Bedrock.
+  Gemini, `VOYAGE_API_KEY` for Voyage, `ANTHROPIC_API_KEY` for Anthropic). An
+  empty key is tolerated for local servers like Ollama. Ignored by Bedrock.
 - `awsregion`: AWS region for the Bedrock provider (defaults to `us-east-1`).
 - `awsprofile`: AWS shared-config profile for the Bedrock provider; empty uses the
   default credential chain. Credentials are checked eagerly — if they're missing
   or expired, pkb exits with a hint to run `aws sso login`.
-- `dimensions`: embedding width. embed-v4 is Matryoshka, so it supports
-  256/512/1024/1536; lower means smaller/faster with minor quality loss
+- `dimensions`: embedding width. `voyage-code-3` is Matryoshka, so it supports
+  256/512/1024/2048; lower means smaller/faster with minor quality loss
   (default 256). Changing this re-keys the index; delete `.pkb/state.json` and
   run `pkb reindex` to rebuild.
 - `extOverrides`: force an extension to `code` or `text`.

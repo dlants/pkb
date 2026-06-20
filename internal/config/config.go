@@ -57,13 +57,13 @@ type Config struct {
 func Default() Config {
 	return Config{
 		Embedding: ModelConfig{
-			Provider:   "bedrock",
-			Model:      "us.cohere.embed-v4:0",
+			Provider:   "voyage",
+			Model:      "voyage-code-3",
 			Dimensions: 256,
 		},
 		Inference: ModelConfig{
-			Provider: "bedrock",
-			Model:    "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+			Provider: "anthropic",
+			Model:    "claude-haiku-4-5",
 		},
 		MaxParallelism: 4,
 	}
