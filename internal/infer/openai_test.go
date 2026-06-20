@@ -24,6 +24,14 @@ func TestOpenAICompatibleComplete(t *testing.T) {
 			http.Error(w, "bad messages", http.StatusBadRequest)
 			return
 		}
+		if req.MaxTokens != augmentMaxTokens {
+			http.Error(w, "missing max_tokens", http.StatusBadRequest)
+			return
+		}
+		if req.Temperature == nil || *req.Temperature != 0 {
+			http.Error(w, "expected temperature 0", http.StatusBadRequest)
+			return
+		}
 		var resp openAIChatResponse
 		resp.Choices = append(resp.Choices, struct {
 			Message openAIChatMessage `json:"message"`

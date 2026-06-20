@@ -102,12 +102,13 @@ func setup() (*index.Options, func(), error) {
 	}
 
 	opts := &index.Options{
-		Repo:         repo,
-		Store:        st,
-		Model:        model,
-		Inference:    inferenceModel,
-		Ignore:       ignore,
-		ExtOverrides: cfg.ExtOverrides,
+		Repo:           repo,
+		Store:          st,
+		Model:          model,
+		Inference:      inferenceModel,
+		Ignore:         ignore,
+		ExtOverrides:   cfg.ExtOverrides,
+		MaxParallelism: cfg.MaxParallelism,
 	}
 	cleanup := func() { st.Close() }
 	return opts, cleanup, nil

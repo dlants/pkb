@@ -14,6 +14,16 @@ pkb stats              # print the current index marker (commit, file/chunk coun
 
 This will create a pkb.db sql file at the root of your repo. Check that into your repo. Now, everyone in your repo has access to the full index, while you only pay the embedding cost once.
 
+`pkb.db` is a binary that is rewritten in full on every reindex, so storing it directly in git bloats history fast. Track it with [Git LFS](https://git-lfs.com) instead — the repo keeps a small pointer while the blob lives in LFS storage, and clones still get the file transparently:
+
+```bash
+git lfs install            # one-time per machine
+git lfs track "pkb.db"     # writes the rule to .gitattributes
+git add .gitattributes pkb.db
+```
+
+Commit `.gitattributes` along with `pkb.db`. If `pkb.db` is already in your history as a regular blob, rewrite it with `git lfs migrate import --include="pkb.db"`.
+
 `reindex` is idempotent: running it twice with no git changes performs zero embedding calls.
 
 Run the pkb binary from anywhere inside the git repository. PKB discovers the repo root based on cwd, and runs against `pkb.db` at the repo root.
@@ -82,6 +92,9 @@ model = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
     `baseurl` at `https://api.openai.com` for OpenAI cloud, or at a local
     server (e.g. `http://localhost:11434` for Ollama, plus llama.cpp, vLLM,
     LM Studio, LocalAI) for a fully local setup.
+    For a fully local setup on Apple Silicon (MLX-accelerated embeddings and
+    a recommended local inference model with quantization, memory, and
+    throughput guidance), see [LOCAL.md](LOCAL.md).
   - `gemini`: Google Generative Language API (good free all-rounder for mixed
     code + markdown).
   - `none` (inference only): disables LLM augmentation, falling back to the
@@ -106,3 +119,7 @@ model = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
 - `exclude`: paths to skip during indexing. Each entry matches a path either by
   basename (any file/dir with that name) or as a path prefix (a leading
   repo-relative path segment); full glob/gitignore semantics are not supported.
+- `maxparallelism`: number of inference (augmentation) calls issued concurrently
+  during indexing. Augmentation against a remote model is the slowest part of a
+  run, so raising this speeds it up at the cost of more concurrent requests
+  (default 4; values below 1 are treated as 1).

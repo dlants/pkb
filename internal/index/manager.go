@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dlants/pkb/internal/chunk"
@@ -80,6 +82,9 @@ type Options struct {
 	Ignore    *Ignore
 	// ExtOverrides forces a file extension to a file type ("code"/"text").
 	ExtOverrides map[string]string
+	// MaxParallelism bounds concurrent inference (augmentation) calls during
+	// indexing. Values below 1 are treated as 1.
+	MaxParallelism int
 }
 
 // activeModels returns the embedding models in use.
@@ -226,6 +231,14 @@ func Reindex(o *Options) (State, error) {
 		return State{}, err
 	}
 
+	var (
+		filesIndexed  int
+		chunksIndexed int
+		charsEmbedded int
+		embedTime     time.Duration
+		indexStart    = time.Now()
+	)
+	const charsPerToken = 3 // rough approximation for tok/s reporting
 	for path := range touched {
 		blobSha, inTree := treeMap[path]
 		prevEntry, wasIndexed := indexed[path]
@@ -247,9 +260,21 @@ func Reindex(o *Options) (State, error) {
 					return State{}, err
 				}
 			}
-			if err := o.indexFile(path, blobSha, model); err != nil {
+			res, err := o.indexFile(path, blobSha, model)
+			if err != nil {
 				return State{}, err
 			}
+			filesIndexed++
+			chunksIndexed += res.chunks
+			charsEmbedded += res.chars
+			embedTime += res.embedTime
+			elapsed := time.Since(indexStart).Seconds()
+			embedTokPerSec := 0.0
+			if s := embedTime.Seconds(); s > 0 {
+				embedTokPerSec = float64(charsEmbedded) / charsPerToken / s
+			}
+			fmt.Fprintf(os.Stderr, "indexed %s (%d chunks) | %d files, %d chunks, %.1f chunks/sec, embed ~%.0f tok/sec\n",
+				path, res.chunks, filesIndexed, chunksIndexed, float64(chunksIndexed)/elapsed, embedTokPerSec)
 		} else {
 			if wasIndexed {
 				if err := o.Store.DeleteFile(string(path), prevEntry.model); err != nil {
@@ -342,10 +367,19 @@ func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.
 	return touched, nil
 }
 
-func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) error {
+// indexResult reports per-file work for progress logging: the number of chunks
+// embedded, the total characters embedded (a proxy for tokens), and the wall
+// time spent in the embedding call itself (excluding inference augmentation).
+type indexResult struct {
+	chunks    int
+	chars     int
+	embedTime time.Duration
+}
+
+func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) (indexResult, error) {
 	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 	if err != nil {
-		return err
+		return indexResult{}, err
 	}
 	// Code files are chunked along syntactic boundaries via tree-sitter (with a
 	// line-based fallback); text/markdown files use the structural markdown
@@ -356,7 +390,7 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 		var err error
 		chunks, err = chunk.ChunkCode(content, grammar, string(path), chunk.TargetChunkSize)
 		if err != nil {
-			return err
+			return indexResult{}, err
 		}
 	} else {
 		chunks = chunk.ChunkMarkdown(string(content), chunk.TargetChunkSize)
@@ -377,18 +411,31 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 	// Inference failures degrade to the deterministic text with a warning and
 	// never abort the run.
 	if o.Inference != nil && o.route(path) != filetype.Code {
-		for i, c := range chunks {
-			blurb, err := o.Inference.Complete(augmentPrompt(string(content), c.Text))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: inference failed for %s chunk %d, using deterministic context: %v\n", path, i, err)
-				continue
-			}
-			blurb = strings.TrimSpace(blurb)
-			if blurb == "" {
-				continue
-			}
-			contextualized[i] = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", blurb, contextualized[i])
+		parallelism := o.MaxParallelism
+		if parallelism < 1 {
+			parallelism = 1
 		}
+		sem := make(chan struct{}, parallelism)
+		var wg sync.WaitGroup
+		for i, c := range chunks {
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(i int, c chunk.ChunkInfo) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				blurb, err := o.Inference.Complete(augmentPrompt(string(content), c.HeadingContext, c.Text))
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: inference failed for %s chunk %d, using deterministic context: %v\n", path, i, err)
+					return
+				}
+				blurb = stripThinking(blurb)
+				if blurb == "" || strings.TrimSpace(blurb) == augmentNoneSentinel {
+					return
+				}
+				contextualized[i] = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", blurb, contextualized[i])
+			}(i, c)
+		}
+		wg.Wait()
 	}
 
 	// Code files are deterministic: reuse per-chunk vectors keyed on the
@@ -397,22 +444,46 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 	// vector can change for an edit anywhere in the file; reuse there is
 	// all-or-nothing per file (handled by the blob-sha + inference-identity
 	// short-circuit in Reindex), so on arrival here we re-embed every chunk.
+	var chars int
+	for _, c := range contextualized {
+		chars += len(c)
+	}
+
 	var embeddings []embed.Embedding
+	embedStart := time.Now()
 	if o.route(path) == filetype.Code {
 		embeddings, err = o.reuseEmbeddings(path, model, chunks, contextualized)
 	} else {
 		embeddings, err = model.EmbedChunks(contextualized)
 	}
+	embedTime := time.Since(embedStart)
 	if err != nil {
-		return err
+		return indexResult{}, err
 	}
 
-	return o.Store.PutFile(string(path), model.ModelName(), blobSha, o.inferenceName(), chunks, contextualized, embeddings)
+	if err := o.Store.PutFile(string(path), model.ModelName(), blobSha, o.inferenceName(), chunks, contextualized, embeddings); err != nil {
+		return indexResult{}, err
+	}
+	return indexResult{chunks: len(chunks), chars: chars, embedTime: embedTime}, nil
 }
 
+// augmentNoneSentinel is the exact token the model is told to emit when a chunk
+// needs no added context. The pipeline maps it to an empty blurb so we never
+// embed filler. It is unlikely to appear as legitimate context output.
+const augmentNoneSentinel = "NONE"
+
 // augmentPrompt builds the contextual-retrieval prompt asking the inference
-// model for a short paragraph situating a chunk within its whole document.
-func augmentPrompt(document, chunkText string) string {
+// model for a single sentence that situates a chunk within its whole document,
+// adding only information not already recoverable from the chunk text itself.
+// The heading breadcrumb is passed explicitly so the model can anchor the chunk
+// without re-deriving its location, and the instructions are placed after the
+// chunk so they sit at the end of the context window where small models follow
+// them more reliably (at a small prompt-caching cost).
+func augmentPrompt(document, headingContext, chunkText string) string {
+	chunkBlock := chunkText
+	if headingContext != "" {
+		chunkBlock = fmt.Sprintf("%s\n\n%s", headingContext, chunkText)
+	}
 	return fmt.Sprintf(`<document>
 %s
 </document>
@@ -422,9 +493,36 @@ Here is a chunk taken from the document above:
 %s
 </chunk>
 
-Give a short, single-paragraph context that situates this chunk within the
-overall document to improve search retrieval. Answer only with the context and
-nothing else.`, document, chunkText)
+When searching, the user is going to see the chunk without the rest of the document. Our job is to provide context to help the user understand the chunk when presented in isolation.
+
+If the chunk mentions "it", "he", "the benchmark", "this approach", but doesn't capture what the chunk is referncing, explain the reference.
+
+Examples:
+-	"it" refers to chunking.
+- "this approach" refers to context augmentation.
+
+Resolve abbreviations and acronyms, when they are defined in the document.
+
+Examples:
+- pkb is "personal knowledge base", the name of this tool
+
+Bias towards brevity, if you can't find obvious context to add, output exactly %s and nothing else.`, document, chunkBlock, augmentNoneSentinel)
+}
+
+// thinkBlockRe matches a complete <think>...</think> reasoning block.
+var thinkBlockRe = regexp.MustCompile(`(?s)<think>.*?</think>`)
+
+// stripThinking removes reasoning output that thinking models (e.g. Qwen3) may
+// emit before their answer, so it never gets embedded as part of the context
+// blurb. It drops complete <think>...</think> blocks; if a dangling </think>
+// remains (some chat templates emit the opening tag implicitly), everything up
+// to and including it is dropped.
+func stripThinking(s string) string {
+	s = thinkBlockRe.ReplaceAllString(s, "")
+	if i := strings.LastIndex(s, "</think>"); i >= 0 {
+		s = s[i+len("</think>"):]
+	}
+	return strings.TrimSpace(s)
 }
 
 // reuseEmbeddings returns an embedding for every chunk, carrying over vectors

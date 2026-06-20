@@ -1,5 +1,10 @@
 [embedding]
-provider = "bedrock"
-model = "us.cohere.embed-v4:0"
-dimensions = 256
-awsprofile = "dev.ai-inference"
+provider = "openai"
+baseurl = "http://localhost:8788"
+model = "mlx-community/Qwen3-Embedding-0.6B-mxfp8"
+dimensions = 1024
+
+[inference]
+provider = "openai"
+baseurl = "http://localhost:11434"
+model = "qwen3:4b-instruct-2507-q4_K_M"
