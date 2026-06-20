@@ -26,6 +26,9 @@ type cohereRequest struct {
 	// Truncate tells Cohere how to handle inputs over the model's max length
 	// ("END" drops the tail) instead of failing the whole batch.
 	Truncate string `json:"truncate"`
+	// OutputDimension requests a Matryoshka-truncated embedding. embed-v4
+	// supports 256/512/1024/1536; omitted (0) uses the model default.
+	OutputDimension int `json:"output_dimension,omitempty"`
 }
 
 type cohereResponse struct {
@@ -57,7 +60,7 @@ func NewBedrockCohere(ctx context.Context, region, profile, modelID string, dims
 	return &BedrockCohere{
 		client:  bedrockruntime.NewFromConfig(cfg),
 		modelID: modelID,
-		name:    modelID,
+		name:    fmt.Sprintf("%s@%d", modelID, dims),
 		dims:    dims,
 	}, nil
 }
@@ -95,8 +98,9 @@ func (b *BedrockCohere) embed(texts []string, inputType string) ([]Embedding, er
 	body, err := json.Marshal(cohereRequest{
 		Texts:          texts,
 		InputType:      inputType,
-		EmbeddingTypes: []string{"float"},
-		Truncate:       "END",
+		EmbeddingTypes:  []string{"float"},
+		Truncate:        "END",
+		OutputDimension: b.dims,
 	})
 	if err != nil {
 		return nil, err

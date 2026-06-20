@@ -41,7 +41,7 @@ func Default() Config {
 		Embedding: ModelConfig{
 			Provider:   "bedrock",
 			Model:      "us.cohere.embed-v4:0",
-			Dimensions: 1536,
+			Dimensions: 256,
 		},
 		Ref: "HEAD",
 	}

@@ -3,5 +3,5 @@ ref = "HEAD"
 [embedding]
 provider = "bedrock"
 model = "us.cohere.embed-v4:0"
-dimensions = 1536
+dimensions = 256
 profile = "dev.ai-inference"
