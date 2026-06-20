@@ -224,7 +224,19 @@ Decisions/notes:
     return actionable errors.
 - Before moving on: tests, vet, build pass.
 
-## Stage 3 — Gemini embedding provider
+## Stage 3 — Gemini embedding provider  ✅ DONE
+
+Decisions/notes:
+- Added `internal/embed/gemini.go` (`Gemini`) hitting
+  `{baseURL}/v1beta/{models/<id>}:batchEmbedContents`; baseURL defaults to
+  `https://generativelanguage.googleapis.com` (trailing slashes trimmed), key
+  from `APIKeyEnv` (default `GEMINI_API_KEY`) sent as the `key` query param.
+- modelID is normalized to the `models/<id>` form the API requires.
+- `OutputDimensionality` set from configured dims; response vector length is
+  validated to equal dims (errors on mismatch — no silent truncation).
+- `embed.Build` now handles `provider="gemini"`.
+- Tests in gemini_test.go use an httptest fake (success, error status,
+  dimension mismatch, empty data).
 
 - Goal: `embed.Build` handles `provider="gemini"` against the Generative
   Language embeddings endpoint, key from `GEMINI_API_KEY`.
