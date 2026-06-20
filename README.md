@@ -34,7 +34,7 @@ configured embedding models.
 ## Usage
 
 Run from anywhere inside the git repository. PKB discovers the repo root, reads
-`.pkb.json` / `.pkb/config.json` and `.pkbignore`, and stores the index at
+`pkb.toml` / `.pkb/config.toml` and `.pkbignore`, and stores the index at
 `pkb.db` at the repo root.
 
 ```bash
@@ -68,22 +68,17 @@ agent integrations) can parse these sections or feed the raw output to an LLM.
 ## Configuration
 
 A repo-root config file — `pkb.toml` or `.pkb/config.toml` (first found wins) —
-selects the two embedding models and the target ref. Any unset field falls back
+selects the embedding model and the target ref. Any unset field falls back
 to defaults, and a missing file uses defaults entirely.
 ```toml
 ref = "HEAD"
 
-[codeEmbedding]
+[embedding]
 provider = "bedrock"
 model = "us.cohere.embed-v4:0"
-dimensions = 1536
+dimensions = 256
 region = "us-east-1"
 profile = "my-sso-profile"
-
-[textEmbedding]
-provider = "bedrock"
-model = "us.cohere.embed-v4:0"
-dimensions = 1536
 
 [extOverrides]
 ".tsx" = "code"
@@ -94,6 +89,10 @@ dimensions = 1536
   default credential chain. Credentials are checked eagerly — if they're missing
   or expired, pkb exits with a hint to run `aws sso login`.
 - `ref`: git ref to index; defaults to `HEAD` (the default branch in CI).
+- `dimensions`: embedding width. embed-v4 is Matryoshka, so it supports
+  256/512/1024/1536; lower means smaller/faster with minor quality loss
+  (default 256). Changing this re-keys the index; delete `.pkb/state.json` and
+  run `pkb reindex` to rebuild.
 - `extOverrides`: force an extension to `code` or `text`.
 `.pkbignore` is a separate gitignore-style file at the repo root.
 

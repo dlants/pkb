@@ -1,6 +1,5 @@
-// Package embed defines the embedding-model interface used for both code and
-// text embeddings. A Context holds two instances (a code model and a text
-// model); a file's type decides which one embeds it.
+// Package embed defines the embedding-model interface used to embed all files
+// (code and text) via a single model.
 package embed
 
 // Embedding is a dense vector representation of a chunk or query.
