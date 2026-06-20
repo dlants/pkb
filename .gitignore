@@ -1,4 +1,3 @@
 node_modules
-.pkb/state.json
 /pkb
 internal/index/augment_bench_report.md

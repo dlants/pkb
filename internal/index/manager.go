@@ -1,11 +1,11 @@
 // Package index implements the reindex flow: it diffs the marker commit
-// (.pkb/state.json) against HEAD (or does a full ls-tree on cold
+// (pkb-state.toml) against HEAD (or does a full ls-tree on cold
 // start/recovery), then indexes/updates/deletes files. There is no watcher;
 // reindex runs to completion and exits.
 package index
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/filetype"
@@ -26,13 +27,13 @@ import (
 
 // State is the persisted marker recording how far indexing has progressed.
 type State struct {
-	Commit     string `json:"commit"`
-	IndexedAt  string `json:"indexedAt"`
-	FileCount  int    `json:"fileCount"`
-	ChunkCount int    `json:"chunkCount"`
+	Commit     string `toml:"commit"`
+	IndexedAt  string `toml:"indexedAt"`
+	FileCount  int    `toml:"fileCount"`
+	ChunkCount int    `toml:"chunkCount"`
 }
 
-const statePath = ".pkb/state.json"
+const statePath = "pkb-state.toml"
 
 // Ignore matches paths against the configured exclude globs using simple
 // segment/prefix matching (full gitignore semantics are out of scope for v1).
@@ -155,23 +156,18 @@ func readState(repoRoot string) (*State, error) {
 		return nil, err
 	}
 	var s State
-	if err := json.Unmarshal(data, &s); err != nil {
+	if err := toml.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
 func writeState(repoRoot string, s State) error {
-	dir := filepath.Join(repoRoot, ".pkb")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(s); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	return os.WriteFile(filepath.Join(repoRoot, statePath), data, 0o644)
+	return os.WriteFile(filepath.Join(repoRoot, statePath), buf.Bytes(), 0o644)
 }
 
 // Reindex brings the index in sync with HEAD and, only on success, advances

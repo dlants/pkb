@@ -119,7 +119,7 @@ apikeyenv = "ANTHROPIC_API_KEY"
   or expired, pkb exits with a hint to run `aws sso login`.
 - `dimensions`: embedding width. `voyage-code-3` is Matryoshka, so it supports
   256/512/1024/2048; lower means smaller/faster with minor quality loss
-  (default 256). Changing this re-keys the index; delete `.pkb/state.json` and
+  (default 256). Changing this re-keys the index; delete `pkb-state.toml` and
   run `pkb reindex` to rebuild.
 - `extOverrides`: force an extension to `code` or `text`.
 - `exclude`: paths to skip during indexing. Each entry matches a path either by

@@ -215,7 +215,7 @@ func TestTextFileInferenceIdentityChangeReembeds(t *testing.T) {
 	// augmented vectors are stale and must be re-embedded. Force a full revisit
 	// (a config-only change leaves no git diff) by clearing the marker.
 	o.Inference = infer.NewMockModel("infer-v2")
-	require.NoError(t, os.Remove(filepath.Join(h.root, ".pkb", "state.json")))
+	require.NoError(t, os.Remove(filepath.Join(h.root, "pkb-state.toml")))
 	_, err = Reindex(o)
 	require.NoError(t, err)
 	require.Equal(t, total+2, model.ChunkCount(), "inference-model switch invalidates text-file vectors")
@@ -426,7 +426,7 @@ func TestPartialRunMarkerSafety(t *testing.T) {
 	_, err := Reindex(o)
 	require.Error(t, err)
 
-	_, statErr := os.Stat(filepath.Join(h.root, ".pkb", "state.json"))
+	_, statErr := os.Stat(filepath.Join(h.root, "pkb-state.toml"))
 	require.True(t, os.IsNotExist(statErr), "marker must not be written on failed run")
 
 	// Fix and retry.
@@ -540,7 +540,7 @@ func TestModelChangeCleansUpOrphanTable(t *testing.T) {
 	m2 := embed.NewMockModel("mock-v2", 3)
 	o.Model = m2
 	// Force a full re-run by clearing the marker.
-	require.NoError(t, os.Remove(filepath.Join(h.root, ".pkb", "state.json")))
+	require.NoError(t, os.Remove(filepath.Join(h.root, "pkb-state.toml")))
 	_, err = Reindex(o)
 	require.NoError(t, err)
 
