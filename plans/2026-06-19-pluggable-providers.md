@@ -200,7 +200,17 @@ Decisions/notes:
     falls back to the new default (Bedrock embeddings + Bedrock Claude Haiku).
 - Before moving on: tests, `go vet`, build all pass.
 
-## Stage 2 — OpenAI-compatible embedding provider
+## Stage 2 — OpenAI-compatible embedding provider  ✅ DONE
+
+Decisions/notes:
+- Added `internal/embed/openai.go` (`OpenAICompatible`) hitting
+  `{baseURL}/v1/embeddings`; baseURL trailing slashes trimmed, defaults to
+  `https://api.openai.com`, key from `APIKeyEnv` (default `OPENAI_API_KEY`).
+- Empty key tolerated (no Authorization header) so Ollama/local servers work.
+- `embed.Build` signature extended with `baseURL, apiKeyEnv` and now handles
+  `openai`/`openai-compatible`; `cmd/pkb/main.go` caller updated.
+- Non-2xx surfaces `error.message`; data-length mismatch is an actionable error.
+- Tests in openai_test.go use an httptest fake (success, error status, empty data).
 
 - Goal: `embed.Build` handles `provider="openai"`/`openai-compatible`, hitting
   `{baseURL}/v1/embeddings`, with key from `APIKeyEnv`. Works against OpenAI and

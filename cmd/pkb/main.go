@@ -85,7 +85,7 @@ func setup() (*index.Options, func(), error) {
 	}
 	ignore := index.NewIgnore(cfg.Exclude)
 
-	model, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.Region, cfg.Embedding.Profile)
+	model, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.Region, cfg.Embedding.Profile, cfg.Embedding.BaseURL, cfg.Embedding.APIKeyEnv)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building embedding model: %w", err)
 	}
