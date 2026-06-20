@@ -23,6 +23,9 @@ type cohereRequest struct {
 	Texts          []string `json:"texts"`
 	InputType      string   `json:"input_type"`
 	EmbeddingTypes []string `json:"embedding_types"`
+	// Truncate tells Cohere how to handle inputs over the model's max length
+	// ("END" drops the tail) instead of failing the whole batch.
+	Truncate string `json:"truncate"`
 }
 
 type cohereResponse struct {
@@ -33,13 +36,23 @@ type cohereResponse struct {
 
 // NewBedrockCohere builds a Bedrock-backed Cohere embedding model. The modelID
 // is the Bedrock model/inference-profile id (e.g. "us.cohere.embed-v4:0").
-func NewBedrockCohere(ctx context.Context, region, modelID string, dims int) (*BedrockCohere, error) {
+func NewBedrockCohere(ctx context.Context, region, profile, modelID string, dims int) (*BedrockCohere, error) {
 	if region == "" {
 		region = "us-east-1"
 	}
-	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
+	opts := []func(*awsconfig.LoadOptions) error{awsconfig.WithRegion(region)}
+	if profile != "" {
+		opts = append(opts, awsconfig.WithSharedConfigProfile(profile))
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("loading aws config: %w", err)
+	}
+	// Credentials are resolved lazily by the SDK; retrieve them eagerly so a
+	// missing/expired session fails fast with an actionable message instead of
+	// surfacing as an opaque InvokeModel error later.
+	if _, err := cfg.Credentials.Retrieve(ctx); err != nil {
+		return nil, fmt.Errorf("no usable AWS credentials: %w\nhint: run `aws sso login` to refresh your session", err)
 	}
 	return &BedrockCohere{
 		client:  bedrockruntime.NewFromConfig(cfg),
@@ -83,6 +96,7 @@ func (b *BedrockCohere) embed(texts []string, inputType string) ([]Embedding, er
 		Texts:          texts,
 		InputType:      inputType,
 		EmbeddingTypes: []string{"float"},
+		Truncate:       "END",
 	})
 	if err != nil {
 		return nil, err

@@ -18,6 +18,7 @@ import (
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
+	"github.com/dlants/pkb/internal/paths"
 	"github.com/dlants/pkb/internal/store"
 )
 
@@ -60,7 +61,8 @@ func LoadIgnore(repoRoot string) (*Ignore, error) {
 }
 
 // Match reports whether relPath is excluded by any pattern.
-func (i *Ignore) Match(relPath string) bool {
+func (i *Ignore) Match(rel paths.GitRootRelativePath) bool {
+	relPath := string(rel)
 	base := filepath.Base(relPath)
 	for _, p := range i.patterns {
 		if base == p {
@@ -95,8 +97,8 @@ func (o *Options) activeModels() []embed.EmbeddingModel {
 }
 
 // route returns the file type for a path, applying any extension overrides.
-func (o *Options) route(path string) filetype.FileType {
-	ext := strings.ToLower(filepath.Ext(path))
+func (o *Options) route(path paths.GitRootRelativePath) filetype.FileType {
+	ext := strings.ToLower(filepath.Ext(string(path)))
 	if o.ExtOverrides != nil {
 		if t, ok := o.ExtOverrides[ext]; ok {
 			if t == "code" {
@@ -105,11 +107,11 @@ func (o *Options) route(path string) filetype.FileType {
 			return filetype.Text
 		}
 	}
-	return filetype.RoutePath(path).Type
+	return filetype.RoutePath(string(path)).Type
 }
 
 // modelFor returns the embedding model that should embed the given path.
-func (o *Options) modelFor(path string) embed.EmbeddingModel {
+func (o *Options) modelFor(path paths.GitRootRelativePath) embed.EmbeddingModel {
 	if o.route(path) == filetype.Code {
 		return o.CodeModel
 	}
@@ -119,8 +121,8 @@ func (o *Options) modelFor(path string) embed.EmbeddingModel {
 // grammarFor returns the tree-sitter grammar name for a code path (empty if the
 // extension has no recognized grammar, in which case ChunkCode falls back to
 // line-based chunking).
-func (o *Options) grammarFor(path string) string {
-	return filetype.RoutePath(path).Grammar
+func (o *Options) grammarFor(path paths.GitRootRelativePath) string {
+	return filetype.RoutePath(string(path)).Grammar
 }
 
 // textExts is the allowlist of indexable text extensions.
@@ -132,8 +134,8 @@ var textExts = map[string]struct{}{
 
 // candidate reports whether a path should be indexed: a recognized code file,
 // or an allowlisted text file; never the .pkb state dir; not ignored.
-func (o *Options) candidate(path string) bool {
-	if path == ".pkbignore" || strings.HasPrefix(path, ".pkb/") {
+func (o *Options) candidate(path paths.GitRootRelativePath) bool {
+	if path == ".pkbignore" || strings.HasPrefix(string(path), ".pkb/") {
 		return false
 	}
 	if o.Ignore != nil && o.Ignore.Match(path) {
@@ -142,7 +144,7 @@ func (o *Options) candidate(path string) bool {
 	if o.route(path) == filetype.Code {
 		return true
 	}
-	_, ok := textExts[strings.ToLower(filepath.Ext(path))]
+	_, ok := textExts[strings.ToLower(filepath.Ext(string(path)))]
 	return ok
 }
 
@@ -181,7 +183,7 @@ func Reindex(o *Options) (State, error) {
 	if ref == "" {
 		ref = "HEAD"
 	}
-	repoRoot := o.Repo.Root
+	repoRoot := string(o.Repo.Root)
 
 	targetSha, err := o.Repo.ResolveRef(ref)
 	if err != nil {
@@ -204,14 +206,14 @@ func Reindex(o *Options) (State, error) {
 
 	// indexed maps each already-indexed path to the model that embedded it and
 	// its stored blob sha.
-	indexed := map[string]indexedEntry{}
+	indexed := map[paths.GitRootRelativePath]indexedEntry{}
 	for _, m := range models {
 		files, err := o.Store.IndexedFiles(m.ModelName())
 		if err != nil {
 			return State{}, err
 		}
 		for path, sha := range files {
-			indexed[path] = indexedEntry{model: m.ModelName(), sha: sha}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: sha}
 		}
 	}
 
@@ -219,7 +221,7 @@ func Reindex(o *Options) (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	treeMap := make(map[string]string, len(treeFiles))
+	treeMap := make(map[paths.GitRootRelativePath]string, len(treeFiles))
 	for _, f := range treeFiles {
 		treeMap[f.Path] = f.BlobSha
 	}
@@ -245,7 +247,7 @@ func Reindex(o *Options) (State, error) {
 			// If a different model previously embedded this path (e.g. routing
 			// changed), purge the stale rows first.
 			if wasIndexed && prevEntry.model != model.ModelName() {
-				if err := o.Store.DeleteFile(path, prevEntry.model); err != nil {
+				if err := o.Store.DeleteFile(string(path), prevEntry.model); err != nil {
 					return State{}, err
 				}
 			}
@@ -254,7 +256,7 @@ func Reindex(o *Options) (State, error) {
 			}
 		} else {
 			if wasIndexed {
-				if err := o.Store.DeleteFile(path, prevEntry.model); err != nil {
+				if err := o.Store.DeleteFile(string(path), prevEntry.model); err != nil {
 					return State{}, err
 				}
 			}
@@ -284,8 +286,8 @@ func Reindex(o *Options) (State, error) {
 
 // touchedPaths computes the set of paths that might need work, choosing the
 // incremental, divergence, or full strategy.
-func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[string]string, indexed map[string]indexedEntry) (map[string]struct{}, error) {
-	touched := map[string]struct{}{}
+func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) (map[paths.GitRootRelativePath]struct{}, error) {
+	touched := map[paths.GitRootRelativePath]struct{}{}
 
 	full := prev == nil || prev.Commit == "" || !o.Repo.ObjectExists(prev.Commit)
 	if !full && prev.Commit == targetSha {
@@ -341,8 +343,8 @@ func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[string
 	return touched, nil
 }
 
-func (o *Options) indexFile(path, blobSha string, model embed.EmbeddingModel) error {
-	content, err := os.ReadFile(filepath.Join(o.Repo.Root, path))
+func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) error {
+	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 	if err != nil {
 		return err
 	}
@@ -353,7 +355,7 @@ func (o *Options) indexFile(path, blobSha string, model embed.EmbeddingModel) er
 	if o.route(path) == filetype.Code {
 		grammar := o.grammarFor(path)
 		var err error
-		chunks, err = chunk.ChunkCode(content, grammar, path, chunk.TargetChunkSize)
+		chunks, err = chunk.ChunkCode(content, grammar, string(path), chunk.TargetChunkSize)
 		if err != nil {
 			return err
 		}
@@ -378,7 +380,7 @@ func (o *Options) indexFile(path, blobSha string, model embed.EmbeddingModel) er
 		}
 	}
 
-	return o.Store.PutFile(path, model.ModelName(), blobSha, chunks, contextualized, embeddings)
+	return o.Store.PutFile(string(path), model.ModelName(), blobSha, chunks, contextualized, embeddings)
 }
 
 // indexedEntry records which model embedded a path and the stored blob sha.

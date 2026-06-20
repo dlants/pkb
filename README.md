@@ -35,7 +35,7 @@ configured embedding models.
 
 Run from anywhere inside the git repository. PKB discovers the repo root, reads
 `.pkb.json` / `.pkb/config.json` and `.pkbignore`, and stores the index at
-`.pkb/pkb.db`.
+`pkb.db` at the repo root.
 
 ```bash
 pkb reindex            # bring the index in sync with the target ref (default HEAD)
@@ -67,23 +67,34 @@ agent integrations) can parse these sections or feed the raw output to an LLM.
 
 ## Configuration
 
-A repo-root config file — `.pkb.json` or `.pkb/config.json` (first found wins) —
+A repo-root config file — `pkb.toml` or `.pkb/config.toml` (first found wins) —
 selects the two embedding models and the target ref. Any unset field falls back
 to defaults, and a missing file uses defaults entirely.
+```toml
+ref = "HEAD"
 
-```json
-{
-  "codeEmbedding": { "provider": "bedrock", "model": "us.cohere.embed-v4:0", "dimensions": 1536 },
-  "textEmbedding": { "provider": "bedrock", "model": "us.cohere.embed-v4:0", "dimensions": 1536 },
-  "ref": "HEAD",
-  "extOverrides": { ".tsx": "code" }
-}
+[codeEmbedding]
+provider = "bedrock"
+model = "us.cohere.embed-v4:0"
+dimensions = 1536
+region = "us-east-1"
+profile = "my-sso-profile"
+
+[textEmbedding]
+provider = "bedrock"
+model = "us.cohere.embed-v4:0"
+dimensions = 1536
+
+[extOverrides]
+".tsx" = "code"
 ```
-
 - `provider`: `bedrock` (Cohere on AWS Bedrock) or `mock` (deterministic, for tests).
+- `region`: AWS region for the Bedrock provider (defaults to `us-east-1`).
+- `profile`: AWS shared-config profile for the Bedrock provider; empty uses the
+  default credential chain. Credentials are checked eagerly — if they're missing
+  or expired, pkb exits with a hint to run `aws sso login`.
 - `ref`: git ref to index; defaults to `HEAD` (the default branch in CI).
 - `extOverrides`: force an extension to `code` or `text`.
-
 `.pkbignore` is a separate gitignore-style file at the repo root.
 
 ## Refreshing on merge (commit hook / CI)
@@ -95,7 +106,7 @@ Reindex at the moment code lands on the default branch. A minimal CI step:
 go build -o pkb ./cmd/pkb
 ./pkb reindex
 # commit the refreshed index so consumers get it on pull
-git add .pkb/pkb.db .pkb/state.json
+git add pkb.db
 git commit -m "pkb: reindex" || true
 ```
 

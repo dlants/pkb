@@ -17,10 +17,13 @@ func TestMissingConfigReturnsDefaults(t *testing.T) {
 
 func TestLoadMergesOverDefaults(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".pkb.json"), []byte(`{
-		"codeEmbedding": {"provider": "bedrock", "model": "code-model", "dimensions": 512},
-		"ref": "main"
-	}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"), []byte(`
+ref = "main"
+[codeEmbedding]
+provider = "bedrock"
+model = "code-model"
+dimensions = 512
+`), 0o644))
 
 	cfg, err := Load(dir)
 	require.NoError(t, err)
@@ -34,8 +37,8 @@ func TestLoadMergesOverDefaults(t *testing.T) {
 func TestNestedConfigPath(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".pkb"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".pkb", "config.json"),
-		[]byte(`{"textEmbedding": {"model": "txt"}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".pkb", "config.toml"),
+		[]byte("[textEmbedding]\nmodel = \"txt\"\n"), 0o644))
 
 	cfg, err := Load(dir)
 	require.NoError(t, err)

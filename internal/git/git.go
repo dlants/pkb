@@ -8,16 +8,18 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/dlants/pkb/internal/paths"
 )
 
 // Repo is a handle to a git working tree rooted at Root.
 type Repo struct {
-	Root string
+	Root paths.AbsPath
 }
 
 // RepoFile is a single tracked file: its repo-relative path and git blob sha.
 type RepoFile struct {
-	Path    string
+	Path    paths.GitRootRelativePath
 	BlobSha string
 }
 
@@ -25,13 +27,13 @@ type RepoFile struct {
 type Change struct {
 	// Status is the first letter of the status code (A, M, D, R, C, T).
 	Status  string
-	Path    string
-	OldPath string // set only for renames/copies
+	Path    paths.GitRootRelativePath
+	OldPath paths.GitRootRelativePath // set only for renames/copies
 }
 
 func (r *Repo) run(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
-	cmd.Dir = r.Root
+	cmd.Dir = string(r.Root)
 	var out, errBuf bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
@@ -49,7 +51,7 @@ func Open(dir string) (*Repo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("not a git repository (or git not found): %w", err)
 	}
-	return &Repo{Root: strings.TrimSpace(string(out))}, nil
+	return &Repo{Root: paths.AbsPath(strings.TrimSpace(string(out)))}, nil
 }
 
 // ResolveRef resolves a ref (e.g. HEAD, a branch, a sha) to a full commit sha.
@@ -81,7 +83,7 @@ func (r *Repo) LsTree(ref string) ([]RepoFile, error) {
 		if len(meta) < 3 || meta[1] != "blob" {
 			continue
 		}
-		files = append(files, RepoFile{Path: line[tab+1:], BlobSha: meta[2]})
+		files = append(files, RepoFile{Path: paths.GitRootRelativePath(line[tab+1:]), BlobSha: meta[2]})
 	}
 	return files, nil
 }
@@ -108,9 +110,9 @@ func (r *Repo) DiffNameStatus(from, to string) ([]Change, error) {
 			if len(fields) < 3 {
 				continue
 			}
-			changes = append(changes, Change{Status: code, OldPath: fields[1], Path: fields[2]})
+			changes = append(changes, Change{Status: code, OldPath: paths.GitRootRelativePath(fields[1]), Path: paths.GitRootRelativePath(fields[2])})
 		default:
-			changes = append(changes, Change{Status: code, Path: fields[1]})
+			changes = append(changes, Change{Status: code, Path: paths.GitRootRelativePath(fields[1])})
 		}
 	}
 	return changes, nil
@@ -119,14 +121,14 @@ func (r *Repo) DiffNameStatus(from, to string) ([]Change, error) {
 // ObjectExists reports whether the given object sha is present in the repo.
 func (r *Repo) ObjectExists(sha string) bool {
 	cmd := exec.Command("git", "cat-file", "-e", sha)
-	cmd.Dir = r.Root
+	cmd.Dir = string(r.Root)
 	return cmd.Run() == nil
 }
 
 // IsAncestor reports whether commit a is an ancestor of commit b.
 func (r *Repo) IsAncestor(a, b string) bool {
 	cmd := exec.Command("git", "merge-base", "--is-ancestor", a, b)
-	cmd.Dir = r.Root
+	cmd.Dir = string(r.Root)
 	return cmd.Run() == nil
 }
 

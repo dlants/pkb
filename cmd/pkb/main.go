@@ -14,6 +14,7 @@ import (
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/index"
+	"github.com/dlants/pkb/internal/paths"
 	"github.com/dlants/pkb/internal/store"
 )
 
@@ -56,14 +57,15 @@ usage:
   pkb stats            print index statistics
 
 pkb runs from anywhere inside a git repository; it discovers the repo root,
-reads .pkb.json / .pkb/config.json and .pkbignore, and stores the index at
-.pkb/pkb.db. Reindex is meant to run from a commit hook or CI step when code
+reads pkb.toml / .pkb/config.toml and .pkbignore, and stores the index at
+pkb.db at the repo root. Reindex is meant to run from a commit hook or CI step
+when code
 lands on the default branch (see README.md).
 `)
 }
 
 // dbRelPath is the fixed repo-relative location of the index database.
-const dbRelPath = ".pkb/pkb.db"
+const dbRelPath = "pkb.db"
 
 // setup discovers the repo root from cwd, loads config + .pkbignore, builds the
 // two embedding models, opens the database, and assembles index.Options.
@@ -77,28 +79,25 @@ func setup() (*index.Options, func(), error) {
 		return nil, nil, fmt.Errorf("not inside a git repository: %w", err)
 	}
 
-	cfg, err := config.Load(repo.Root)
+	cfg, err := config.Load(string(repo.Root))
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading config: %w", err)
 	}
-	ignore, err := index.LoadIgnore(repo.Root)
+	ignore, err := index.LoadIgnore(string(repo.Root))
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading .pkbignore: %w", err)
 	}
 
-	codeModel, err := embed.Build(cfg.CodeEmbedding.Provider, cfg.CodeEmbedding.Model, cfg.CodeEmbedding.Dimensions)
+	codeModel, err := embed.Build(cfg.CodeEmbedding.Provider, cfg.CodeEmbedding.Model, cfg.CodeEmbedding.Dimensions, cfg.CodeEmbedding.Region, cfg.CodeEmbedding.Profile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building code model: %w", err)
 	}
-	textModel, err := embed.Build(cfg.TextEmbedding.Provider, cfg.TextEmbedding.Model, cfg.TextEmbedding.Dimensions)
+	textModel, err := embed.Build(cfg.TextEmbedding.Provider, cfg.TextEmbedding.Model, cfg.TextEmbedding.Dimensions, cfg.TextEmbedding.Region, cfg.TextEmbedding.Profile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building text model: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(repo.Root, ".pkb"), 0o755); err != nil {
-		return nil, nil, err
-	}
-	st, err := store.Open(filepath.Join(repo.Root, dbRelPath))
+	st, err := store.Open(filepath.Join(string(repo.Root), dbRelPath))
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening database: %w", err)
 	}
@@ -155,7 +154,7 @@ func runSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Print(formatResults(results))
+	fmt.Print(formatResults(opts.Repo.Root, results))
 	return nil
 }
 
@@ -170,7 +169,7 @@ func runStats(args []string) error {
 	}
 	defer cleanup()
 
-	st, err := readState(opts.Repo.Root)
+	st, err := readState(string(opts.Repo.Root))
 	if err != nil {
 		return err
 	}
@@ -186,7 +185,7 @@ func runStats(args []string) error {
 }
 
 // formatResults renders search results as score-ordered markdown sections.
-func formatResults(results []store.SearchResult) string {
+func formatResults(root paths.AbsPath, results []store.SearchResult) string {
 	if len(results) == 0 {
 		return "No results found.\n"
 	}
@@ -195,7 +194,8 @@ func formatResults(results []store.SearchResult) string {
 		if i > 0 {
 			b.WriteString("\n---\n\n")
 		}
-		fmt.Fprintf(&b, "## Result %d (score: %.3f)\nFile: %s\n\n%s\n", i+1, r.Score, r.Path, r.Text)
+		abs := root.Join(paths.GitRootRelativePath(r.Path))
+		fmt.Fprintf(&b, "## Result %d (score: %.3f)\nFile: %s\n\n%s\n", i+1, r.Score, abs, r.Text)
 	}
 	return b.String()
 }
