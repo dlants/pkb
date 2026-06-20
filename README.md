@@ -40,11 +40,18 @@ go build -o pkb ./cmd/pkb
 
 # Configuration
 
-At runtime PKB needs AWS credentials with Bedrock access for the configured embedding models.
+PKB uses two models: an **embedding** model (embeds all files) and an optional
+**inference** model (augments markdown/text chunks with a one-paragraph context
+before embedding — the contextual-retrieval pattern; code files are never
+augmented). Both are pluggable across providers.
+
+The default configuration is the corporate-friendly turnkey path: **Bedrock**
+embeddings (Cohere embed-v4) plus **Bedrock** Claude Haiku augmentation, both
+covered by a single IAM credential with Bedrock access.
 
 A repo-root config file — `pkb.toml` or `.pkb/config.toml` (first found wins) —
-selects the embedding model. Any unset field falls back to defaults, and a
-missing file uses defaults entirely.
+selects the embedding and inference models. Any unset field falls back to
+defaults, and a missing file uses defaults entirely.
 
 PKB always indexes `HEAD`. Run `pkb reindex` when the default branch is checked
 out (e.g. in CI after checkout) so the index tracks the default branch.
@@ -59,11 +66,34 @@ dimensions = 256
 awsregion = "us-east-1"
 awsprofile = "my-sso-profile"
 
+[inference]
+provider = "bedrock"
+model = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+
 [extOverrides]
 ".tsx" = "code"
 ```
 
-- `provider`: `bedrock` (Cohere on AWS Bedrock) or `mock` (deterministic, for tests).
+- `provider`: the backend for a model block. Supported values:
+  - `bedrock`: AWS Bedrock (Cohere embed-v4 for `[embedding]`, Claude for
+    `[inference]`). Corporate default; uses IAM credentials, no extra keys.
+  - `openai` / `openai-compatible`: any OpenAI-shaped server. Hits
+    `{baseurl}/v1/embeddings` and `{baseurl}/v1/chat/completions`. Point
+    `baseurl` at `https://api.openai.com` for OpenAI cloud, or at a local
+    server (e.g. `http://localhost:11434` for Ollama, plus llama.cpp, vLLM,
+    LM Studio, LocalAI) for a fully local setup.
+  - `gemini`: Google Generative Language API (good free all-rounder for mixed
+    code + markdown).
+  - `none` (inference only): disables LLM augmentation, falling back to the
+    deterministic heading-prefix path with no inference calls.
+  - `mock`: deterministic, for tests.
+- `baseurl`: API base URL for `openai`/`openai-compatible`/`gemini` providers
+  (defaults: `https://api.openai.com`, `https://generativelanguage.googleapis.com`).
+  Ignored by Bedrock.
+- `apikeyenv`: name of the environment variable holding the API key for HTTP
+  providers (defaults: `OPENAI_API_KEY` for OpenAI, `GEMINI_API_KEY` for
+  Gemini). An empty key is tolerated for local servers like Ollama. Ignored by
+  Bedrock.
 - `awsregion`: AWS region for the Bedrock provider (defaults to `us-east-1`).
 - `awsprofile`: AWS shared-config profile for the Bedrock provider; empty uses the
   default credential chain. Credentials are checked eagerly — if they're missing

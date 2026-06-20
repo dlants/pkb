@@ -350,8 +350,22 @@ Decisions/notes:
     degradation on failure; reuse semantics from Stage 5 hold across reindex.
 - Before moving on: tests, vet, build pass.
 
-## Stage 7 — main.go wiring, defaults, and docs
+## Stage 7 — main.go wiring, defaults, and docs  ✅ DONE
 
+Decisions/notes:
+- `cmd/pkb/main.go` `setup()` now builds the inference model via `infer.Build`
+  from the `[inference]` config block and sets `index.Options.Inference`
+  (nil when provider is `none`/empty). Embedding wiring unchanged.
+- Docs: README.md "Configuration" section now documents both `[embedding]` and
+  `[inference]` blocks, all providers (`bedrock`/`openai`/`openai-compatible`/
+  `gemini`/`none`/`mock`), and the `baseurl`/`apikeyenv` fields + env-var
+  defaults. context.md gained a "Providers" summary.
+- Smoke test: added `internal/smoke/e2e_test.go` (the existing
+  `smoke_test.go` is the cgo-link test, kept). It drives index + search end to
+  end with mock embed + mock infer providers (offline, no creds) and asserts
+  `embed.Build`/`infer.Build` reject unknown providers.
+
+- Goal:
 - Goal: `cmd/pkb/main.go` builds both the embedding and (optional) inference
   models from config. Document the provider options and recommended defaults
   (default/corporate: Bedrock embeddings + Bedrock Haiku augmentation;
