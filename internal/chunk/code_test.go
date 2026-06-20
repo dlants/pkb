@@ -62,6 +62,63 @@ func TestChunkCodeOversizedClassSplitsMethods(t *testing.T) {
 	}
 }
 
+func TestChunkCodeOversizedClassEmitsHeaderChunk(t *testing.T) {
+	body := strings.Repeat("    this.x += 1;\n", 80)
+	src := "// Foo does things.\nclass Foo {\n  alpha() {\n" + body + "  }\n\n  beta() {\n" + body + "  }\n}\n"
+	chunks, err := ChunkCode([]byte(src), "typescript", "c.ts", 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var header *ChunkInfo
+	for i := range chunks {
+		if chunks[i].HeadingContext == "c.ts > class Foo" {
+			header = &chunks[i]
+		}
+	}
+	if header == nil {
+		t.Fatalf("expected a standalone class header chunk, got: %+v", breadcrumbs(chunks))
+	}
+	if !strings.Contains(header.Text, "// Foo does things.") || !strings.Contains(header.Text, "class Foo") {
+		t.Fatalf("header chunk missing doc/decl: %q", header.Text)
+	}
+	if strings.Contains(header.Text, "this.x") {
+		t.Fatalf("header chunk should not include method bodies: %q", header.Text)
+	}
+	if header.Start.Line != 1 || header.Start.Col != 1 {
+		t.Fatalf("header start = %+v, want line 1 col 1", header.Start)
+	}
+	if header.End.Line != 2 {
+		t.Fatalf("header end = %+v, want line 2 (end of `class Foo {`)", header.End)
+	}
+}
+
+func TestChunkCodeOversizedClassHeaderChunkNoDoc(t *testing.T) {
+	body := strings.Repeat("    this.x += 1;\n", 80)
+	src := "class Foo {\n  alpha() {\n" + body + "  }\n\n  beta() {\n" + body + "  }\n}\n"
+	chunks, err := ChunkCode([]byte(src), "typescript", "c.ts", 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var header *ChunkInfo
+	for i := range chunks {
+		if chunks[i].HeadingContext == "c.ts > class Foo" {
+			header = &chunks[i]
+		}
+	}
+	if header == nil {
+		t.Fatalf("expected a standalone class header chunk, got: %+v", breadcrumbs(chunks))
+	}
+	if !strings.Contains(header.Text, "class Foo") || strings.Contains(header.Text, "//") {
+		t.Fatalf("no-doc header chunk = %q", header.Text)
+	}
+	if strings.Contains(header.Text, "this.x") {
+		t.Fatalf("header chunk should not include method bodies: %q", header.Text)
+	}
+	if header.Start.Line != 1 || header.Start.Col != 1 {
+		t.Fatalf("header start = %+v, want line 1 col 1", header.Start)
+	}
+}
+
 func TestChunkCodeOversizedFunctionLineSplit(t *testing.T) {
 	body := strings.Repeat("  doThing();\n", 100)
 	src := "function big() {\n" + body + "}\n"
@@ -155,6 +212,50 @@ func TestChunkContainerHeuristicFallback(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("heuristic fallback breadcrumbs = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestChunkCodeHCLBlocks(t *testing.T) {
+	src := "region = \"us-east-1\"\n\n" +
+		"resource \"aws_instance\" \"web\" {\n  ami = \"abc\"\n}\n\n" +
+		"variable \"size\" {\n  default = 1\n}\n"
+	chunks, err := ChunkCode([]byte(src), "hcl", "main.tf", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := breadcrumbs(chunks)
+	var sawResource, sawVar, sawFiller bool
+	for i, c := range chunks {
+		switch got[i] {
+		case "main.tf > resource \"aws_instance\" \"web\"":
+			sawResource = true
+		case "main.tf > variable \"size\"":
+			sawVar = true
+		case "main.tf":
+			if strings.Contains(c.Text, "region") {
+				sawFiller = true
+			}
+		}
+	}
+	if !sawResource || !sawVar || !sawFiller {
+		t.Fatalf("HCL chunking breadcrumbs = %v", got)
+	}
+}
+
+func TestChunkCodeHCLOversizedBlockLineSplit(t *testing.T) {
+	body := strings.Repeat("  attr = \"value\"\n", 80)
+	src := "resource \"aws_instance\" \"web\" {\n" + body + "}\n"
+	chunks, err := ChunkCode([]byte(src), "hcl", "main.tf", 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) < 2 {
+		t.Fatalf("expected oversized block to line-split, got %d chunks", len(chunks))
+	}
+	for _, c := range chunks {
+		if c.HeadingContext != "main.tf > resource \"aws_instance\" \"web\"" {
+			t.Fatalf("unexpected breadcrumb %q", c.HeadingContext)
 		}
 	}
 }
