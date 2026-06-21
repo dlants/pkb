@@ -208,7 +208,11 @@ func runChunk(args []string) error {
 	route := filetype.RoutePath(path)
 	var chunks []chunk.ChunkInfo
 	if route.Type == filetype.Code {
-		chunks, err = chunk.ChunkCode(content, route.Grammar, path, *maxSize)
+		if chunk.IsConfigGrammar(route.Grammar) {
+			chunks, err = chunk.ChunkConfig(content, route.Grammar, path, *maxSize)
+		} else {
+			chunks, err = chunk.ChunkCode(content, route.Grammar, path, *maxSize)
+		}
 		if err != nil {
 			return err
 		}

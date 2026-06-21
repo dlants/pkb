@@ -136,6 +136,9 @@ func (o *Options) candidate(path paths.GitRootRelativePath) bool {
 	if strings.HasPrefix(string(path), ".pkb/") {
 		return false
 	}
+	if string(path) == statePath {
+		return false
+	}
 	if o.Ignore != nil && o.Ignore.Match(path) {
 		return false
 	}
@@ -382,7 +385,11 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 	if o.route(path) == filetype.Code {
 		grammar := o.grammarFor(path)
 		var err error
-		chunks, err = chunk.ChunkCode(content, grammar, string(path), chunk.TargetChunkSize)
+		if chunk.IsConfigGrammar(grammar) {
+			chunks, err = chunk.ChunkConfig(content, grammar, string(path), chunk.TargetChunkSize)
+		} else {
+			chunks, err = chunk.ChunkCode(content, grammar, string(path), chunk.TargetChunkSize)
+		}
 		if err != nil {
 			return indexResult{}, err
 		}
