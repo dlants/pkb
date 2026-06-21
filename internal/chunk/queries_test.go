@@ -10,8 +10,8 @@ func TestVendoredQueriesCompile(t *testing.T) {
 	for name := range grammars {
 		src := queryFor(name)
 		if src == "" {
-			// Some grammars (e.g. HCL) intentionally ship no tags.scm and use
-			// the heuristic chunking path instead.
+			// A grammar with no vendored tags.scm is chunked by the
+			// whole-file cAST sweep instead.
 			continue
 		}
 		lang := languageFor(name)

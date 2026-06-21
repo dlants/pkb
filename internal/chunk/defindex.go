@@ -70,7 +70,8 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 	matches := cursor.Matches(q, root, source)
 	for m := matches.Next(); m != nil; m = matches.Next() {
 		var defNode *tree_sitter.Node
-		var label, name string
+		var suffixLabel, labelText string
+		var nameParts []nameCapture
 		docStart := -1
 
 		for _, capture := range m.Captures {
@@ -80,15 +81,30 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 			case strings.HasPrefix(cname, "definition."):
 				n := node
 				defNode = &n
-				label = strings.TrimPrefix(cname, "definition.")
+				suffixLabel = strings.TrimPrefix(cname, "definition.")
 			case cname == "name":
-				name = node.Utf8Text(source)
+				nameParts = append(nameParts, nameCapture{
+					start: int(node.StartByte()),
+					text:  node.Utf8Text(source),
+				})
+			case cname == "label":
+				labelText = node.Utf8Text(source)
 			case cname == "doc":
 				if s := int(node.StartByte()); docStart == -1 || s < docStart {
 					docStart = s
 				}
 			}
 		}
+
+		// A @label capture (e.g. HCL's block-type identifier) overrides the
+		// static @definition.<suffix> label so the breadcrumb reads naturally.
+		label := suffixLabel
+		if labelText != "" {
+			label = labelText
+		}
+		// @name may appear multiple times (e.g. an HCL block's labels); join the
+		// captures in source order to form the display name.
+		name := joinNames(nameParts)
 
 		if defNode == nil {
 			continue
@@ -111,6 +127,26 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 	})
 
 	return idx, nil
+}
+
+// nameCapture is one @name capture: its start byte (for source-order joining)
+// and text.
+type nameCapture struct {
+	start int
+	text  string
+}
+
+// joinNames orders @name captures by source position and joins them with a
+// single space, producing the display name (e.g. an HCL block's labels).
+func joinNames(parts []nameCapture) string {
+	sort.SliceStable(parts, func(i, j int) bool {
+		return parts[i].start < parts[j].start
+	})
+	texts := make([]string, len(parts))
+	for i, p := range parts {
+		texts[i] = p.text
+	}
+	return strings.Join(texts, " ")
 }
 
 // entry returns the defEntry for node, if it was captured as a @definition.*.

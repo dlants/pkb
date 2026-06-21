@@ -11,7 +11,11 @@ import _ "embed"
 // full ECMAScript construct set in addition to TypeScript-specific nodes.
 //
 // Source versions: go v0.23.4, javascript v0.23.1, python v0.23.6,
-// rust v0.23.2, typescript v0.23.2.
+// rust v0.23.2, typescript v0.23.2, hcl v1.2.0 (hcl.scm is pkb-authored, not
+// vendored upstream, capturing top-level blocks as @definition.block).
+
+//go:embed queries/hcl.scm
+var queryHCL string
 
 //go:embed queries/go.scm
 var queryGo string
@@ -34,6 +38,7 @@ var queryTSX string
 // queries maps a grammar name to its embedded tags.scm source.
 var queries = map[string]string{
 	"go":         queryGo,
+	"hcl":        queryHCL,
 	"javascript": queryJavascript,
 	"python":     queryPython,
 	"rust":       queryRust,
