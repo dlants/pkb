@@ -364,6 +364,52 @@ Decisions/deviations:
 
 ## Stage 4: Cross-language smoke + doc-packing confirmation
 
+Implemented (DONE): smoke-tested the bottom-up chunker across go, typescript,
+python, rust, hcl, and markdown via the `pkb chunk` CLI, and added an automated
+test pinning the decorator decision. Doc-comment packing is confirmed by the
+existing `TestChunkCodeDocCommentAttachedToDecl` (Go doc comment rides into the
+function chunk, not the preceding filler).
+
+Decisions/deviations:
+- Decorators (first cut): left as preceding filler. The python tags.scm captures
+  `function_definition`, whose span excludes the `decorated_definition` wrapper,
+  so `@decorator` lines snap to the preceding filler chunk rather than into the
+  function chunk. Pinned by new `TestChunkCodePythonDecoratorIsFiller`
+  (code_test.go). Pulling decorators into the span (analogous to Go's `type `
+  keyword recovery) is a per-language tuning follow-up, not done here.
+- Cross-language smoke (`./pkb chunk` on fixtures) shows sensible boundaries:
+  - go (internal/chunk/code.go): every top-level func/type/method is its own
+    `> label name` chunk; package/imports are filler. Good.
+  - typescript: `function greet` and `interface Shape > method area` chunked
+    correctly; imports are filler.
+  - hcl: `resource "aws_instance" "web"` / `variable "size"` blocks each their
+    own chunk; bare `region = ...` is filler.
+  - markdown: routed to the markdown chunker (heading breadcrumbs), unaffected.
+  - rust: structs/functions/methods chunk correctly, BUT a free `impl` method
+    matches both the `declaration_list (function_item) @definition.method` and
+    the bare `function_item @definition.function` rules in rust.scm, producing
+    two overlapping spans with the same range and a doubled breadcrumb
+    (`> method norm > function norm`). Harmless (same bytes, nested crumb) but
+    noisy.
+
+Follow-up tuning items (noted, NOT implemented this stage):
+- Python: include decorators in the function span.
+- Rust: dedupe the overlapping method/function captures (overlapping spans with
+  identical ranges should collapse to the more specific one).
+- Interface-with-implementation packing (named in the original request) remains
+  future tuning over the definition-span representation.
+
+- [x] Behavior: Python decorated function — decorator left as preceding filler;
+  recorded via `TestChunkCodePythonDecoratorIsFiller`.
+- [x] Behavior: Go doc comment is part of the function chunk
+  (`TestChunkCodeDocCommentAttachedToDecl`).
+- [x] Manual: `./pkb chunk` across go/typescript/python/rust/hcl/markdown shows
+  sensible boundaries (see notes above).
+- [x] `go build ./...`, `go vet ./...`, `go test ./...` all green; the
+  `internal/chunk` package is golangci-lint clean. Two pre-existing errcheck
+  findings (`cmd/pkb/main.go` `st.Close`, `cmd/pkb/main_test.go` `w.Close`) exist
+  unchanged on HEAD and are out of scope (consistent with Stage 3's note).
+
 - Goal: confirm the bottom-up model holds across the supported grammars and that
   doc/comment packing is intact, using the `pkb chunk` CLI for manual inspection
   and a couple of automated assertions.
