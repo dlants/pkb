@@ -51,12 +51,13 @@ type Config struct {
 	// slowest part of a run, so issuing several requests at once speeds it up.
 	// Defaults to 4; values below 1 are treated as 1.
 	MaxParallelism int `toml:"maxparallelism"`
-	// Budget caps the projected dollar cost of a single reindex run. Before any
-	// paid embedding/inference work, Reindex estimates the run's cost and aborts
-	// when it exceeds this budget, so an unexpectedly large/expensive change set
-	// must be reindexed locally instead. Defaults to $5; a non-positive value
-	// disables the gate.
-	Budget float64 `toml:"budget"`
+	// MaxReindexCost caps the projected dollar cost of a single reindex
+	// run (it is a per-run cap, not a cumulative spend limit across runs).
+	// Before any paid embedding/inference work, Reindex estimates the run's cost
+	// and aborts when it exceeds this budget, so an unexpectedly large/expensive
+	// change set must be reindexed locally instead. Defaults to $5; a
+	// non-positive value disables the gate.
+	MaxReindexCost float64 `toml:"maxReindexCost"`
 }
 
 // Default returns the built-in configuration used when no config file exists.
@@ -72,7 +73,7 @@ func Default() Config {
 			Model:    "claude-haiku-4-5",
 		},
 		MaxParallelism: 4,
-		Budget:         5.0,
+		MaxReindexCost: 5.0,
 	}
 }
 
