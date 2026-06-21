@@ -190,7 +190,6 @@ func TestChunkCodeDocCommentAttachedToDecl(t *testing.T) {
 }
 
 func TestChunkCodeHCLBlocks(t *testing.T) {
-	t.Skip("HCL has no vendored tags.scm yet; per-block chunking restored in Stage 3")
 	src := "region = \"us-east-1\"\n\n" +
 		"resource \"aws_instance\" \"web\" {\n  ami = \"abc\"\n}\n\n" +
 		"variable \"size\" {\n  default = 1\n}\n"
@@ -218,7 +217,6 @@ func TestChunkCodeHCLBlocks(t *testing.T) {
 }
 
 func TestChunkCodeHCLOversizedBlockLineSplit(t *testing.T) {
-	t.Skip("HCL has no vendored tags.scm yet; per-block chunking restored in Stage 3")
 	body := strings.Repeat("  attr = \"value\"\n", 80)
 	src := "resource \"aws_instance\" \"web\" {\n" + body + "}\n"
 	chunks, err := ChunkCode([]byte(src), "hcl", "main.tf", 300)

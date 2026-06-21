@@ -328,6 +328,24 @@ green; `./pkb chunk internal/index/manager.go` shows `type State` as its own
 
 ## Stage 3: HCL tags.scm and removal of the config_file special case
 
+Implemented (DONE): added internal/chunk/queries/hcl.scm capturing every `block`
+node as `@definition.block`, with the block-type `(identifier)` as `@label` and
+its `(string_lit)*` labels as `@name`; registered it in queries.go (`queryHCL`).
+The `config_file > body` descent was already gone (dropped in Stage 2), so
+nothing to remove there; the two HCL tests were un-skipped and pass.
+
+Decisions/deviations:
+- Breadcrumbs read `resource "aws_instance" "web"` (not `block ...`). To get
+  this, defindex.go now supports a `@label` capture that overrides the static
+  `@definition.<suffix>` label, and accepts multiple `@name` captures
+  (`joinNames` orders them by source byte and space-joins). Both additions are
+  backward-compatible: existing single-`@name`, no-`@label` grammars are
+  unchanged. New helper type `nameCapture`.
+- queries_test.go comment updated (no-tags.scm grammars now whole-file cAST, not
+  a "heuristic path").
+- Pre-existing repo-wide errcheck lint findings (store.go, embed, test files)
+  are untouched; no new lint issues in the chunk package.
+
 - Goal: add internal/chunk/queries/hcl.scm capturing top-level blocks as
   `@definition.block` with the block type as `@name`; register it in queries.go;
   remove the `config_file > body` descent from the old code path (now obsolete).
