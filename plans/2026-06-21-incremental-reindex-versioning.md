@@ -337,6 +337,22 @@ Full suite, vet, build pass.
 
 ## Stage 4 — Drop the augmentation short-circuit; minor changes don't re-embed
 
+**Status: DONE.** `Reindex`'s skip decision now keys on `complete=1` + blob +
+model match only (`wasIndexed && prevEntry.complete && prevEntry.model == ... &&
+prevEntry.sha == blobSha`); the `prevEntry.inference == o.inferenceName()`
+requirement and the now-dead `Options.inferenceName()` helper and
+`indexedEntry.inference` field were removed. `indexedEntry` gained `complete`,
+populated from `FileMeta.Complete`. `minor_spec` is already recorded on write via
+`StartFile` (Stage 3). The existing tail `VACUUM` runs after every file
+finalizes (after old-gen drops) and was left in place. An augmentation-spec-only
+change (different inference model/prompt) now re-embeds and re-augments nothing:
+reuse-by-`ChunkKey` carries the original vector, blurb, and `aug_spec`. Test
+`TestTextFileInferenceIdentityChangeReusesVectors` was strengthened to assert
+zero embedding and zero inference calls on the inference-model switch. Full
+suite, vet, build pass.
+
+## Stage 4 — Drop the augmentation short-circuit; minor changes don't re-embed
+
 - Goal: remove the `prevEntry.inference == inferenceName()` requirement from
   `Reindex`'s skip decision (skip on `complete=1` + blob + model match only).
   Record `minor_spec` on write for inspection. Confirm an augmentation-spec
