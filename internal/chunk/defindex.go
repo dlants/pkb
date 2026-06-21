@@ -1,6 +1,7 @@
 package chunk
 
 import (
+	"sort"
 	"strings"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -15,6 +16,16 @@ type defEntry struct {
 	docStartByte int
 }
 
+// defSpan is a @definition.* capture as a byte interval plus its metadata. It is
+// the bottom-up unit that drives chunk boundaries and breadcrumbs: start/end are
+// the captured node's byte range, and the embedded defEntry carries name, label,
+// and the doc-comment start byte (-1 when absent).
+type defSpan struct {
+	defEntry
+	start int
+	end   int
+}
+
 // defIndex is the result of running a grammar's tags.scm over a parsed tree:
 // nodes is the set of tree-sitter node IDs captured as @definition.*, and info
 // maps each such node ID to its defEntry. Node identity uses Node.Id(), which is
@@ -23,6 +34,7 @@ type defEntry struct {
 type defIndex struct {
 	nodes map[uintptr]struct{}
 	info  map[uintptr]defEntry
+	spans []defSpan
 }
 
 // buildDefIndex runs the grammar's vendored tags.scm query over the tree rooted
@@ -81,9 +93,22 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 			continue
 		}
 		id := defNode.Id()
+		entry := defEntry{name: name, label: label, docStartByte: docStart}
 		idx.nodes[id] = struct{}{}
-		idx.info[id] = defEntry{name: name, label: label, docStartByte: docStart}
+		idx.info[id] = entry
+		idx.spans = append(idx.spans, defSpan{
+			defEntry: entry,
+			start:    int(defNode.StartByte()),
+			end:      int(defNode.EndByte()),
+		})
 	}
+
+	sort.SliceStable(idx.spans, func(i, j int) bool {
+		if idx.spans[i].start != idx.spans[j].start {
+			return idx.spans[i].start < idx.spans[j].start
+		}
+		return idx.spans[i].end < idx.spans[j].end
+	})
 
 	return idx, nil
 }
