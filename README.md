@@ -6,6 +6,7 @@ PKB is a single file go binary that exposes a search CLI, with a very simple int
 
 ```bash
 pkb reindex            # bring the index in sync with the current HEAD
+pkb estimate           # project the cost of the next and a full reindex (no API calls)
 pkb search "<query>"   # search; -k N controls result count (default 5)
 pkb stats              # print the current index marker (commit, file/chunk counts)
 pkb chunk <file>       # display how this file would be chunked (for debugging)
@@ -119,4 +120,4 @@ apikeyenv = "ANTHROPIC_API_KEY"
 - `extOverrides`: force an extension to `code` or `text`.
 - `exclude`: paths to skip during indexing. Each entry matches a path either by basename (any file/dir with that name) or as a path prefix (a leading repo-relative path segment); full glob/gitignore semantics are not supported.
 - `maxparallelism`: number of inference (augmentation) calls issued concurrently during indexing. Augmentation against a remote model is the slowest part of a run, so raising this speeds it up at the cost of more concurrent requests (default 4; values below 1 are treated as 1).
-- `maxReindexCost`: cap, in US dollars, on the projected cost of a single reindex run. Before any paid embedding/inference work, `reindex` estimates the run's cost from the changed files and per-chunk reuse (no API calls) and aborts when the estimate exceeds this per-run cap, so an unexpectedly large change set must be reindexed locally instead. The projected cost is printed on every run (default $5; a non-positive value disables the gate).
+- `maxReindexCost`: cap, in US dollars, on the projected cost of a single reindex run. Before any paid embedding/inference work, `reindex` estimates the run's cost from the changed files and per-chunk reuse (no API calls) and aborts when the estimate exceeds this per-run cap, so an unexpectedly large change set must be reindexed locally instead. The projected cost is printed on every run (default $5; a non-positive value disables the gate). `pkb reindex --max-reindex-cost <dollars>` overrides the configured value for a single run, and `pkb estimate` prints the same projection without spending anything.

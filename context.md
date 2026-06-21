@@ -10,6 +10,18 @@ grammars via cgo.
 
 PKB uses a pluggable **embedding** model (all files) and an optional **inference** model (augments markdown/text chunks before embedding; code is never augmented). Both are selected in `pkb.toml` via `[embedding]` / `[inference]` blocks. Providers: `bedrock` (corporate default — Cohere embed-v4 - Claude Haiku, IAM creds), `openai`/`openai-compatible` (OpenAI cloud or local servers like Ollama via `baseurl`), `gemini`, `none` (inference only — disables augmentation), and `mock` (tests). HTTP providers read the API key from the env var named by `apikeyenv` (`OPENAI_API_KEY` / `GEMINI_API_KEY` defaults). See README.md for the full config reference.
 
+## Storage (SQLite)
+
+The index is a single SQLite file (`pkb.db`) with the `sqlite-vec` extension statically linked. Two app tables plus one `vec0` virtual table per embedding model:
+
+- **`files`** — `id`, `path`, `model_name`, `embedding_version` (the global `MajorVersion`), `blob_sha`, `inference_model`, `complete`, `indexed_gen`, `minor_spec`; `UNIQUE(path, model_name, embedding_version)`.
+- **`chunks`** — `id`, `file_id` (FK → `files`, cascade delete), `text`, `contextualized_text`, `heading_context`, `start_line`, `start_col`, `end_line`, `end_col`, `gen`, `augmentation`, `aug_spec`.
+- **`vec_<model>_v<major>`** — `vec0` virtual table, `chunk_id INTEGER PRIMARY KEY` → `embedding float[dims] distance_metric=cosine` (e.g. `vec_voyage_code_3_256_v3`). sqlite-vec also creates its own shadow tables (`*_chunks`, `*_rowids`, `*_info`, `*_vector_chunks00`).
+
+**Major vs minor versioning.** The vec table is keyed by `model_name` + `MajorVersion`, so bumping the major version (chunking algorithm, breadcrumbs, tree-sitter/scm, embedding model, or dimensions) re-keys the index and forces a full re-embed. `minor_spec`/`aug_spec` (augmentation on/off, inference model, prompt version) are recorded but **never** invalidate a vector.
+
+**Generations (crash-safe incremental reindex).** Each file is reindexed under a fresh generation (`indexed_gen + 1`): `StartFile` discards half-written chunks from a crashed attempt and leaves the committed generation searchable; new chunks are written one transaction at a time under the new `gen`; `FinalizeFile` atomically advances `indexed_gen` and drops the superseded generation's rows. `Search` and `ChunkEmbeddings` only read rows where `c.gen = f.indexed_gen`, so a partial generation is invisible and per-chunk reuse (keyed by `ChunkKey(heading_context, text)`) lets unchanged chunks skip both the embedding and inference calls.
+
 ## Commands
 
 ### Build
