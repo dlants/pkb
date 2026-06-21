@@ -8,18 +8,16 @@ import (
 )
 
 // defEntry holds the per-declaration metadata derived from a tags.scm match:
-// the symbol name (@name), the human label (the @definition.<label> suffix), and
-// the start byte of an adjacent doc-comment run (@doc), or -1 when absent.
+// the symbol name (@name) and the human label (the @definition.<label> suffix).
 type defEntry struct {
-	name         string
-	label        string
-	docStartByte int
+	name  string
+	label string
 }
 
 // defSpan is a @definition.* capture as a byte interval plus its metadata. It is
 // the bottom-up unit that drives chunk boundaries and breadcrumbs: start/end are
-// the captured node's byte range, and the embedded defEntry carries name, label,
-// and the doc-comment start byte (-1 when absent).
+// the captured node's byte range, and the embedded defEntry carries name and
+// label.
 type defSpan struct {
 	defEntry
 	start int
@@ -72,7 +70,6 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 		var defNode *tree_sitter.Node
 		var suffixLabel, labelText string
 		var nameParts []nameCapture
-		docStart := -1
 
 		for _, capture := range m.Captures {
 			cname := names[capture.Index]
@@ -89,10 +86,6 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 				})
 			case cname == "label":
 				labelText = node.Utf8Text(source)
-			case cname == "doc":
-				if s := int(node.StartByte()); docStart == -1 || s < docStart {
-					docStart = s
-				}
 			}
 		}
 
@@ -110,7 +103,7 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 			continue
 		}
 		id := defNode.Id()
-		entry := defEntry{name: name, label: label, docStartByte: docStart}
+		entry := defEntry{name: name, label: label}
 		idx.info[id] = entry
 		idx.spans = append(idx.spans, defSpan{
 			defEntry: entry,

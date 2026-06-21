@@ -181,7 +181,16 @@ so the attachment flows into the first inner node (the span). Callers pass
   `pkb chunk ./internal/index/manager.go` and confirm the two bug chunks are
   fixed.
 
-## Stage 2: Remove redundant `@doc` / `docStartByte` plumbing
+## Stage 2: Remove redundant `@doc` / `docStartByte` plumbing (DONE)
+
+Status: complete. Removed `defEntry.docStartByte`, the `@doc` capture branch and
+`docStart` tracking in `buildDefIndex`, and the `docStartByte` extension in
+`spanFor`; updated the doc comments on `defEntry`/`defSpan`. Retired the
+`docStartByte` assertions in `defindex_test.go` (the Go and HCL `State` cases now
+just confirm the entry/span is indexed). `go build ./...`, `go vet ./...`,
+`go test ./...`, and `golangci-lint run ./internal/chunk/` all pass; `pkb chunk
+./internal/index/manager.go` is unchanged from Stage 1 (the `type Ignore` and
+`type Options` doc comments still sit inside their definition chunks).
 
 - The stage: delete `defEntry.docStartByte`, the `@doc` capture branch in
   `buildDefIndex`, the `docStartByte` extension in `spanFor`, and the

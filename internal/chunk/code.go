@@ -268,7 +268,7 @@ func (s *sweeper) breadcrumb() string {
 }
 
 // spanFor returns the definition span captured at node, with its start extended
-// back to the beginning of its line and over any associated doc-comment run.
+// back to the beginning of its line.
 func (s *sweeper) spanFor(node *tree_sitter.Node) (defSpan, bool) {
 	if s.idx == nil {
 		return defSpan{}, false
@@ -279,9 +279,6 @@ func (s *sweeper) spanFor(node *tree_sitter.Node) (defSpan, bool) {
 	}
 	start := int(node.StartByte())
 	extStart := lineStartByte(s.source, start)
-	if entry.docStartByte >= 0 && entry.docStartByte < extStart {
-		extStart = entry.docStartByte
-	}
 	return defSpan{defEntry: entry, start: start, end: int(node.EndByte()), extStart: extStart}, true
 }
 
