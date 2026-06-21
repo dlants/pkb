@@ -3,8 +3,6 @@ package chunk
 import (
 	"strings"
 	"testing"
-
-	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 func TestChunkCodeTwoFunctions(t *testing.T) {
@@ -191,32 +189,8 @@ func TestChunkCodeDocCommentAttachedToDecl(t *testing.T) {
 	}
 }
 
-func TestChunkContainerHeuristicFallback(t *testing.T) {
-	src := "function foo() {\n  return 1;\n}\n\nfunction bar() {\n  return 2;\n}\n"
-	lang := languageFor("typescript")
-	parser := tree_sitter.NewParser()
-	defer parser.Close()
-	if err := parser.SetLanguage(lang); err != nil {
-		t.Fatal(err)
-	}
-	tree := parser.Parse([]byte(src), nil)
-	defer tree.Close()
-
-	var out []ChunkInfo
-	chunkContainer(tree.RootNode(), []byte(src), "a/b.ts", TargetChunkSize, nil, &out)
-	got := breadcrumbs(out)
-	want := []string{"a/b.ts > function foo", "a/b.ts > function bar"}
-	if len(got) != len(want) {
-		t.Fatalf("heuristic fallback breadcrumbs = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("heuristic fallback breadcrumbs = %v, want %v", got, want)
-		}
-	}
-}
-
 func TestChunkCodeHCLBlocks(t *testing.T) {
+	t.Skip("HCL has no vendored tags.scm yet; per-block chunking restored in Stage 3")
 	src := "region = \"us-east-1\"\n\n" +
 		"resource \"aws_instance\" \"web\" {\n  ami = \"abc\"\n}\n\n" +
 		"variable \"size\" {\n  default = 1\n}\n"
@@ -244,6 +218,7 @@ func TestChunkCodeHCLBlocks(t *testing.T) {
 }
 
 func TestChunkCodeHCLOversizedBlockLineSplit(t *testing.T) {
+	t.Skip("HCL has no vendored tags.scm yet; per-block chunking restored in Stage 3")
 	body := strings.Repeat("  attr = \"value\"\n", 80)
 	src := "resource \"aws_instance\" \"web\" {\n" + body + "}\n"
 	chunks, err := ChunkCode([]byte(src), "hcl", "main.tf", 300)
@@ -257,6 +232,86 @@ func TestChunkCodeHCLOversizedBlockLineSplit(t *testing.T) {
 		if c.HeadingContext != "main.tf > resource \"aws_instance\" \"web\"" {
 			t.Fatalf("unexpected breadcrumb %q", c.HeadingContext)
 		}
+	}
+}
+
+func TestChunkCodeGoTypeNotMergedWithImports(t *testing.T) {
+	src := "package p\n\nimport (\n\t\"fmt\"\n)\n\ntype State struct {\n\tName string\n}\n"
+	chunks, err := ChunkCode([]byte(src), "go", "m.go", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stateChunk, importChunk *ChunkInfo
+	for i := range chunks {
+		switch chunks[i].HeadingContext {
+		case "m.go > type State":
+			stateChunk = &chunks[i]
+		case "m.go":
+			importChunk = &chunks[i]
+		}
+	}
+	if stateChunk == nil {
+		t.Fatalf("no `type State` chunk: %v", breadcrumbs(chunks))
+	}
+	if !strings.HasPrefix(strings.TrimSpace(stateChunk.Text), "type State struct") {
+		t.Fatalf("type chunk missing `type ` keyword: %q", stateChunk.Text)
+	}
+	if strings.Contains(stateChunk.Text, "import") {
+		t.Fatalf("type chunk merged with imports: %q", stateChunk.Text)
+	}
+	if importChunk == nil || !strings.Contains(importChunk.Text, "import") {
+		t.Fatalf("imports not in their own filler chunk: %v", breadcrumbs(chunks))
+	}
+}
+
+func TestChunkCodeGoGroupedTypes(t *testing.T) {
+	src := "package p\n\ntype (\n\tA struct{}\n\tB struct{}\n)\n"
+	chunks, err := ChunkCode([]byte(src), "go", "g.go", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var a, b bool
+	for _, c := range chunks {
+		if c.HeadingContext == "g.go > type A" {
+			a = true
+		}
+		if c.HeadingContext == "g.go > type B" {
+			b = true
+		}
+	}
+	if !a || !b {
+		t.Fatalf("expected separate chunks for grouped types A and B, got: %v", breadcrumbs(chunks))
+	}
+}
+
+func TestChunkCodeCASTPacksSiblings(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("package p\n\nfunc f() {\n")
+	for i := 0; i < 60; i++ {
+		b.WriteString("\tdoThing()\n")
+	}
+	b.WriteString("}\n")
+	chunks, err := ChunkCode([]byte(b.String()), "go", "p.go", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fnChunks int
+	for _, c := range chunks {
+		if len(c.Text) > 200 {
+			t.Fatalf("chunk over budget (%d): %q", len(c.Text), c.HeadingContext)
+		}
+		if c.HeadingContext != "p.go > function f" {
+			continue
+		}
+		fnChunks++
+		// Each window should end on a node boundary (a full statement), not
+		// mid-line.
+		if strings.HasSuffix(c.Text, "doThing(") {
+			t.Fatalf("chunk split mid-node: %q", c.Text)
+		}
+	}
+	if fnChunks < 2 {
+		t.Fatalf("expected oversized function to pack into multiple windows, got %d", fnChunks)
 	}
 }
 

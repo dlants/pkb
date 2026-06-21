@@ -24,15 +24,17 @@ type defSpan struct {
 	defEntry
 	start int
 	end   int
+	// extStart is the span start extended back to the line start and over any
+	// doc-comment run; it is the byte offset chunk text begins at. It is only
+	// populated by the sweeper (zero in the raw buildDefIndex output).
+	extStart int
 }
 
 // defIndex is the result of running a grammar's tags.scm over a parsed tree:
-// nodes is the set of tree-sitter node IDs captured as @definition.*, and info
-// maps each such node ID to its defEntry. Node identity uses Node.Id(), which is
-// stable within a parsed tree, so the manual traversal can consult the index
-// when it re-encounters the same nodes.
+// info maps each @definition.* node ID to its defEntry (Node.Id() is stable
+// within a parsed tree, so the sweep can consult it when it re-encounters a
+// node), and spans is the same captures as ordered byte intervals.
 type defIndex struct {
-	nodes map[uintptr]struct{}
 	info  map[uintptr]defEntry
 	spans []defSpan
 }
@@ -62,8 +64,7 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 
 	names := q.CaptureNames()
 	idx := &defIndex{
-		nodes: map[uintptr]struct{}{},
-		info:  map[uintptr]defEntry{},
+		info: map[uintptr]defEntry{},
 	}
 
 	matches := cursor.Matches(q, root, source)
@@ -94,7 +95,6 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 		}
 		id := defNode.Id()
 		entry := defEntry{name: name, label: label, docStartByte: docStart}
-		idx.nodes[id] = struct{}{}
 		idx.info[id] = entry
 		idx.spans = append(idx.spans, defSpan{
 			defEntry: entry,
@@ -111,15 +111,6 @@ func buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defI
 	})
 
 	return idx, nil
-}
-
-// has reports whether node was captured as a @definition.* by the query.
-func (d *defIndex) has(node *tree_sitter.Node) bool {
-	if d == nil {
-		return false
-	}
-	_, ok := d.nodes[node.Id()]
-	return ok
 }
 
 // entry returns the defEntry for node, if it was captured as a @definition.*.

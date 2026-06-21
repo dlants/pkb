@@ -6,53 +6,6 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-// declKinds is the set of tree-sitter node kinds treated as chunkable
-// declarations (functions, classes, methods, etc.) across the supported
-// grammars. Everything else (imports, top-level constants, statements) is
-// grouped into "filler" chunks.
-var declKinds = map[string]struct{}{
-	"function_declaration":           {},
-	"function_definition":            {},
-	"function_item":                  {},
-	"generator_function_declaration": {},
-	"method_definition":              {},
-	"method_declaration":             {},
-	"class_declaration":              {},
-	"abstract_class_declaration":     {},
-	"class_definition":               {},
-	"class_specifier":                {},
-	"interface_declaration":          {},
-	"struct_item":                    {},
-	"enum_item":                      {},
-	"impl_item":                      {},
-	"trait_item":                     {},
-	"mod_item":                       {},
-	"module":                         {},
-	"namespace_declaration":          {},
-	"type_alias_declaration":         {},
-	"type_declaration":               {},
-	// HCL: top-level blocks (resource/variable/...) are the chunkable units.
-	// HCL has no vendored tags.scm, so it always uses this heuristic path; the
-	// generic "block" kind is otherwise unused by the query-driven grammars.
-	"block": {},
-}
-
-func isDeclKind(kind string) bool {
-	_, ok := declKinds[kind]
-	return ok
-}
-
-// labelFromKind turns a tree-sitter node kind into a human breadcrumb label,
-// e.g. "function_declaration" -> "function", "method_definition" -> "method".
-func labelFromKind(kind string) string {
-	for _, suffix := range []string{"_declaration", "_definition", "_specifier", "_item"} {
-		if strings.HasSuffix(kind, suffix) {
-			kind = strings.TrimSuffix(kind, suffix)
-			break
-		}
-	}
-	return strings.ReplaceAll(kind, "_", " ")
-}
 
 // ChunkCode splits source code into chunks along syntactic boundaries using
 // tree-sitter, carrying a structural breadcrumb (file path + enclosing symbol
@@ -90,193 +43,221 @@ func ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([
 
 	idx, idxErr := buildDefIndex(root, content, grammar)
 	if idxErr != nil {
-		// Query failed to compile: fall back to the heuristic path.
+		// Query failed to compile: chunk with no definition spans (whole-file
+		// cAST packing).
 		idx = nil
 	}
 
-	// HCL wraps top-level blocks in a `config_file > body` node, so descend to
-	// the body to expose the blocks as direct children for chunking.
-	container := root
-	if container.Kind() == "config_file" {
-		for i := uint(0); i < container.NamedChildCount(); i++ {
-			if c := container.NamedChild(i); c.Kind() == "body" {
-				container = c
-				break
-			}
-		}
+	sw := &sweeper{
+		source:      content,
+		budget:      maxChunkSize,
+		idx:         idx,
+		pathContext: pathContext,
+		winStart:    -1,
 	}
-
-	var out []ChunkInfo
-	chunkContainer(container, content, pathContext, maxChunkSize, idx, &out)
-	if len(out) == 0 {
+	sw.sweepChildren(root)
+	sw.flush()
+	if len(sw.out) == 0 {
 		return lineChunks(content, pathContext, maxChunkSize), nil
 	}
-	return out, nil
+	return sw.out, nil
 }
 
-// unwrap returns the inner declaration of a wrapper node (e.g. an
-// export_statement / decorated_definition), or the node itself.
-func unwrap(node *tree_sitter.Node) *tree_sitter.Node {
-	switch node.Kind() {
-	case "export_statement", "decorated_definition":
-		count := node.NamedChildCount()
-		for i := uint(0); i < count; i++ {
-			child := node.NamedChild(i)
-			if isDeclKind(child.Kind()) {
-				return child
-			}
-		}
-	}
-	return node
+// sweeper performs the single recursive cAST pass over the parse tree. A
+// definition span (a @definition.* capture) is a hard break: entering or exiting
+// one force-flushes the current window, and the stack of active spans supplies
+// the breadcrumb. Plain nodes are packed into windows up to the byte budget.
+type sweeper struct {
+	source      []byte
+	budget      int
+	idx         *defIndex
+	pathContext string
+
+	stack []defSpan
+
+	// current window, as a byte range [winStart, winEnd); winStart < 0 means
+	// the window is empty.
+	winStart int
+	winEnd   int
+
+	out []ChunkInfo
 }
 
-// chunkContainer walks the named children of container, grouping non-declaration
-// nodes into filler chunks and emitting each declaration via emitDecl.
-func chunkContainer(container *tree_sitter.Node, source []byte, prefix string, maxChunkSize int, idx *defIndex, out *[]ChunkInfo) {
-	count := container.NamedChildCount()
-	var filler []*tree_sitter.Node
-
-	flushFiller := func() {
-		if len(filler) == 0 {
-			return
-		}
-		emitRange(filler[0], filler[len(filler)-1], source, prefix, maxChunkSize, out)
-		filler = nil
-	}
-
+// sweepChildren visits the named children of node in source order.
+func (s *sweeper) sweepChildren(node *tree_sitter.Node) {
+	count := node.NamedChildCount()
 	for i := uint(0); i < count; i++ {
-		child := container.NamedChild(i)
-		decl := unwrap(child)
-		if isDecl(decl, idx) {
-			// A doc comment claimed by this declaration may have been
-			// accumulated as trailing filler; drop it so it travels with the
-			// declaration instead of being emitted twice.
-			if e, ok := idx.entry(decl); ok && e.docStartByte >= 0 {
-				for len(filler) > 0 && int(filler[len(filler)-1].StartByte()) >= e.docStartByte {
-					filler = filler[:len(filler)-1]
-				}
-			}
-			flushFiller()
-			emitDecl(child, decl, source, prefix, maxChunkSize, idx, out)
-			continue
-		}
-		filler = append(filler, child)
+		s.visitNode(node.NamedChild(i))
 	}
-	flushFiller()
 }
 
-// isDecl reports whether node is a chunkable declaration: via the definition
-// index when one is available, otherwise via the kind heuristic.
-func isDecl(node *tree_sitter.Node, idx *defIndex) bool {
-	if idx != nil {
-		return idx.has(node)
+// visitNode applies the sweep rules to a single named node.
+func (s *sweeper) visitNode(node *tree_sitter.Node) {
+	if span, ok := s.spanFor(node); ok {
+		s.enterSpan(span, node)
+		return
 	}
-	return isDeclKind(node.Kind())
+
+	lo, hi := int(node.StartByte()), int(node.EndByte())
+	if hi-lo <= s.budget && !s.containsSpan(node) {
+		s.addRange(lo, hi)
+		return
+	}
+
+	if node.NamedChildCount() == 0 {
+		// Childless leaf over budget: line-split as the final backstop.
+		s.flush()
+		s.lineSplitRange(lo, hi)
+		return
+	}
+	s.sweepChildren(node)
 }
 
-// emitDecl emits a declaration: as a single chunk if it fits, otherwise by
-// recursing into nested declarations, or by line-splitting if it is a leaf.
-func emitDecl(outer, decl *tree_sitter.Node, source []byte, prefix string, maxChunkSize int, idx *defIndex, out *[]ChunkInfo) {
-	start := int(outer.StartByte())
-	end := int(outer.EndByte())
-	startPos := posOf(outer.StartPosition())
+// enterSpan flushes the current window, pushes the span (extending its start
+// back over leading keywords/doc comments), packs the span's body, then flushes
+// and pops on exit. A span that fits entirely in one window is emitted whole.
+func (s *sweeper) enterSpan(span defSpan, node *tree_sitter.Node) {
+	s.trimWindowTo(span.extStart)
+	s.flush()
+	s.stack = append(s.stack, span)
 
-	entry, hasEntry := idx.entry(decl)
-	if hasEntry && entry.docStartByte >= 0 && entry.docStartByte < start {
-		start = entry.docStartByte
-		startPos = posFromByte(source, start)
+	// Seed the window at the extended start so leading keywords (Go's `type `,
+	// TS `export `) and the doc-comment run ride with the definition.
+	s.winStart = span.extStart
+	s.winEnd = int(node.StartByte())
+
+	s.sweepChildren(node)
+
+	if s.winStart >= 0 && s.winEnd < span.end {
+		s.winEnd = span.end
 	}
-	text := string(source[start:end])
+	s.flush()
+	s.stack = s.stack[:len(s.stack)-1]
+}
 
-	var label, name string
-	if hasEntry {
-		label, name = entry.label, entry.name
-	} else if decl.Kind() == "block" {
-		label, name = hclBlockParts(decl, source)
-	} else {
-		label = labelFromKind(decl.Kind())
-		name = declName(decl, source)
+// addRange adds a plain node's byte range to the current window, flushing first
+// if appending it would overflow the budget.
+func (s *sweeper) addRange(lo, hi int) {
+	if s.winStart < 0 {
+		s.winStart, s.winEnd = lo, hi
+		return
 	}
-	desc := strings.TrimSpace(label + " " + name)
-	childPrefix := joinBreadcrumb(prefix, desc)
+	if hi-s.winStart > s.budget && s.winEnd > s.winStart {
+		s.flush()
+		s.winStart, s.winEnd = lo, hi
+		return
+	}
+	s.winEnd = hi
+}
 
-	if len(text) <= maxChunkSize {
-		*out = append(*out, ChunkInfo{
+// trimWindowTo clamps the current window so it ends no later than byte b,
+// dropping it entirely if it would become empty. Used so a definition's doc run
+// (already inside the window as filler) is not emitted twice.
+func (s *sweeper) trimWindowTo(b int) {
+	if s.winStart < 0 {
+		return
+	}
+	if s.winStart >= b {
+		s.winStart = -1
+		return
+	}
+	if s.winEnd > b {
+		s.winEnd = b
+	}
+}
+
+// flush emits the current window as a chunk (dropping whitespace-only windows)
+// and resets it.
+func (s *sweeper) flush() {
+	if s.winStart < 0 {
+		return
+	}
+	text := string(s.source[s.winStart:s.winEnd])
+	if strings.TrimSpace(text) != "" {
+		s.out = append(s.out, ChunkInfo{
 			Text:           text,
-			HeadingContext: childPrefix,
-			Start:          startPos,
-			End:            posOf(outer.EndPosition()),
-		})
-		return
-	}
-
-	body := decl.ChildByFieldName("body")
-	if body != nil && hasDeclChild(body, idx) {
-		// The declaration's own text (doc comment + header, e.g.
-		// `// doc\nclass Foo {`) won't appear in any child chunk, so emit it as
-		// a standalone header chunk before recursing into the members.
-		headerEnd := int(body.StartByte())
-		header := strings.TrimRight(string(source[start:headerEnd]), " \t\n")
-		if strings.TrimSpace(header) != "" {
-			*out = append(*out, ChunkInfo{
-				Text:           header,
-				HeadingContext: childPrefix,
-				Start:          startPos,
-				End:            posFromByte(source, start+len(header)),
-			})
-		}
-		chunkContainer(body, source, childPrefix, maxChunkSize, idx, out)
-		return
-	}
-
-	// Leaf declaration over budget: line-split the whole declaration.
-	for _, sc := range splitCodeByLines(text, startPos, maxChunkSize) {
-		*out = append(*out, ChunkInfo{
-			Text:           sc.text,
-			HeadingContext: childPrefix,
-			Start:          sc.start,
-			End:            sc.end,
+			HeadingContext: s.breadcrumb(),
+			Start:          posFromByte(s.source, s.winStart),
+			End:            posFromByte(s.source, s.winEnd),
 		})
 	}
+	s.winStart = -1
 }
 
-// emitRange emits a filler chunk spanning the byte range of [first,last],
-// line-splitting if it exceeds the budget.
-func emitRange(first, last *tree_sitter.Node, source []byte, prefix string, maxChunkSize int, out *[]ChunkInfo) {
-	start := int(first.StartByte())
-	end := int(last.EndByte())
-	text := string(source[start:end])
+// lineSplitRange emits a byte range as one or more line-split chunks under the
+// current breadcrumb.
+func (s *sweeper) lineSplitRange(lo, hi int) {
+	text := string(s.source[lo:hi])
 	if strings.TrimSpace(text) == "" {
 		return
 	}
-	startPos := posOf(first.StartPosition())
-	if len(text) <= maxChunkSize {
-		*out = append(*out, ChunkInfo{
-			Text:           text,
-			HeadingContext: prefix,
-			Start:          startPos,
-			End:            posOf(last.EndPosition()),
-		})
-		return
-	}
-	for _, sc := range splitCodeByLines(text, startPos, maxChunkSize) {
-		*out = append(*out, ChunkInfo{
+	bc := s.breadcrumb()
+	for _, sc := range splitCodeByLines(text, posFromByte(s.source, lo), s.budget) {
+		s.out = append(s.out, ChunkInfo{
 			Text:           sc.text,
-			HeadingContext: prefix,
+			HeadingContext: bc,
 			Start:          sc.start,
 			End:            sc.end,
 		})
 	}
 }
 
-func hasDeclChild(container *tree_sitter.Node, idx *defIndex) bool {
-	count := container.NamedChildCount()
-	for i := uint(0); i < count; i++ {
-		if isDecl(unwrap(container.NamedChild(i)), idx) {
+// breadcrumb joins the file path with each active span's "label name".
+func (s *sweeper) breadcrumb() string {
+	bc := s.pathContext
+	for _, sp := range s.stack {
+		bc = joinBreadcrumb(bc, strings.TrimSpace(sp.label+" "+sp.name))
+	}
+	return bc
+}
+
+// spanFor returns the definition span captured at node, with its start extended
+// back to the beginning of its line and over any associated doc-comment run.
+func (s *sweeper) spanFor(node *tree_sitter.Node) (defSpan, bool) {
+	if s.idx == nil {
+		return defSpan{}, false
+	}
+	entry, ok := s.idx.entry(node)
+	if !ok {
+		return defSpan{}, false
+	}
+	start := int(node.StartByte())
+	extStart := lineStartByte(s.source, start)
+	if entry.docStartByte >= 0 && entry.docStartByte < extStart {
+		extStart = entry.docStartByte
+	}
+	return defSpan{defEntry: entry, start: start, end: int(node.EndByte()), extStart: extStart}, true
+}
+
+// containsSpan reports whether any definition span begins strictly inside node.
+func (s *sweeper) containsSpan(node *tree_sitter.Node) bool {
+	if s.idx == nil {
+		return false
+	}
+	lo, hi := int(node.StartByte()), int(node.EndByte())
+	for _, sp := range s.idx.spans {
+		// Strictly inside: a span sharing node's start byte is either node
+		// itself (handled by spanFor) or a child that coincides with the
+		// already-active span boundary, neither of which is a nested span.
+		if sp.start > lo && sp.start < hi {
 			return true
 		}
 	}
 	return false
+}
+
+// lineStartByte returns the byte offset of the beginning of the line containing
+// off (the byte just after the preceding newline, or 0).
+func lineStartByte(source []byte, off int) int {
+	if off > len(source) {
+		off = len(source)
+	}
+	for i := off - 1; i >= 0; i-- {
+		if source[i] == '\n' {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // posFromByte computes a 1-based line/col Position for a byte offset in source.
@@ -293,40 +274,6 @@ func posFromByte(source []byte, off int) Position {
 	return Position{Line: line, Col: col}
 }
 
-// hclBlockParts derives the breadcrumb label and name for an HCL block: the
-// label is the block keyword (e.g. "resource"), and the name is its quoted
-// labels joined (e.g. `"aws_instance" "web"`).
-func hclBlockParts(node *tree_sitter.Node, source []byte) (label, name string) {
-	count := node.NamedChildCount()
-	var labels []string
-	for i := uint(0); i < count; i++ {
-		child := node.NamedChild(i)
-		switch child.Kind() {
-		case "identifier":
-			if label == "" {
-				label = child.Utf8Text(source)
-			}
-		case "string_lit":
-			labels = append(labels, child.Utf8Text(source))
-		}
-	}
-	return label, strings.Join(labels, " ")
-}
-
-func declName(node *tree_sitter.Node, source []byte) string {
-	if n := node.ChildByFieldName("name"); n != nil {
-		return n.Utf8Text(source)
-	}
-	count := node.NamedChildCount()
-	for i := uint(0); i < count; i++ {
-		child := node.NamedChild(i)
-		if child.Kind() == "identifier" || child.Kind() == "type_identifier" {
-			return child.Utf8Text(source)
-		}
-	}
-	return ""
-}
-
 func joinBreadcrumb(prefix, desc string) string {
 	if prefix == "" {
 		return desc
@@ -335,10 +282,6 @@ func joinBreadcrumb(prefix, desc string) string {
 		return prefix
 	}
 	return prefix + " > " + desc
-}
-
-func posOf(p tree_sitter.Point) Position {
-	return Position{Line: int(p.Row) + 1, Col: int(p.Column) + 1}
 }
 
 // lineChunks splits raw content by lines into budget-sized chunks, used as the
