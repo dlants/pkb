@@ -292,6 +292,29 @@ Full suite, vet, build pass.
 
 ## Stage 3 — `indexFile` drives incremental, generation-guarded persistence
 
+**Status: DONE.** `indexFile` now loads the committed-generation reuse map
+(`ChunkEmbeddings`, keyed on `ChunkKey`) for *all* file types, resolves per chunk
+whether it is a reuse hit (carrying the stored embedding + augmentation blurb +
+`aug_spec`), runs augmentation (`Inference.Complete`) only for reuse-miss chunks
+of text files, builds the embedded text via a new `contextualize` helper (heading
+context inner, augmentation blurb outermost), embeds only misses in one batched
+call, then persists incrementally: `StartFile` (fresh generation) →
+`InsertChunk` per chunk (in its own tx, storing `augmentation`/`aug_spec`) →
+`FinalizeFile` (atomic generation swap, drops the superseded generation). The old
+all-or-nothing `reuseEmbeddings` helper was deleted. Decision: `store.ReuseChunk`
+gained an `AugSpec` field (and `ChunkEmbeddings` now selects `c.aug_spec`) so
+reuse hits carry the original spec that produced their blurb. Crash resilience is
+provided by the committed generation: a crash mid-file leaves the previous
+generation intact, and the retry reuses every unchanged chunk by `ChunkKey`.
+Tests: `TestTextFilePerChunkReuseOnChange`,
+`TestTextFileInferenceIdentityChangeReusesVectors` (replaces the old
+whole-file/identity re-embed tests), and
+`TestCrashMidFileReusesCommittedGeneration`. The Reindex skip short-circuit
+(`prevEntry.inference == inferenceName()`) is intentionally left for Stage 4.
+Full suite, vet, build pass.
+
+## Stage 3 — `indexFile` drives incremental, generation-guarded persistence
+
 - Goal: `indexFile` uses the Stage-2 API: load current-gen reuse map, write each
   chunk under `newGen` in its own transaction, run augmentation only on reuse
   misses (text only), store the blurb on the chunk, finalize at the end.

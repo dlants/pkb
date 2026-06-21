@@ -151,7 +151,7 @@ func TestIncrementalAddModifyDelete(t *testing.T) {
 	require.NotContains(t, files, "del.md")
 }
 
-func TestTextFileWholeFileReembedOnChange(t *testing.T) {
+func TestTextFilePerChunkReuseOnChange(t *testing.T) {
 	h := newHarness(t)
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
 	h.commit("init")
@@ -165,15 +165,15 @@ func TestTextFileWholeFileReembedOnChange(t *testing.T) {
 	total := model.ChunkCount()
 	require.Equal(t, 2, total, "fixture should produce two chunks")
 
-	// Change only the body of the second section. Text files are LLM-augmented
-	// from the whole file, so reuse is all-or-nothing per file: every chunk
-	// re-embeds, not just the edited one.
+	// Change only the body of the second section. Reuse is now per-chunk for
+	// text files too (keyed on the deterministic ChunkKey), so only the edited
+	// chunk re-embeds; the unchanged chunk keeps its vector.
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nrewritten nested paragraph")
 	h.commit("edit body")
 
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	require.Equal(t, total+2, model.ChunkCount(), "any change re-embeds the whole text file")
+	require.Equal(t, total+1, model.ChunkCount(), "only the changed chunk re-embeds")
 }
 
 func TestTextFileUnchangedBlobReusesAll(t *testing.T) {
@@ -196,7 +196,7 @@ func TestTextFileUnchangedBlobReusesAll(t *testing.T) {
 	require.Equal(t, calls, model.ChunkCalls(), "unchanged text file should embed nothing")
 }
 
-func TestTextFileInferenceIdentityChangeReembeds(t *testing.T) {
+func TestTextFileInferenceIdentityChangeReusesVectors(t *testing.T) {
 	h := newHarness(t)
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
 	h.commit("init")
@@ -211,14 +211,15 @@ func TestTextFileInferenceIdentityChangeReembeds(t *testing.T) {
 	total := model.ChunkCount()
 	require.Equal(t, 2, total)
 
-	// Switch the inference model without touching file content: the text file's
-	// augmented vectors are stale and must be re-embedded. Force a full revisit
-	// (a config-only change leaves no git diff) by clearing the marker.
+	// Switch the inference model without touching file content. The augmentation
+	// (minor) spec never invalidates a stored vector, so reuse-by-ChunkKey keeps
+	// every chunk's embedding. Force a full revisit (a config-only change leaves
+	// no git diff) by clearing the marker.
 	o.Inference = infer.NewMockModel("infer-v2")
 	require.NoError(t, os.Remove(filepath.Join(h.root, "pkb-state.toml")))
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	require.Equal(t, total+2, model.ChunkCount(), "inference-model switch invalidates text-file vectors")
+	require.Equal(t, total, model.ChunkCount(), "inference-model switch reuses existing vectors")
 }
 
 // recordingModel wraps a mock embedding model and captures the exact chunk
@@ -227,10 +228,16 @@ type recordingModel struct {
 	*embed.MockModel
 	mu       sync.Mutex
 	embedded []string
+	failOnce bool
 }
 
 func (r *recordingModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {
 	r.mu.Lock()
+	if r.failOnce {
+		r.failOnce = false
+		r.mu.Unlock()
+		return nil, fmt.Errorf("injected embed failure")
+	}
 	r.embedded = append(r.embedded, chunks...)
 	r.mu.Unlock()
 	return r.MockModel.EmbedChunks(chunks)
@@ -240,6 +247,43 @@ func (r *recordingModel) inputs() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]string(nil), r.embedded...)
+}
+
+func TestCrashMidFileReusesCommittedGeneration(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, st := h.opts(t, rec)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	firstRun := rec.inputs()
+	require.Len(t, firstRun, 2, "fixture should embed two chunks on first run")
+
+	// Edit only the second section, then crash the next embed call.
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nrewritten nested paragraph")
+	h.commit("edit body")
+	rec.failOnce = true
+	_, err = Reindex(o)
+	require.Error(t, err, "injected failure should abort the run")
+
+	// Retry to completion. The unchanged first chunk is reused from the
+	// committed generation and is never re-embedded; only the changed chunk is
+	// embedded on the retry.
+	before := rec.inputs()
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	retry := rec.inputs()[len(before):]
+	require.Len(t, retry, 1, "retry re-embeds only the changed chunk")
+
+	// The committed index holds exactly one generation of two chunks.
+	stats, err := st.Stats("mock")
+	require.NoError(t, err)
+	require.Equal(t, 1, stats.Files)
+	require.Equal(t, 2, stats.Chunks)
 }
 
 func TestMinorSpec(t *testing.T) {
