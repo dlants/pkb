@@ -55,7 +55,7 @@ func ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([
 		pathContext: pathContext,
 		winStart:    -1,
 	}
-	sw.sweepChildren(root)
+	sw.sweepChildren(root, int(root.StartByte()))
 	sw.flush()
 	if len(sw.out) == 0 {
 		return lineChunks(content, pathContext, maxChunkSize), nil
@@ -83,40 +83,96 @@ type sweeper struct {
 	out []ChunkInfo
 }
 
-// sweepChildren visits the named children of node in source order.
-func (s *sweeper) sweepChildren(node *tree_sitter.Node) {
+// sweepChildren visits the named children of node in source order, attaching a
+// contiguous run of leading comment ("extra") nodes to the node that
+// immediately follows it. The run's start byte is threaded into visitNode as
+// attachStart so the comment rides into the following node's chunk (a
+// definition span is extended; a plain node is packed as an indivisible unit).
+// A blank line between the run and the following node breaks the attachment:
+// the run is emitted as ordinary filler instead.
+func (s *sweeper) sweepChildren(node *tree_sitter.Node, leadStart int) {
 	count := node.NamedChildCount()
+	// commentStart/commentEnd track a pending contiguous run of comment nodes;
+	// commentStart < 0 means no run is pending. leadStart < node.StartByte()
+	// means a comment run attached to a parent that recursed into this node;
+	// seed the pending run so it can re-attach to the first inner node (e.g. a
+	// Go doc comment whose sibling is `type_declaration` but whose definition
+	// span is the nested `type_spec`).
+	commentStart, commentEnd := -1, -1
+	if leadStart < int(node.StartByte()) {
+		commentStart, commentEnd = leadStart, int(node.StartByte())
+	}
 	for i := uint(0); i < count; i++ {
-		s.visitNode(node.NamedChild(i))
+		child := node.NamedChild(i)
+		lo, hi := int(child.StartByte()), int(child.EndByte())
+		if child.IsExtra() {
+			switch {
+			case commentStart < 0:
+				commentStart, commentEnd = lo, hi
+			case adjacent(s.source, commentEnd, lo):
+				commentEnd = hi
+			default:
+				// A blank line broke the run: emit the prior run as filler and
+				// start a fresh run at this comment.
+				s.addRange(commentStart, commentEnd)
+				commentStart, commentEnd = lo, hi
+			}
+			continue
+		}
+
+		attachStart := lo
+		if commentStart >= 0 {
+			if adjacent(s.source, commentEnd, lo) {
+				attachStart = commentStart
+			} else {
+				s.addRange(commentStart, commentEnd)
+			}
+			commentStart, commentEnd = -1, -1
+		}
+		s.visitNode(child, attachStart)
+	}
+	// A trailing comment run with no following sibling is emitted as filler so
+	// it is never dropped.
+	if commentStart >= 0 {
+		s.addRange(commentStart, commentEnd)
 	}
 }
 
-// visitNode applies the sweep rules to a single named node.
-func (s *sweeper) visitNode(node *tree_sitter.Node) {
+// visitNode applies the sweep rules to a single named node. attachStart is the
+// node's effective left edge: it equals the node's own start byte unless a
+// leading comment run attaches to it, in which case it points at the run start.
+func (s *sweeper) visitNode(node *tree_sitter.Node, attachStart int) {
 	if span, ok := s.spanFor(node); ok {
-		s.enterSpan(span, node)
+		s.enterSpan(span, node, attachStart)
 		return
 	}
 
 	lo, hi := int(node.StartByte()), int(node.EndByte())
 	if hi-lo <= s.budget && !s.containsSpan(node) {
-		s.addRange(lo, hi)
+		s.addRange(attachStart, hi)
 		return
 	}
 
 	if node.NamedChildCount() == 0 {
-		// Childless leaf over budget: line-split as the final backstop.
+		// Childless leaf over budget: line-split as the final backstop, leading
+		// with any attached comment so it is not lost.
 		s.flush()
-		s.lineSplitRange(lo, hi)
+		s.lineSplitRange(attachStart, hi)
 		return
 	}
-	s.sweepChildren(node)
+	// Node that recurses (over budget, or containing a nested definition span):
+	// thread attachStart in as the lead start so an attached comment re-attaches
+	// to the first inner node instead of being dropped.
+	s.sweepChildren(node, attachStart)
 }
 
 // enterSpan flushes the current window, pushes the span (extending its start
 // back over leading keywords/doc comments), packs the span's body, then flushes
 // and pops on exit. A span that fits entirely in one window is emitted whole.
-func (s *sweeper) enterSpan(span defSpan, node *tree_sitter.Node) {
+func (s *sweeper) enterSpan(span defSpan, node *tree_sitter.Node, attachStart int) {
+	if attachStart < span.extStart {
+		span.extStart = attachStart
+	}
 	s.trimWindowTo(span.extStart)
 	s.flush()
 	s.stack = append(s.stack, span)
@@ -126,7 +182,7 @@ func (s *sweeper) enterSpan(span defSpan, node *tree_sitter.Node) {
 	s.winStart = span.extStart
 	s.winEnd = int(node.StartByte())
 
-	s.sweepChildren(node)
+	s.sweepChildren(node, int(node.StartByte()))
 
 	if s.winStart >= 0 && s.winEnd < span.end {
 		s.winEnd = span.end
@@ -244,6 +300,22 @@ func (s *sweeper) containsSpan(node *tree_sitter.Node) bool {
 		}
 	}
 	return false
+}
+
+// adjacent reports whether the bytes in source[from:to] contain no blank line,
+// i.e. at most one newline. A blank-line gap means a leading comment run is a
+// standalone unit rather than documentation for the following node.
+func adjacent(source []byte, from, to int) bool {
+	newlines := 0
+	for i := from; i < to && i < len(source); i++ {
+		if source[i] == '\n' {
+			newlines++
+			if newlines > 1 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // lineStartByte returns the byte offset of the beginning of the line containing

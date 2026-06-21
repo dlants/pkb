@@ -189,6 +189,91 @@ func TestChunkCodeDocCommentAttachedToDecl(t *testing.T) {
 	}
 }
 
+func TestChunkCodeDocCommentAttachedToTypeDecl(t *testing.T) {
+	// A Go `type X struct` doc comment has no @doc capture (the comment is a
+	// sibling of type_declaration, not the captured type_spec). It must still
+	// land in the definition's chunk via sweep-driven attachment.
+	src := "package p\n\nconst x = 1\n\n// Foo holds things.\ntype Foo struct {\n\tA int\n}\n"
+	chunks, err := ChunkCode([]byte(src), "go", "p.go", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fooChunk *ChunkInfo
+	for i := range chunks {
+		if chunks[i].HeadingContext == "p.go > type Foo" {
+			fooChunk = &chunks[i]
+		}
+		if chunks[i].HeadingContext == "p.go" && strings.Contains(chunks[i].Text, "// Foo holds things.") {
+			t.Fatalf("doc comment leaked into filler chunk: %q", chunks[i].Text)
+		}
+	}
+	if fooChunk == nil {
+		t.Fatalf("no Foo chunk: %v", breadcrumbs(chunks))
+	}
+	if !strings.HasPrefix(strings.TrimSpace(fooChunk.Text), "// Foo holds things.") {
+		t.Fatalf("expected doc comment leading Foo chunk, got %q", fooChunk.Text)
+	}
+}
+
+func TestChunkCodeBlankLineBreaksDocAttachment(t *testing.T) {
+	// A blank line between a banner comment and the definition keeps them apart.
+	src := "package p\n\n// banner\n\ntype Foo struct {\n\tA int\n}\n"
+	chunks, err := ChunkCode([]byte(src), "go", "p.go", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range chunks {
+		if c.HeadingContext == "p.go > type Foo" && strings.Contains(c.Text, "// banner") {
+			t.Fatalf("banner pulled into Foo chunk: %q", c.Text)
+		}
+	}
+}
+
+func TestChunkCodeCommentStaysWithPlainNodeAcrossFlush(t *testing.T) {
+	// A comment leading a plain (non-def) statement stays with it across a
+	// budget flush boundary.
+	var b strings.Builder
+	b.WriteString("package p\n\nfunc f() {\n")
+	for i := 0; i < 20; i++ {
+		b.WriteString("\tdoThing()\n")
+	}
+	b.WriteString("\t// marker comment here\n\tlastThing()\n}\n")
+	chunks, err := ChunkCode([]byte(b.String()), "go", "p.go", 120)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, c := range chunks {
+		if strings.Contains(c.Text, "// marker comment here") {
+			if !strings.Contains(c.Text, "lastThing()") {
+				t.Fatalf("comment split from its statement: %q", c.Text)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("marker comment dropped: %v", breadcrumbs(chunks))
+	}
+}
+
+func TestChunkCodeTrailingCommentEmitted(t *testing.T) {
+	// A trailing comment with no following sibling is still emitted.
+	src := "package p\n\nconst x = 1\n\n// trailing note\n"
+	chunks, err := ChunkCode([]byte(src), "go", "p.go", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, c := range chunks {
+		if strings.Contains(c.Text, "// trailing note") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("trailing comment dropped: %v", breadcrumbs(chunks))
+	}
+}
+
 func TestChunkCodeHCLBlocks(t *testing.T) {
 	src := "region = \"us-east-1\"\n\n" +
 		"resource \"aws_instance\" \"web\" {\n  ami = \"abc\"\n}\n\n" +
