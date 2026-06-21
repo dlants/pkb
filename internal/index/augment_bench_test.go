@@ -93,7 +93,7 @@ func TestAugmentBench(t *testing.T) {
 	totals := make([]time.Duration, len(models))
 	// Group by chunk so each model's blurb sits side by side for comparison.
 	for _, d := range docs {
-		cs := chunk.ChunkMarkdown(d.body, chunk.TargetChunkSize)
+		cs := chunk.ChunkMarkdown(d.body, d.name, chunk.TargetChunkSize)
 		for idx, c := range cs {
 			fmt.Fprintf(&report, "\n## %s [chunk %d]\n\nbreadcrumb: `%s`\n\n```\n%s\n```\n\n",
 				d.name, idx, c.HeadingContext, c.Text)

@@ -249,8 +249,10 @@ func softSplitBlock(text string, blockStart Position, maxChunkSize int) []softCh
 }
 
 // ChunkMarkdown splits markdown text into chunks along heading and paragraph
-// boundaries, carrying heading breadcrumbs as HeadingContext.
-func ChunkMarkdown(text string, maxChunkSize int) []ChunkInfo {
+// boundaries, carrying heading breadcrumbs as HeadingContext. pathContext seeds
+// the breadcrumb (typically the file's relative path) so the file path is part
+// of the embedded context, mirroring ChunkCode.
+func ChunkMarkdown(text string, pathContext string, maxChunkSize int) []ChunkInfo {
 	if maxChunkSize <= 0 {
 		maxChunkSize = TargetChunkSize
 	}
@@ -282,7 +284,7 @@ func ChunkMarkdown(text string, maxChunkSize int) []ChunkInfo {
 		for _, sub := range softSplitBlock(blockText, blockStart, maxChunkSize) {
 			chunks = append(chunks, ChunkInfo{
 				Text:           sub.text,
-				HeadingContext: block.headingContext,
+				HeadingContext: joinBreadcrumb(pathContext, block.headingContext),
 				Start:          sub.start,
 				End:            sub.end,
 			})
