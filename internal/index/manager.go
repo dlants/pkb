@@ -565,7 +565,7 @@ func (o *Options) reuseEmbeddings(path paths.GitRootRelativePath, model embed.Em
 	var toEmbedIdx []int
 	for i, c := range chunks {
 		if e, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
-			embeddings[i] = e
+			embeddings[i] = e.Embedding
 			continue
 		}
 		toEmbed = append(toEmbed, contextualized[i])
