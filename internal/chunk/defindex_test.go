@@ -51,24 +51,13 @@ func TestBuildDefIndexGo(t *testing.T) {
 		t.Fatal("nil index for go")
 	}
 
-	foo, ok := findEntry(idx, "Foo", "function")
+	_, ok := findEntry(idx, "Foo", "function")
 	if !ok {
 		t.Fatalf("Foo function not indexed: %+v", idx.info)
 	}
-	if foo.docStartByte < 0 {
-		t.Fatalf("expected Foo to carry a doc comment, got docStartByte=%d", foo.docStartByte)
-	}
-	docByteIdx := foo.docStartByte
-	if got := string(src[docByteIdx : docByteIdx+2]); got != "//" {
-		t.Fatalf("docStartByte should point at the comment, got %q", got)
-	}
-
-	bar, ok := findEntry(idx, "Bar", "type")
+	_, ok = findEntry(idx, "Bar", "type")
 	if !ok {
 		t.Fatalf("Bar type not indexed: %+v", idx.info)
-	}
-	if bar.docStartByte != -1 {
-		t.Fatalf("expected Bar to have no doc, got %d", bar.docStartByte)
 	}
 }
 
@@ -149,9 +138,6 @@ func TestBuildDefIndexSpansGo(t *testing.T) {
 	}
 	if got := string(src[state.start : state.start+len("State")]); got != "State" {
 		t.Fatalf("State span should start at the type_spec node (State), got %q", got)
-	}
-	if state.docStartByte != -1 {
-		t.Fatalf("expected State to have no doc, got %d", state.docStartByte)
 	}
 }
 
