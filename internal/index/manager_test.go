@@ -201,25 +201,33 @@ func TestTextFileInferenceIdentityChangeReusesVectors(t *testing.T) {
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
 	h.commit("init")
 
-	model := embed.NewMockModel("mock", 3)
+	model := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
 	o, st := h.opts(t, model)
-	o.Inference = infer.NewMockModel("infer-v1")
+	infer1 := infer.NewMockModel("infer-v1")
+	o.Inference = infer1
 	defer st.Close()
 
 	_, err := Reindex(o)
 	require.NoError(t, err)
 	total := model.ChunkCount()
 	require.Equal(t, 2, total)
+	require.Len(t, model.inputs(), 2, "initial run embeds every chunk")
+	require.Equal(t, 2, infer1.Calls(), "initial run augments every chunk")
 
 	// Switch the inference model without touching file content. The augmentation
 	// (minor) spec never invalidates a stored vector, so reuse-by-ChunkKey keeps
-	// every chunk's embedding. Force a full revisit (a config-only change leaves
-	// no git diff) by clearing the marker.
-	o.Inference = infer.NewMockModel("infer-v2")
+	// every chunk's embedding and stored blurb -- the second run must do no
+	// embedding and no inference work. Force a full revisit (a config-only change
+	// leaves no git diff) by clearing the marker.
+	infer2 := infer.NewMockModel("infer-v2")
+	o.Inference = infer2
 	require.NoError(t, os.Remove(filepath.Join(h.root, "pkb-state.toml")))
+	before := len(model.inputs())
 	_, err = Reindex(o)
 	require.NoError(t, err)
 	require.Equal(t, total, model.ChunkCount(), "inference-model switch reuses existing vectors")
+	require.Equal(t, before, len(model.inputs()), "inference-model switch re-embeds nothing")
+	require.Equal(t, 0, infer2.Calls(), "inference-model switch re-augments nothing")
 }
 
 // recordingModel wraps a mock embedding model and captures the exact chunk

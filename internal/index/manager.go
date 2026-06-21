@@ -92,16 +92,6 @@ func (o *Options) activeModels() []embed.EmbeddingModel {
 	return []embed.EmbeddingModel{o.Model}
 }
 
-// inferenceName returns the identity of the configured inference model, or ""
-// when augmentation is disabled. It is folded into text-file reuse so a model
-// switch invalidates stale augmented embeddings.
-func (o *Options) inferenceName() string {
-	if o.Inference == nil {
-		return ""
-	}
-	return o.Inference.ModelName()
-}
-
 // promptVersion is a hand-maintained version of the augmentation prompt
 // template (see augmentPrompt). Bump it whenever the prompt text changes so the
 // recorded minor spec reflects the augmentation that produced a chunk's blurb.
@@ -227,7 +217,7 @@ func Reindex(o *Options) (State, error) {
 			return State{}, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, inference: meta.InferenceModel}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, complete: meta.Complete}
 		}
 	}
 
@@ -263,14 +253,14 @@ func Reindex(o *Options) (State, error) {
 		prevEntry, wasIndexed := indexed[path]
 		if inTree && o.candidate(path) {
 			model := o.Model
-			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
-				// Code files are deterministic, so unchanged content + same
-				// embedding model is always reusable. Text files are
-				// LLM-augmented, so also require the inference-model identity to
-				// match; otherwise re-augment and re-embed the whole file.
-				if o.route(path) == filetype.Code || prevEntry.inference == o.inferenceName() {
-					continue
-				}
+			// Skip a file only when it was fully indexed (complete=1) by the same
+			// embedding model against the same blob. The minor (augmentation) spec
+			// is deliberately excluded: an augmentation-spec change (inference
+			// model or prompt) never invalidates a vector, so it triggers no
+			// re-embedding or re-augmentation. A complete=0 file is always
+			// reprocessed, and reprocessing is cheap (per-chunk reuse hits).
+			if wasIndexed && prevEntry.complete && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+				continue
 			}
 			// If a different model previously embedded this path (e.g. routing
 			// changed), purge the stale rows first.
@@ -608,11 +598,11 @@ func stripThinking(s string) string {
 
 
 // indexedEntry records which model embedded a path, the stored blob sha, and
-// the inference-model identity used for its (text-file) augmentation.
+// whether the file was fully indexed (complete) by that model.
 type indexedEntry struct {
-	model     string
-	sha       string
-	inference string
+	model    string
+	sha      string
+	complete bool
 }
 
 // Search embeds the query with every active model, queries each model's vec
