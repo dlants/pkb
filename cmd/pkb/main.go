@@ -1,10 +1,12 @@
 // Command pkb is the CLI for the git-repo-rooted code+docs search index.
-// It runs from a repo root and exposes three commands: reindex, search, stats.
+// It runs from a repo root and exposes the reindex, estimate, search, stats,
+// and chunk commands.
 package main
 
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/config"
+	"github.com/dlants/pkb/internal/cost"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
@@ -36,6 +39,8 @@ func main() {
 	switch cmd {
 	case "reindex":
 		err = runReindex(rest)
+	case "estimate":
+		err = runEstimate(rest)
 	case "search":
 		err = runSearch(rest)
 	case "stats":
@@ -58,6 +63,7 @@ func usage() {
 
 usage:
   pkb reindex          reindex the repo against HEAD
+  pkb estimate         estimate the cost of the next and a full reindex
   pkb search <query>   search the index
   pkb stats            print index statistics
   pkb chunk <file>     chunk a file and pretty-print the chunks
@@ -114,7 +120,7 @@ func setup() (*index.Options, func(), error) {
 		Ignore:         ignore,
 		ExtOverrides:   cfg.ExtOverrides,
 		MaxParallelism: cfg.MaxParallelism,
-		Budget:         cfg.Budget,
+		MaxReindexCost: cfg.MaxReindexCost,
 	}
 	cleanup := func() { st.Close() }
 	return opts, cleanup, nil
@@ -122,6 +128,68 @@ func setup() (*index.Options, func(), error) {
 
 func runReindex(args []string) error {
 	fs := flag.NewFlagSet("reindex", flag.ExitOnError)
+	maxCost := fs.Float64("max-reindex-cost", -1, "override the configured per-run max reindex cost in dollars (<=0 disables the gate)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	opts, cleanup, err := setup()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	if isFlagSet(fs, "max-reindex-cost") {
+		opts.MaxReindexCost = *maxCost
+	}
+
+	st, err := index.Reindex(opts)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("indexed commit %s: %d files, %d chunks\n", st.Commit, st.FileCount, st.ChunkCount)
+	return nil
+}
+
+// isFlagSet reports whether the named flag was explicitly provided on the
+// command line (as opposed to left at its default).
+func isFlagSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
+}
+
+// round3 rounds x to 3 significant figures.
+func round3(x float64) float64 {
+	if x == 0 {
+		return 0
+	}
+	mag := math.Pow(10, 2-math.Floor(math.Log10(math.Abs(x))))
+	return math.Round(x*mag) / mag
+}
+
+// sig3 formats a number to 3 significant figures.
+func sig3(x float64) string { return fmt.Sprintf("%g", round3(x)) }
+
+// formatTok renders a token count to 3 significant figures, switching to kTok
+// once the count reaches 1000.
+func formatTok(n int) string {
+	if n < 1000 {
+		return fmt.Sprintf("%dtok", n)
+	}
+	return fmt.Sprintf("%gkTok", round3(float64(n)/1000))
+}
+
+func printEstimate(label string, est index.CostEstimate) {
+	fmt.Printf("%s - %d files / %d chunks: $%s. (%s embedding, %s inference input, %s inference output)\n",
+		label, est.Files, est.Chunks, sig3(est.Dollars),
+		formatTok(est.EmbedTokens), formatTok(est.InferInputTokens), formatTok(est.InferOutputTokens))
+}
+
+func runEstimate(args []string) error {
+	fs := flag.NewFlagSet("estimate", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -131,11 +199,24 @@ func runReindex(args []string) error {
 	}
 	defer cleanup()
 
-	st, err := index.Reindex(opts)
+	fmt.Println("Estimated costs:")
+	fmt.Printf("- embedding: $%s/1M tok\n", sig3(cost.EmbeddingPricePerToken(opts.Model.ModelName())*1e6))
+	if opts.Inference != nil {
+		ip := cost.InferencePricePerToken(opts.Inference.ModelName())
+		fmt.Printf("- inference: $%s/1M input tok, $%s/1M output tok\n", sig3(ip.InputPerToken*1e6), sig3(ip.OutputPerToken*1e6))
+	}
+
+	next, err := index.Estimate(opts, false)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("indexed commit %s: %d files, %d chunks\n", st.Commit, st.FileCount, st.ChunkCount)
+	printEstimate("next reindex", next)
+
+	full, err := index.Estimate(opts, true)
+	if err != nil {
+		return err
+	}
+	printEstimate("full reindex", full)
 	return nil
 }
 

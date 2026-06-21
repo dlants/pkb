@@ -1,3 +1,5 @@
+maxReindexCost = 5.0
+
 [embedding]
 provider = "voyage"
 model = "voyage-code-3"

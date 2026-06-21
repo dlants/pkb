@@ -86,10 +86,11 @@ type Options struct {
 	// MaxParallelism bounds concurrent inference (augmentation) calls during
 	// indexing. Values below 1 are treated as 1.
 	MaxParallelism int
-	// Budget caps the projected dollar cost of a run. Reindex estimates the cost
-	// before any paid work and aborts when it exceeds Budget. A non-positive
-	// value disables the gate.
-	Budget float64
+	// MaxReindexCost caps the projected dollar cost of a single run (a
+	// per-run cap, not a cumulative spend limit). Reindex estimates the cost
+	// before any paid work and aborts when it exceeds MaxReindexCost. A
+	// non-positive value disables the gate.
+	MaxReindexCost float64
 }
 
 // activeModels returns the embedding models in use.
@@ -245,15 +246,15 @@ func Reindex(o *Options) (State, error) {
 		return State{}, err
 	}
 
-	est, err := o.estimate(touched, treeMap, indexed)
+	est, err := o.estimate(touched, treeMap, indexed, false)
 	if err != nil {
 		return State{}, err
 	}
-	fmt.Fprintf(os.Stderr, "estimated reindex cost: $%.4f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens)\n",
+	fmt.Fprintf(os.Stderr, "estimated reindex cost: $%.2f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens)\n",
 		est.dollars, est.files, est.chunks, est.embedTokens, est.inferInputTokens, est.inferOutputTokens)
-	if o.Budget > 0 && est.dollars > o.Budget {
-		return State{}, fmt.Errorf("estimated reindex cost $%.4f exceeds budget $%.2f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens); reindex locally instead",
-			est.dollars, o.Budget, est.files, est.chunks, est.embedTokens, est.inferInputTokens, est.inferOutputTokens)
+	if o.MaxReindexCost > 0 && est.dollars > o.MaxReindexCost {
+		return State{}, fmt.Errorf("estimated reindex cost $%.2f exceeds max reindex cost $%.2f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens); reindex locally instead",
+			est.dollars, o.MaxReindexCost, est.files, est.chunks, est.embedTokens, est.inferInputTokens, est.inferOutputTokens)
 	}
 
 	var (
@@ -332,6 +333,96 @@ func Reindex(o *Options) (State, error) {
 	return st, nil
 }
 
+// CostEstimate is a read-only projection of a reindex run's cost: how many
+// files/chunks need fresh work and the token/dollar totals that work is
+// expected to incur. It is the public form of the internal costEstimate.
+type CostEstimate struct {
+	Files             int
+	Chunks            int
+	EmbedTokens       int
+	InferInputTokens  int
+	InferOutputTokens int
+	EmbedDollars      float64
+	InferDollars      float64
+	Dollars           float64
+}
+
+// Estimate projects the dollar cost of a reindex without performing any paid
+// embedding/inference work or mutating index data. When full is true it
+// projects a from-scratch reindex of the entire repository, ignoring per-chunk
+// reuse so every chunk is charged; otherwise it projects the next incremental
+// reindex against HEAD, mirroring Reindex's skip and reuse decisions exactly.
+func Estimate(o *Options, full bool) (CostEstimate, error) {
+	ref := "HEAD"
+	repoRoot := string(o.Repo.Root)
+
+	targetSha, err := o.Repo.ResolveRef(ref)
+	if err != nil {
+		return CostEstimate{}, err
+	}
+
+	models := o.activeModels()
+	for _, m := range models {
+		if err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {
+			return CostEstimate{}, err
+		}
+	}
+
+	indexed := map[paths.GitRootRelativePath]indexedEntry{}
+	for _, m := range models {
+		files, err := o.Store.IndexedFiles(m.ModelName())
+		if err != nil {
+			return CostEstimate{}, err
+		}
+		for path, meta := range files {
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, complete: meta.Complete}
+		}
+	}
+
+	treeFiles, err := o.Repo.LsTree(ref)
+	if err != nil {
+		return CostEstimate{}, err
+	}
+	treeMap := make(map[paths.GitRootRelativePath]string, len(treeFiles))
+	for _, f := range treeFiles {
+		treeMap[f.Path] = f.BlobSha
+	}
+
+	var touched map[paths.GitRootRelativePath]struct{}
+	if full {
+		touched = map[paths.GitRootRelativePath]struct{}{}
+		for path := range treeMap {
+			if o.candidate(path) {
+				touched[path] = struct{}{}
+			}
+		}
+	} else {
+		prev, err := readState(repoRoot)
+		if err != nil {
+			return CostEstimate{}, err
+		}
+		touched, err = o.touchedPaths(prev, targetSha, treeMap, indexed)
+		if err != nil {
+			return CostEstimate{}, err
+		}
+	}
+
+	est, err := o.estimate(touched, treeMap, indexed, full)
+	if err != nil {
+		return CostEstimate{}, err
+	}
+	return CostEstimate{
+		Files:             est.files,
+		Chunks:            est.chunks,
+		EmbedTokens:       est.embedTokens,
+		InferInputTokens:  est.inferInputTokens,
+		InferOutputTokens: est.inferOutputTokens,
+		EmbedDollars:      est.embedDollars,
+		InferDollars:      est.inferDollars,
+		Dollars:           est.dollars,
+	}, nil
+}
+
 // touchedPaths computes the set of paths that might need work, choosing the
 // incremental, divergence, or full strategy.
 func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) (map[paths.GitRootRelativePath]struct{}, error) {
@@ -400,6 +491,8 @@ type costEstimate struct {
 	embedTokens       int
 	inferInputTokens  int
 	inferOutputTokens int
+	embedDollars      float64
+	inferDollars      float64
 	dollars           float64
 }
 
@@ -412,7 +505,7 @@ type costEstimate struct {
 // time, so embedding tokens are projected from the un-augmented contextual text
 // -- a slight under-count of the augmentation contribution that the dominant
 // inference term already accounts for. No network or DB writes occur.
-func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) (costEstimate, error) {
+func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry, fromScratch bool) (costEstimate, error) {
 	var est costEstimate
 	model := o.Model
 	for path := range touched {
@@ -421,7 +514,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			continue
 		}
 		prevEntry, wasIndexed := indexed[path]
-		if wasIndexed && prevEntry.complete && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+		if !fromScratch && wasIndexed && prevEntry.complete && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 			continue
 		}
 		content, err := os.ReadFile(o.Repo.Root.Join(path).String())
@@ -433,10 +526,14 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			return costEstimate{}, err
 		}
 		// A model change purges the old rows, so reuse is keyed on the new
-		// model's name -- an empty map there, correctly charging every chunk.
-		existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
-		if err != nil {
-			return costEstimate{}, err
+		// model's name -- an empty map there, correctly charging every chunk. A
+		// from-scratch projection ignores reuse entirely and charges every chunk.
+		var existing map[string]store.ReuseChunk
+		if !fromScratch {
+			existing, err = o.Store.ChunkEmbeddings(string(path), model.ModelName())
+			if err != nil {
+				return costEstimate{}, err
+			}
 		}
 		isText := o.route(path) != filetype.Code
 		est.files++
@@ -452,11 +549,12 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			}
 		}
 	}
-	est.dollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())
+	est.embedDollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())
 	if o.Inference != nil {
 		ip := cost.InferencePricePerToken(o.Inference.ModelName())
-		est.dollars += float64(est.inferInputTokens)*ip.InputPerToken + float64(est.inferOutputTokens)*ip.OutputPerToken
+		est.inferDollars = float64(est.inferInputTokens)*ip.InputPerToken + float64(est.inferOutputTokens)*ip.OutputPerToken
 	}
+	est.dollars = est.embedDollars + est.inferDollars
 	return est, nil
 }
 
@@ -681,7 +779,6 @@ func stripThinking(s string) string {
 	}
 	return strings.TrimSpace(s)
 }
-
 
 // indexedEntry records which model embedded a path, the stored blob sha, and
 // whether the file was fully indexed (complete) by that model.
