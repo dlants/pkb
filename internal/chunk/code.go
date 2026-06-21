@@ -6,7 +6,6 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-
 // ChunkCode splits source code into chunks along syntactic boundaries using
 // tree-sitter, carrying a structural breadcrumb (file path + enclosing symbol
 // path) as HeadingContext. pathContext seeds the breadcrumb (typically the
@@ -72,6 +71,12 @@ type sweeper struct {
 	budget      int
 	idx         *defIndex
 	pathContext string
+
+	// breadcrumbFn, when non-nil, overrides the def-span breadcrumb: it is
+	// called at flush time with the window's byte range and returns the full
+	// HeadingContext for the chunk. Used by the config chunker, which derives
+	// breadcrumbs from a node's structural path rather than tags.scm spans.
+	breadcrumbFn func(lo, hi int) string
 
 	stack []defSpan
 
@@ -230,9 +235,13 @@ func (s *sweeper) flush() {
 	}
 	text := string(s.source[s.winStart:s.winEnd])
 	if strings.TrimSpace(text) != "" {
+		bc := s.breadcrumb()
+		if s.breadcrumbFn != nil {
+			bc = s.breadcrumbFn(s.winStart, s.winEnd)
+		}
 		s.out = append(s.out, ChunkInfo{
 			Text:           text,
-			HeadingContext: s.breadcrumb(),
+			HeadingContext: bc,
 			Start:          posFromByte(s.source, s.winStart),
 			End:            posFromByte(s.source, s.winEnd),
 		})
@@ -248,6 +257,9 @@ func (s *sweeper) lineSplitRange(lo, hi int) {
 		return
 	}
 	bc := s.breadcrumb()
+	if s.breadcrumbFn != nil {
+		bc = s.breadcrumbFn(lo, hi)
+	}
 	for _, sc := range splitCodeByLines(text, posFromByte(s.source, lo), s.budget) {
 		s.out = append(s.out, ChunkInfo{
 			Text:           sc.text,

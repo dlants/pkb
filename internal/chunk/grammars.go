@@ -1,13 +1,16 @@
 package chunk
 
 import (
+	tshcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
+	tstoml "github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go"
+	tsyaml "github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tsgo "github.com/tree-sitter/tree-sitter-go/bindings/go"
 	tsjs "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
+	tsjson "github.com/tree-sitter/tree-sitter-json/bindings/go"
 	tspy "github.com/tree-sitter/tree-sitter-python/bindings/go"
 	tsrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	tsts "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
-	tshcl "github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go"
 )
 
 // grammars maps a grammar name (as produced by filetype routing) to a factory
@@ -21,6 +24,9 @@ var grammars = map[string]func() *tree_sitter.Language{
 	"typescript": func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTypescript()) },
 	"tsx":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTSX()) },
 	"hcl":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tshcl.Language()) },
+	"json":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsjson.Language()) },
+	"toml":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tstoml.Language()) },
+	"yaml":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsyaml.Language()) },
 }
 
 // HasGrammar reports whether a tree-sitter grammar is available for the name.

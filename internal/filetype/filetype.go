@@ -38,15 +38,19 @@ type Route struct {
 
 // codeExts maps recognized source extensions to grammar names.
 var codeExts = map[string]string{
-	".ts":  "typescript",
-	".tsx": "tsx",
-	".js":  "javascript",
-	".jsx": "javascript",
-	".go":  "go",
-	".py":  "python",
-	".rs":  "rust",
-	".hcl": "hcl",
-	".tf":  "hcl",
+	".ts":   "typescript",
+	".tsx":  "tsx",
+	".js":   "javascript",
+	".jsx":  "javascript",
+	".go":   "go",
+	".py":   "python",
+	".rs":   "rust",
+	".hcl":  "hcl",
+	".tf":   "hcl",
+	".json": "json",
+	".toml": "toml",
+	".yaml": "yaml",
+	".yml":  "yaml",
 }
 
 // RouteExt returns the Route for a file extension (including the leading dot).
