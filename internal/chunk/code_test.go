@@ -313,6 +313,38 @@ func TestChunkCodeCASTPacksSiblings(t *testing.T) {
 	}
 }
 
+// TestChunkCodePythonDecoratorIsFiller documents the first-cut decorator
+// behavior: the python tags.scm captures `function_definition`, whose span
+// excludes the `decorated_definition` wrapper, so leading decorators land in
+// the preceding filler chunk rather than inside the function chunk. This is an
+// accepted limitation; pulling decorators into the function span is noted as
+// per-language tuning follow-up in the plan.
+func TestChunkCodePythonDecoratorIsFiller(t *testing.T) {
+	src := "@decorator\ndef f():\n    return 1\n"
+	chunks, err := ChunkCode([]byte(src), "python", "a.py", TargetChunkSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fnChunk, fillerChunk *ChunkInfo
+	for i := range chunks {
+		switch chunks[i].HeadingContext {
+		case "a.py > function f":
+			fnChunk = &chunks[i]
+		case "a.py":
+			fillerChunk = &chunks[i]
+		}
+	}
+	if fnChunk == nil {
+		t.Fatalf("no function chunk: %v", breadcrumbs(chunks))
+	}
+	if strings.Contains(fnChunk.Text, "@decorator") {
+		t.Fatalf("decorator unexpectedly inside function chunk: %q", fnChunk.Text)
+	}
+	if fillerChunk == nil || !strings.Contains(fillerChunk.Text, "@decorator") {
+		t.Fatalf("expected decorator in a preceding filler chunk, got: %v", breadcrumbs(chunks))
+	}
+}
+
 func breadcrumbs(chunks []ChunkInfo) []string {
 	out := make([]string, len(chunks))
 	for i, c := range chunks {

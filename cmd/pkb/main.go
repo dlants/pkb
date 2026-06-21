@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/config"
 	"github.com/dlants/pkb/internal/embed"
+	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/index"
 	"github.com/dlants/pkb/internal/infer"
@@ -38,6 +40,8 @@ func main() {
 		err = runSearch(rest)
 	case "stats":
 		err = runStats(rest)
+	case "chunk":
+		err = runChunk(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", cmd)
 		usage()
@@ -56,6 +60,7 @@ usage:
   pkb reindex          reindex the repo against HEAD
   pkb search <query>   search the index
   pkb stats            print index statistics
+  pkb chunk <file>     chunk a file and pretty-print the chunks
 
 pkb runs from anywhere inside a git repository; it discovers the repo root,
 reads pkb.toml / .pkb/config.toml and .pkbignore, and stores the index at
@@ -179,6 +184,47 @@ func runStats(args []string) error {
 	fmt.Printf("commit:    %s\n", st.Commit)
 	fmt.Printf("files:     %d\n", st.FileCount)
 	fmt.Printf("chunks:    %d\n", st.ChunkCount)
+	return nil
+}
+
+// runChunk reads a file, chunks it the same way the indexer would (tree-sitter
+// for recognized code, markdown chunker otherwise), and pretty-prints the
+// resulting chunks. It does not touch the index, config, or any provider.
+func runChunk(args []string) error {
+	fs := flag.NewFlagSet("chunk", flag.ExitOnError)
+	maxSize := fs.Int("max", chunk.TargetChunkSize, "max chunk size in characters")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	path := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	if path == "" {
+		return fmt.Errorf("chunk: missing file path")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	route := filetype.RoutePath(path)
+	var chunks []chunk.ChunkInfo
+	if route.Type == filetype.Code {
+		chunks, err = chunk.ChunkCode(content, route.Grammar, path, *maxSize)
+		if err != nil {
+			return err
+		}
+	} else {
+		chunks = chunk.ChunkMarkdown(string(content), *maxSize)
+	}
+
+	kind := route.Type.String()
+	if route.Grammar != "" {
+		kind = route.Grammar
+	}
+	fmt.Printf("%s (%s): %d chunks\n", path, kind, len(chunks))
+	for i, c := range chunks {
+		fmt.Printf("\n--- chunk %d | lines %d-%d | %d chars ---\n", i, c.Start.Line, c.End.Line, len(c.Text))
+		fmt.Printf("breadcrumb: %s\n%s\n", c.HeadingContext, c.Text)
+	}
 	return nil
 }
 
