@@ -8,6 +8,7 @@ PKB is a single file go binary that exposes a search CLI, with a very simple int
 pkb reindex            # bring the index in sync with the current HEAD
 pkb search "<query>"   # search; -k N controls result count (default 5)
 pkb stats              # print the current index marker (commit, file/chunk counts)
+pkb chunk <file>       # display how this file would be chunked (for debugging)
 ```
 
 `pkb reindex` is meant to be run at a single well-defined moment — when code lands on the default branch (typically a CI step). PKB keeps track of the last commit that was indexed (in `pkb-state.toml`), and uses git to identify changed files, then brings the index up to date with the current commit.
@@ -28,7 +29,7 @@ Commit `.gitattributes` along with `pkb.db`. If `pkb.db` is already in your hist
 
 ## Keeping the index fresh
 
-`pkb reindex` indexes the current `HEAD` and writes the indexed commit sha to `pkb-state.toml`. Because the refreshed `pkb.db` / `pkb-state.toml` then need to be committed, the index is always delivered one commit *behind* the code it represents — the index commit on `main` contains an index that reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer.
+`pkb reindex` indexes the current `HEAD` and writes the indexed commit sha to `pkb-state.toml`. Because the refreshed `pkb.db` / `pkb-state.toml` then need to be committed, the index is always delivered one commit _behind_ the code it represents — the index commit on `main` contains an index that reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer.
 
 The recommended trigger is **CI on merge to the default branch**, not a client-side git hook (a `pre-push` hook can't add a commit to the push that's already in flight, and would clobber the Git LFS pre-push hook). This repo ships such a workflow at [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml) — use it as the reference for your own setup. On push to `main` it:
 
@@ -38,7 +39,7 @@ The recommended trigger is **CI on merge to the default branch**, not a client-s
 
 Two details keep this robust:
 
-- **LFS uploads must be explicit.** The commit step runs `git lfs install --local` and `git lfs push origin HEAD` *before* `git push`, so the new `pkb.db` blob lands in LFS storage before its pointer is pushed. Relying on the implicit pre-push hook is fragile — if the blob is missing from LFS storage, later `lfs: true` checkouts fail with a `404`.
+- **LFS uploads must be explicit.** The commit step runs `git lfs install --local` and `git lfs push origin HEAD` _before_ `git push`, so the new `pkb.db` blob lands in LFS storage before its pointer is pushed. Relying on the implicit pre-push hook is fragile — if the blob is missing from LFS storage, later `lfs: true` checkouts fail with a `404`.
 - **No re-trigger loop.** The workflow has `paths-ignore: [pkb.db, pkb-state.toml]`, and `GITHUB_TOKEN` pushes don't trigger workflows anyway, so the index commit doesn't start another run. The commit message also carries `[skip ci]`.
 
 It needs `VOYAGE_API_KEY` and `ANTHROPIC_API_KEY` set as **repository secrets** (Settings → Secrets and variables → Actions), and `contents: write` permission (already declared in the workflow).
@@ -76,21 +77,13 @@ go build -o pkb ./cmd/pkb
 
 # Configuration
 
-PKB uses two models: an **embedding** model (embeds all files) and an optional
-**inference** model (augments markdown/text chunks with a one-paragraph context
-before embedding — the contextual-retrieval pattern; code files are never
-augmented). Both are pluggable across providers.
+PKB uses two models: an **embedding** model (embeds all files) and an optional **inference** model (augments markdown/text chunks with a one-paragraph context before embedding — the contextual-retrieval pattern; code files are never augmented). Both are pluggable across providers.
 
-The default configuration uses **Voyage AI** embeddings (`voyage-code-3`,
-authenticated with `VOYAGE_API_KEY`) plus **Anthropic** Claude Haiku
-augmentation (authenticated with `ANTHROPIC_API_KEY`).
+The default configuration uses **Voyage AI** embeddings (`voyage-code-3`, authenticated with `VOYAGE_API_KEY`) plus **Anthropic** Claude Haiku augmentation (authenticated with `ANTHROPIC_API_KEY`).
 
-A repo-root config file — `pkb.toml` or `.pkb/config.toml` (first found wins) —
-selects the embedding and inference models. Any unset field falls back to
-defaults, and a missing file uses defaults entirely.
+A repo-root config file — `pkb.toml` or `.pkb/config.toml` (first found wins) — selects the embedding and inference models. Any unset field falls back to defaults, and a missing file uses defaults entirely.
 
-PKB always indexes `HEAD`. Run `pkb reindex` when the default branch is checked
-out (e.g. in CI after checkout) so the index tracks the default branch.
+PKB always indexes `HEAD`. Run `pkb reindex` when the default branch is checked out (e.g. in CI after checkout) so the index tracks the default branch.
 
 ```toml
 exclude = ["node_modules", "dist", "vendor/generated"]
@@ -111,47 +104,18 @@ apikeyenv = "ANTHROPIC_API_KEY"
 ```
 
 - `provider`: the backend for a model block. Supported values:
-  - `bedrock`: AWS Bedrock (Cohere embed-v4 for `[embedding]`, Claude for
-    `[inference]`). Corporate default; uses IAM credentials, no extra keys.
-  - `openai` / `openai-compatible`: any OpenAI-shaped server. Hits
-    `{baseurl}/v1/embeddings` and `{baseurl}/v1/chat/completions`. Point
-    `baseurl` at `https://api.openai.com` for OpenAI cloud, or at a local
-    server (e.g. `http://localhost:11434` for Ollama, plus llama.cpp, vLLM,
-    LM Studio, LocalAI) for a fully local setup.
-    For a fully local setup on Apple Silicon (MLX-accelerated embeddings and
-    a recommended local inference model with quantization, memory, and
-    throughput guidance), see [LOCAL.md](LOCAL.md).
-  - `gemini`: Google Generative Language API (good free all-rounder for mixed
-    code + markdown).
-  - `voyage` (embedding only): Voyage AI (`{baseurl}/v1/embeddings`). Default
-    embedding provider; `voyage-code-3` is tuned for code retrieval. Chunks and
-    queries are tagged with Voyage's `document`/`query` input types.
-  - `anthropic` (inference only): Anthropic's native Messages API
-    (`{baseurl}/v1/messages`). Default augmentation provider (Claude Haiku).
-  - `none` (inference only): disables LLM augmentation, falling back to the
-    deterministic heading-prefix path with no inference calls.
+  - `bedrock`: AWS Bedrock (Cohere embed-v4 for `[embedding]`, Claude for `[inference]`). Corporate default; uses IAM credentials, no extra keys.
+  - `openai` / `openai-compatible`: any OpenAI-shaped server. Hits `{baseurl}/v1/embeddings` and `{baseurl}/v1/chat/completions`. Point `baseurl` at `https://api.openai.com` for OpenAI cloud, or at a local server (e.g. `http://localhost:11434` for Ollama, plus llama.cpp, vLLM, LM Studio, LocalAI) for a fully local setup. For a fully local setup on Apple Silicon (MLX-accelerated embeddings and a recommended local inference model with quantization, memory, and throughput guidance), see [LOCAL.md](LOCAL.md).
+  - `gemini`: Google Generative Language API (good free all-rounder for mixed code + markdown).
+  - `voyage` (embedding only): Voyage AI (`{baseurl}/v1/embeddings`). Default embedding provider; `voyage-code-3` is tuned for code retrieval. Chunks and queries are tagged with Voyage's `document`/`query` input types.
+  - `anthropic` (inference only): Anthropic's native Messages API (`{baseurl}/v1/messages`). Default augmentation provider (Claude Haiku).
+  - `none` (inference only): disables LLM augmentation, falling back to the deterministic heading-prefix path with no inference calls.
   - `mock`: deterministic, for tests.
-- `baseurl`: API base URL for `openai`/`openai-compatible`/`gemini`/`voyage`/
-  `anthropic` providers (defaults: `https://api.openai.com`,
-  `https://generativelanguage.googleapis.com`, `https://api.voyageai.com`,
-  `https://api.anthropic.com`). Ignored by Bedrock.
-- `apikeyenv`: name of the environment variable holding the API key for HTTP
-  providers (defaults: `OPENAI_API_KEY` for OpenAI, `GEMINI_API_KEY` for
-  Gemini, `VOYAGE_API_KEY` for Voyage, `ANTHROPIC_API_KEY` for Anthropic). An
-  empty key is tolerated for local servers like Ollama. Ignored by Bedrock.
+- `baseurl`: API base URL for `openai`/`openai-compatible`/`gemini`/`voyage`/ `anthropic` providers (defaults: `https://api.openai.com`, `https://generativelanguage.googleapis.com`, `https://api.voyageai.com`, `https://api.anthropic.com`). Ignored by Bedrock.
+- `apikeyenv`: name of the environment variable holding the API key for HTTP providers (defaults: `OPENAI_API_KEY` for OpenAI, `GEMINI_API_KEY` for Gemini, `VOYAGE_API_KEY` for Voyage, `ANTHROPIC_API_KEY` for Anthropic). An empty key is tolerated for local servers like Ollama. Ignored by Bedrock.
 - `awsregion`: AWS region for the Bedrock provider (defaults to `us-east-1`).
-- `awsprofile`: AWS shared-config profile for the Bedrock provider; empty uses the
-  default credential chain. Credentials are checked eagerly — if they're missing
-  or expired, pkb exits with a hint to run `aws sso login`.
-- `dimensions`: embedding width. `voyage-code-3` is Matryoshka, so it supports
-  256/512/1024/2048; lower means smaller/faster with minor quality loss
-  (default 256). Changing this re-keys the index; delete `pkb-state.toml` and
-  run `pkb reindex` to rebuild.
+- `awsprofile`: AWS shared-config profile for the Bedrock provider; empty uses the default credential chain. Credentials are checked eagerly — if they're missing or expired, pkb exits with a hint to run `aws sso login`.
+- `dimensions`: embedding width. `voyage-code-3` is Matryoshka, so it supports 256/512/1024/2048; lower means smaller/faster with minor quality loss (default 256). Changing this re-keys the index; delete `pkb-state.toml` and run `pkb reindex` to rebuild.
 - `extOverrides`: force an extension to `code` or `text`.
-- `exclude`: paths to skip during indexing. Each entry matches a path either by
-  basename (any file/dir with that name) or as a path prefix (a leading
-  repo-relative path segment); full glob/gitignore semantics are not supported.
-- `maxparallelism`: number of inference (augmentation) calls issued concurrently
-  during indexing. Augmentation against a remote model is the slowest part of a
-  run, so raising this speeds it up at the cost of more concurrent requests
-  (default 4; values below 1 are treated as 1).
+- `exclude`: paths to skip during indexing. Each entry matches a path either by basename (any file/dir with that name) or as a path prefix (a leading repo-relative path segment); full glob/gitignore semantics are not supported.
+- `maxparallelism`: number of inference (augmentation) calls issued concurrently during indexing. Augmentation against a remote model is the slowest part of a run, so raising this speeds it up at the cost of more concurrent requests (default 4; values below 1 are treated as 1).
