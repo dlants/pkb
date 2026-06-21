@@ -248,6 +248,25 @@ build pass.
 
 ## Stage 2 — Schema + storage primitives for generations and augmentation
 
+**Status: DONE.** `store` gained the new columns (`files.complete`,
+`files.indexed_gen`, `files.minor_spec`, `chunks.gen`, `chunks.augmentation`,
+`chunks.aug_spec`) via idempotent `ALTER TABLE` migrations (table-driven
+`addColumn` loop). New incremental API: `StartFile` (ensures file row, records
+blob/minor spec, marks incomplete, clears any prior crashed attempt's
+non-committed-gen chunks, returns `indexed_gen+1`), `InsertChunk` (persists one
+chunk + vec row under a gen in its own transaction, storing
+`augmentation`/`aug_spec`), and `FinalizeFile` (advances `indexed_gen`, sets
+`complete=1`, drops superseded generations via `deleteChunksOtherGenTx`).
+`Search`, `Stats`, and `ChunkEmbeddings` filter `c.gen = f.indexed_gen` so only
+the committed generation is visible/reused. `ChunkEmbeddings` returns
+`map[string]ReuseChunk` (embedding + stored blurb); `FileMeta` exposes
+`Complete`/`MinorSpec`. Decisions: kept `PutFile` unchanged (defaults keep it
+valid; Stage 3 replaces its usage). Tests in `internal/store/store_test.go`
+(`TestGenerationLifecycle`, `TestPartialGenerationInvisible`,
+`TestStartFileClearsCrashedAttempt`,
+`TestIndexedFilesExposesCompleteAndMinorSpec`, `TestMigrationFromOldSchema`).
+Full suite, vet, build pass.
+
 - Goal: `store` gains the new columns (`files.complete`, `files.indexed_gen`,
   `files.minor_spec`, `chunks.gen`, `chunks.augmentation`, `chunks.aug_spec`)
   with `ALTER TABLE` migrations, plus the incremental API: start-file (clear
