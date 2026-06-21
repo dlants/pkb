@@ -374,6 +374,36 @@ suite, vet, build pass.
 
 ## Stage 5 — Cost estimation + budget gate
 
+**Status: DONE.** `Config.Budget float64 toml:"budget"` (default `5.0`) was
+added with a non-positive value disabling the gate; it threads through
+`index.Options.Budget` (wired in `cmd/pkb/main.go`). A new `internal/cost`
+package holds the pricing table (`$/1M`-token embedding + inference rates,
+matched as substrings of the model name so `voyage-code-3@256` and
+`us.cohere.embed-v4:0` resolve, with conservative fallbacks) plus `CharsPerToken`
+and `AugmentMaxTokens` constants and `EmbeddingPricePerToken`/
+`InferencePricePerToken`. The chunking logic in `indexFile` was extracted into a
+shared `Options.chunkFile` helper so the estimator chunks identically. New
+`Options.estimate` mirrors `Reindex`'s skip decision and per-chunk
+`ChunkEmbeddings` reuse: skipped/reused chunks are never charged; embedding
+tokens come from the (un-augmented) contextualized text of miss chunks, and
+inference cost is charged only for augment-miss chunks of text files
+(`(documentChars+chunkChars)/charsPerToken` input, `AugmentMaxTokens` output). It
+performs no API calls and no DB writes. `Reindex` runs the estimate right after
+`touchedPaths`, prints the projected cost to stderr on every run, and returns a
+budget error before any paid work when `Budget > 0 && est > Budget`. The tail
+`VACUUM` was left in place (runs after all finalizes). Decisions: estimate uses
+un-augmented contextual length for embed tokens (aug blurb length is unknown
+pre-run; the inference term dominates); pricing matched by substring for
+robustness to `@dims`/profile prefixes. Tests: `internal/cost/cost_test.go`
+(`TestEmbeddingPricePerToken`, `TestInferencePricePerToken`) and
+`internal/index/manager_test.go` (`TestBudgetGateAbortsOverBudget` — over-budget
+aborts with zero embed/infer calls and an unchanged index;
+`TestBudgetGateDoesNotChargeReuse` — a forced full revisit of an unchanged repo
+under a tiny budget proceeds because reuse hits cost $0). README config reference
+documents `budget`. Full suite, vet, build pass.
+
+## Stage 5 — Cost estimation + budget gate
+
 - Goal: `Config.Budget` (default `$5`) is parsed; `Reindex` estimates the run's cost from the touched set + reuse maps and aborts before any paid work when the estimate exceeds the budget. The projected cost is logged on every run.
 - Verification:
   - Behavior: an over-budget estimate aborts with no API calls and no DB mutation.

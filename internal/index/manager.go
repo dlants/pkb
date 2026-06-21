@@ -17,6 +17,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/dlants/pkb/internal/chunk"
+	"github.com/dlants/pkb/internal/cost"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
@@ -85,6 +86,10 @@ type Options struct {
 	// MaxParallelism bounds concurrent inference (augmentation) calls during
 	// indexing. Values below 1 are treated as 1.
 	MaxParallelism int
+	// Budget caps the projected dollar cost of a run. Reindex estimates the cost
+	// before any paid work and aborts when it exceeds Budget. A non-positive
+	// value disables the gate.
+	Budget float64
 }
 
 // activeModels returns the embedding models in use.
@@ -240,6 +245,17 @@ func Reindex(o *Options) (State, error) {
 		return State{}, err
 	}
 
+	est, err := o.estimate(touched, treeMap, indexed)
+	if err != nil {
+		return State{}, err
+	}
+	fmt.Fprintf(os.Stderr, "estimated reindex cost: $%.4f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens)\n",
+		est.dollars, est.files, est.chunks, est.embedTokens, est.inferInputTokens, est.inferOutputTokens)
+	if o.Budget > 0 && est.dollars > o.Budget {
+		return State{}, fmt.Errorf("estimated reindex cost $%.4f exceeds budget $%.2f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens); reindex locally instead",
+			est.dollars, o.Budget, est.files, est.chunks, est.embedTokens, est.inferInputTokens, est.inferOutputTokens)
+	}
+
 	var (
 		filesIndexed  int
 		chunksIndexed int
@@ -375,6 +391,75 @@ func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.
 	return touched, nil
 }
 
+// costEstimate summarizes a projected reindex run: how many files/chunks need
+// fresh work and the token/dollar totals that work is expected to cost. It is
+// computed with no API calls and no DB mutation.
+type costEstimate struct {
+	files             int
+	chunks            int
+	embedTokens       int
+	inferInputTokens  int
+	inferOutputTokens int
+	dollars           float64
+}
+
+// estimate projects the dollar cost of indexing the touched set, counting only
+// work that will actually be paid for. It mirrors Reindex's skip decision and
+// per-chunk reuse so reuse hits are never charged: a file fully indexed by the
+// same model against the same blob is skipped, and within a reindexed file only
+// reuse-miss chunks contribute embedding (and, for text files with augmentation
+// enabled, inference) tokens. Augmentation blurb length is unknown at estimate
+// time, so embedding tokens are projected from the un-augmented contextual text
+// -- a slight under-count of the augmentation contribution that the dominant
+// inference term already accounts for. No network or DB writes occur.
+func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) (costEstimate, error) {
+	var est costEstimate
+	model := o.Model
+	for path := range touched {
+		blobSha, inTree := treeMap[path]
+		if !inTree || !o.candidate(path) {
+			continue
+		}
+		prevEntry, wasIndexed := indexed[path]
+		if wasIndexed && prevEntry.complete && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+			continue
+		}
+		content, err := os.ReadFile(o.Repo.Root.Join(path).String())
+		if err != nil {
+			return costEstimate{}, err
+		}
+		chunks, err := o.chunkFile(path, content)
+		if err != nil {
+			return costEstimate{}, err
+		}
+		// A model change purges the old rows, so reuse is keyed on the new
+		// model's name -- an empty map there, correctly charging every chunk.
+		existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
+		if err != nil {
+			return costEstimate{}, err
+		}
+		isText := o.route(path) != filetype.Code
+		est.files++
+		for _, c := range chunks {
+			if _, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
+				continue
+			}
+			est.chunks++
+			est.embedTokens += len(contextualize(c.HeadingContext, "", c.Text)) / cost.CharsPerToken
+			if o.Inference != nil && isText {
+				est.inferInputTokens += (len(content) + len(c.HeadingContext) + len(c.Text)) / cost.CharsPerToken
+				est.inferOutputTokens += cost.AugmentMaxTokens
+			}
+		}
+	}
+	est.dollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())
+	if o.Inference != nil {
+		ip := cost.InferencePricePerToken(o.Inference.ModelName())
+		est.dollars += float64(est.inferInputTokens)*ip.InputPerToken + float64(est.inferOutputTokens)*ip.OutputPerToken
+	}
+	return est, nil
+}
+
 // indexResult reports per-file work for progress logging: the number of chunks
 // embedded, the total characters embedded (a proxy for tokens), and the wall
 // time spent in the embedding call itself (excluding inference augmentation).
@@ -384,28 +469,29 @@ type indexResult struct {
 	embedTime time.Duration
 }
 
+// chunkFile chunks a file's content along the appropriate boundaries: code
+// files via tree-sitter (with a line-based fallback) or the config chunker;
+// text/markdown files via the structural markdown chunker. It is shared by the
+// real index path and the cost estimator so both see identical chunking.
+func (o *Options) chunkFile(path paths.GitRootRelativePath, content []byte) ([]chunk.ChunkInfo, error) {
+	if o.route(path) == filetype.Code {
+		grammar := o.grammarFor(path)
+		if chunk.IsConfigGrammar(grammar) {
+			return chunk.ChunkConfig(content, grammar, string(path), chunk.TargetChunkSize)
+		}
+		return chunk.ChunkCode(content, grammar, string(path), chunk.TargetChunkSize)
+	}
+	return chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize), nil
+}
+
 func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) (indexResult, error) {
 	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 	if err != nil {
 		return indexResult{}, err
 	}
-	// Code files are chunked along syntactic boundaries via tree-sitter (with a
-	// line-based fallback); text/markdown files use the structural markdown
-	// chunker.
-	var chunks []chunk.ChunkInfo
-	if o.route(path) == filetype.Code {
-		grammar := o.grammarFor(path)
-		var err error
-		if chunk.IsConfigGrammar(grammar) {
-			chunks, err = chunk.ChunkConfig(content, grammar, string(path), chunk.TargetChunkSize)
-		} else {
-			chunks, err = chunk.ChunkCode(content, grammar, string(path), chunk.TargetChunkSize)
-		}
-		if err != nil {
-			return indexResult{}, err
-		}
-	} else {
-		chunks = chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize)
+	chunks, err := o.chunkFile(path, content)
+	if err != nil {
+		return indexResult{}, err
 	}
 
 	isText := o.route(path) != filetype.Code

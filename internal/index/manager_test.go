@@ -616,6 +616,53 @@ func TestModelChangeCleansUpOrphanTable(t *testing.T) {
 	require.Contains(t, newFiles, "doc.md")
 }
 
+func TestBudgetGateAbortsOverBudget(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, st := h.opts(t, rec)
+	inf := infer.NewMockModel("infer-v1")
+	o.Inference = inf
+	o.Budget = 1e-12 // any real work exceeds this
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.Error(t, err, "estimate over budget must abort the run")
+	require.Contains(t, err.Error(), "budget")
+
+	// No paid work and no mutation occurred.
+	require.Empty(t, rec.inputs(), "over-budget run must not embed")
+	require.Equal(t, 0, inf.Calls(), "over-budget run must not augment")
+	stats, err := st.Stats("mock")
+	require.NoError(t, err)
+	require.Equal(t, 0, stats.Files)
+	require.Equal(t, 0, stats.Chunks)
+}
+
+func TestBudgetGateDoesNotChargeReuse(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, st := h.opts(t, rec)
+	defer st.Close()
+
+	// First run, generous budget, indexes everything.
+	o.Budget = 1000
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	// Force a full revisit with a tiny budget. Every file is already complete
+	// against the same blob, so the estimate is $0 and the run proceeds.
+	o.Budget = 1e-12
+	require.NoError(t, os.Remove(filepath.Join(h.root, "pkb-state.toml")))
+	_, err = Reindex(o)
+	require.NoError(t, err, "reuse hits must not be charged against the budget")
+}
+
 func TestStripThinking(t *testing.T) {
 	cases := []struct {
 		name string

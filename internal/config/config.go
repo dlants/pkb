@@ -18,10 +18,10 @@ type ModelConfig struct {
 	Model      string `toml:"model"`
 	Dimensions int    `toml:"dimensions"`
 	// Region is the AWS region for the Bedrock provider (default us-east-1).
-		Region string `toml:"awsregion"`
+	Region string `toml:"awsregion"`
 	// Profile is the shared-config AWS profile for the Bedrock provider; empty
 	// uses the default credential chain.
-		Profile string `toml:"awsprofile"`
+	Profile string `toml:"awsprofile"`
 	// BaseURL is the API base URL for OpenAI-compatible providers (e.g.
 	// https://api.openai.com or http://localhost:11434 for Ollama). Ignored by
 	// non-HTTP providers like Bedrock.
@@ -51,6 +51,12 @@ type Config struct {
 	// slowest part of a run, so issuing several requests at once speeds it up.
 	// Defaults to 4; values below 1 are treated as 1.
 	MaxParallelism int `toml:"maxparallelism"`
+	// Budget caps the projected dollar cost of a single reindex run. Before any
+	// paid embedding/inference work, Reindex estimates the run's cost and aborts
+	// when it exceeds this budget, so an unexpectedly large/expensive change set
+	// must be reindexed locally instead. Defaults to $5; a non-positive value
+	// disables the gate.
+	Budget float64 `toml:"budget"`
 }
 
 // Default returns the built-in configuration used when no config file exists.
@@ -66,6 +72,7 @@ func Default() Config {
 			Model:    "claude-haiku-4-5",
 		},
 		MaxParallelism: 4,
+		Budget:         5.0,
 	}
 }
 
