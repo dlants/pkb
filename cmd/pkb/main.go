@@ -114,6 +114,7 @@ func setup() (*index.Options, func(), error) {
 		Ignore:         ignore,
 		ExtOverrides:   cfg.ExtOverrides,
 		MaxParallelism: cfg.MaxParallelism,
+		Budget:         cfg.Budget,
 	}
 	cleanup := func() { st.Close() }
 	return opts, cleanup, nil
