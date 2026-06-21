@@ -95,6 +95,66 @@ func TestBuildDefIndexTypescript(t *testing.T) {
 	}
 }
 
+func findSpan(idx *defIndex, name, label string) (defSpan, bool) {
+	for _, s := range idx.spans {
+		if s.name == name && s.label == label {
+			return s, true
+		}
+	}
+	return defSpan{}, false
+}
+
+func TestBuildDefIndexSpansGo(t *testing.T) {
+	src := []byte("package p\n\n// Foo does a thing.\nfunc Foo() int {\n\treturn 1\n}\n\nfunc (b Bar) M() {}\n\ntype State struct {\n\tX int\n}\n")
+	_, root := parseFor(t, src, "go")
+
+	idx, err := buildDefIndex(root, src, "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idx == nil {
+		t.Fatal("nil index for go")
+	}
+
+	if len(idx.spans) != 3 {
+		t.Fatalf("expected 3 spans, got %d: %+v", len(idx.spans), idx.spans)
+	}
+
+	// Spans are ordered by start byte.
+	for i := 1; i < len(idx.spans); i++ {
+		if idx.spans[i-1].start > idx.spans[i].start {
+			t.Fatalf("spans not ordered by start: %+v", idx.spans)
+		}
+	}
+
+	foo, ok := findSpan(idx, "Foo", "function")
+	if !ok {
+		t.Fatalf("Foo function span missing: %+v", idx.spans)
+	}
+	if got := string(src[foo.start : foo.start+len("func Foo")]); got != "func Foo" {
+		t.Fatalf("Foo span should start at the func keyword, got %q", got)
+	}
+
+	m, ok := findSpan(idx, "M", "method")
+	if !ok {
+		t.Fatalf("M method span missing: %+v", idx.spans)
+	}
+	if m.start >= m.end {
+		t.Fatalf("M span has empty interval: %+v", m)
+	}
+
+	state, ok := findSpan(idx, "State", "type")
+	if !ok {
+		t.Fatalf("State type span missing: %+v", idx.spans)
+	}
+	if got := string(src[state.start : state.start+len("State")]); got != "State" {
+		t.Fatalf("State span should start at the type_spec node (State), got %q", got)
+	}
+	if state.docStartByte != -1 {
+		t.Fatalf("expected State to have no doc, got %d", state.docStartByte)
+	}
+}
+
 func TestBuildDefIndexNoQuery(t *testing.T) {
 	src := []byte("x = 1\n")
 	idx, err := buildDefIndex(nil, src, "nonexistent")
