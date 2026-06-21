@@ -418,21 +418,41 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 		chunks = chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize)
 	}
 
-	contextualized := make([]string, len(chunks))
+	isText := o.route(path) != filetype.Code
+	minorSpec := o.minorSpec()
+
+	// Load the committed-generation reuse map keyed on ChunkKey (heading
+	// breadcrumb + raw text). Reuse is valid for code and text alike: the minor
+	// (augmentation) spec never invalidates a vector, so an unchanged chunk keeps
+	// both its embedding and its stored augmentation blurb even when the file
+	// changed elsewhere or the augmentation spec changed.
+	existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
+	if err != nil {
+		return indexResult{}, err
+	}
+
+	// Resolve, per chunk: whether it is a reuse hit, the augmentation blurb, and
+	// the aug_spec that produced that blurb. Reuse hits carry the stored blurb
+	// and spec verbatim; misses default to no blurb under the current spec.
+	reuse := make([]bool, len(chunks))
+	augmentations := make([]string, len(chunks))
+	augSpecs := make([]string, len(chunks))
+	reuseEmb := make([]embed.Embedding, len(chunks))
 	for i, c := range chunks {
-		if c.HeadingContext != "" {
-			contextualized[i] = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", c.HeadingContext, c.Text)
-		} else {
-			contextualized[i] = c.Text
+		augSpecs[i] = minorSpec
+		if rc, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
+			reuse[i] = true
+			augmentations[i] = rc.Augmentation
+			augSpecs[i] = rc.AugSpec
+			reuseEmb[i] = rc.Embedding
 		}
 	}
 
-	// Text/markdown files are LLM-augmented (the contextual-retrieval pattern):
-	// each chunk gets a short blurb situating it within the whole document,
-	// prepended before embedding. Code files keep the deterministic prefix.
-	// Inference failures degrade to the deterministic text with a warning and
-	// never abort the run.
-	if o.Inference != nil && o.route(path) != filetype.Code {
+	// Augment only reuse-miss chunks of text/markdown files (the contextual-
+	// retrieval pattern): each gets a short blurb situating it within the whole
+	// document. Inference failures degrade to the deterministic text with a
+	// warning and never abort the run; reuse hits are never re-augmented.
+	if o.Inference != nil && isText {
 		parallelism := o.MaxParallelism
 		if parallelism < 1 {
 			parallelism = 1
@@ -440,6 +460,9 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 		sem := make(chan struct{}, parallelism)
 		var wg sync.WaitGroup
 		for i, c := range chunks {
+			if reuse[i] {
+				continue
+			}
 			wg.Add(1)
 			sem <- struct{}{}
 			go func(i int, c chunk.ChunkInfo) {
@@ -454,39 +477,75 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 				if blurb == "" || strings.TrimSpace(blurb) == augmentNoneSentinel {
 					return
 				}
-				contextualized[i] = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", blurb, contextualized[i])
+				augmentations[i] = blurb
 			}(i, c)
 		}
 		wg.Wait()
 	}
 
-	// Code files are deterministic: reuse per-chunk vectors keyed on the
-	// heading breadcrumb + raw text so a small edit re-embeds only the affected
-	// chunks. Text files are LLM-augmented from the whole file, so a chunk's
-	// vector can change for an edit anywhere in the file; reuse there is
-	// all-or-nothing per file (handled by the blob-sha + inference-identity
-	// short-circuit in Reindex), so on arrival here we re-embed every chunk.
+	// Build the embedded text for every chunk from its heading breadcrumb and
+	// augmentation blurb. Embed only reuse misses, in a single batched call,
+	// carrying reused vectors over unchanged.
+	contextualized := make([]string, len(chunks))
+	embeddings := make([]embed.Embedding, len(chunks))
+	var toEmbed []string
+	var toEmbedIdx []int
 	var chars int
-	for _, c := range contextualized {
-		chars += len(c)
+	for i, c := range chunks {
+		contextualized[i] = contextualize(c.HeadingContext, augmentations[i], c.Text)
+		if reuse[i] {
+			embeddings[i] = reuseEmb[i]
+			continue
+		}
+		chars += len(contextualized[i])
+		toEmbed = append(toEmbed, contextualized[i])
+		toEmbedIdx = append(toEmbedIdx, i)
 	}
 
-	var embeddings []embed.Embedding
 	embedStart := time.Now()
-	if o.route(path) == filetype.Code {
-		embeddings, err = o.reuseEmbeddings(path, model, chunks, contextualized)
-	} else {
-		embeddings, err = model.EmbedChunks(contextualized)
+	if len(toEmbed) > 0 {
+		fresh, err := model.EmbedChunks(toEmbed)
+		if err != nil {
+			return indexResult{}, err
+		}
+		for j, e := range fresh {
+			embeddings[toEmbedIdx[j]] = e
+		}
 	}
 	embedTime := time.Since(embedStart)
+
+	// Persist incrementally under a fresh generation: each chunk is written in
+	// its own transaction (StartFile/InsertChunk) so a crash keeps every chunk
+	// already embedded and augmented, and FinalizeFile makes the new generation
+	// visible atomically while dropping the superseded one.
+	fileID, newGen, err := o.Store.StartFile(string(path), model.ModelName(), blobSha, minorSpec)
 	if err != nil {
 		return indexResult{}, err
 	}
-
-	if err := o.Store.PutFile(string(path), model.ModelName(), blobSha, o.inferenceName(), chunks, contextualized, embeddings); err != nil {
+	for i, c := range chunks {
+		if err := o.Store.InsertChunk(fileID, newGen, model.ModelName(), c, contextualized[i], augmentations[i], augSpecs[i], embeddings[i]); err != nil {
+			return indexResult{}, err
+		}
+	}
+	if err := o.Store.FinalizeFile(fileID, newGen, model.ModelName()); err != nil {
 		return indexResult{}, err
 	}
 	return indexResult{chunks: len(chunks), chars: chars, embedTime: embedTime}, nil
+}
+
+// contextualize builds the text actually embedded for a chunk: the raw text,
+// wrapped first in its heading-breadcrumb context and then (outermost) in its
+// augmentation blurb, each as a <context>...</context> block. Empty components
+// are omitted so an un-augmented chunk embeds just its heading context + text.
+func contextualize(headingContext, augmentation, text string) string {
+	s := text
+	if headingContext != "" {
+		s = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", headingContext, s)
+	}
+	if augmentation != "" {
+		s = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", augmentation, s)
+	}
+	return s
 }
 
 // augmentNoneSentinel is the exact token the model is told to emit when a chunk
@@ -547,42 +606,6 @@ func stripThinking(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// reuseEmbeddings returns an embedding for every chunk, carrying over vectors
-// for chunks whose deterministic key (heading breadcrumb + raw text) is
-// unchanged and embedding only the rest in a single batched call. This keeps a
-// small edit to a large file from re-embedding every chunk.
-func (o *Options) reuseEmbeddings(path paths.GitRootRelativePath, model embed.EmbeddingModel, chunks []chunk.ChunkInfo, contextualized []string) ([]embed.Embedding, error) {
-	if len(contextualized) == 0 {
-		return nil, nil
-	}
-	existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
-	if err != nil {
-		return nil, err
-	}
-
-	embeddings := make([]embed.Embedding, len(contextualized))
-	var toEmbed []string
-	var toEmbedIdx []int
-	for i, c := range chunks {
-		if e, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
-			embeddings[i] = e.Embedding
-			continue
-		}
-		toEmbed = append(toEmbed, contextualized[i])
-		toEmbedIdx = append(toEmbedIdx, i)
-	}
-
-	if len(toEmbed) > 0 {
-		fresh, err := model.EmbedChunks(toEmbed)
-		if err != nil {
-			return nil, err
-		}
-		for j, e := range fresh {
-			embeddings[toEmbedIdx[j]] = e
-		}
-	}
-	return embeddings, nil
-}
 
 // indexedEntry records which model embedded a path, the stored blob sha, and
 // the inference-model identity used for its (text-file) augmentation.

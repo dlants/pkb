@@ -394,6 +394,7 @@ func ChunkKey(headingContext, text string) string {
 type ReuseChunk struct {
 	Embedding    embed.Embedding
 	Augmentation string
+	AugSpec      string
 }
 
 // ChunkEmbeddings returns a map of ChunkKey -> ReuseChunk for a path/model, so
@@ -406,7 +407,7 @@ type ReuseChunk struct {
 func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]ReuseChunk, error) {
 	vec := vecTableName(modelName, MajorVersion)
 	rows, err := s.db.Query(fmt.Sprintf(
-		`SELECT c.heading_context, c.text, c.augmentation, v.embedding
+		`SELECT c.heading_context, c.text, c.augmentation, c.aug_spec, v.embedding
 		 FROM chunks c
 		 JOIN files f ON f.id = c.file_id
 		 JOIN %s v ON v.chunk_id = c.id
@@ -418,12 +419,12 @@ func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]ReuseChunk, 
 	defer rows.Close()
 	out := map[string]ReuseChunk{}
 	for rows.Next() {
-		var headingContext, text, augmentation string
+		var headingContext, text, augmentation, augSpec string
 		var blob []byte
-		if err := rows.Scan(&headingContext, &text, &augmentation, &blob); err != nil {
+		if err := rows.Scan(&headingContext, &text, &augmentation, &augSpec, &blob); err != nil {
 			return nil, err
 		}
-		out[ChunkKey(headingContext, text)] = ReuseChunk{Embedding: deserializeFloat32(blob), Augmentation: augmentation}
+		out[ChunkKey(headingContext, text)] = ReuseChunk{Embedding: deserializeFloat32(blob), Augmentation: augmentation, AugSpec: augSpec}
 	}
 	return out, rows.Err()
 }
