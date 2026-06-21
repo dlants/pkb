@@ -430,6 +430,49 @@ func TestChunkCodePythonDecoratorIsFiller(t *testing.T) {
 	}
 }
 
+func TestChunkCodeLongLineTrimmedToSingleChunk(t *testing.T) {
+	long := "const x = \"" + strings.Repeat("a", 1000) + "\";"
+	chunks, err := ChunkCode([]byte(long+"\n"), "typescript", "f.ts", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) != 1 {
+		t.Fatalf("expected 1 chunk, got %d: %v", len(chunks), breadcrumbs(chunks))
+	}
+	if len(chunks[0].Text) > 200 {
+		t.Fatalf("chunk not trimmed to budget: len=%d", len(chunks[0].Text))
+	}
+	if chunks[0].HeadingContext != "f.ts" {
+		t.Fatalf("expected bare path breadcrumb, got %q", chunks[0].HeadingContext)
+	}
+	if !strings.HasPrefix(long, chunks[0].Text) {
+		t.Fatalf("trimmed chunk is not a prefix of the line: %q", chunks[0].Text)
+	}
+}
+
+func TestChunkCodeMultipleDefnsInOneLongLine(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 50; i++ {
+		b.WriteString("function f")
+		b.WriteByte(byte('0' + i%10))
+		b.WriteString("(){return 1;}")
+	}
+	src := b.String()
+	chunks, err := ChunkCode([]byte(src+"\n"), "typescript", "g.ts", 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) != 1 {
+		t.Fatalf("expected 1 chunk for many defns on one long line, got %d: %v", len(chunks), breadcrumbs(chunks))
+	}
+	if len(chunks[0].Text) > 200 {
+		t.Fatalf("chunk not trimmed to budget: len=%d", len(chunks[0].Text))
+	}
+	if chunks[0].HeadingContext != "g.ts" {
+		t.Fatalf("expected bare path breadcrumb, got %q", chunks[0].HeadingContext)
+	}
+}
+
 func breadcrumbs(chunks []ChunkInfo) []string {
 	out := make([]string, len(chunks))
 	for i, c := range chunks {

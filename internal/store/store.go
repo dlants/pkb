@@ -18,9 +18,16 @@ import (
 	"github.com/dlants/pkb/internal/embed"
 )
 
-// EmbeddingVersion is the schema/embedding version; bumping it isolates old
-// vectors into separate vec tables.
-const EmbeddingVersion = 3
+// MajorVersion is the embedding compatibility identity ("major version").
+// Together with the embedding model_name (which already encodes model@dims),
+// it forms the major identity that keys each vec table and the files row, and
+// determines when a stored vector is still usable. Bump it whenever anything
+// that changes the meaning of an embedding changes: the chunking algorithm,
+// breadcrumb/heading-context handling, tree-sitter grammars, or the tags.scm /
+// pkb chunking logic. Bumping it isolates old vectors into separate vec tables
+// and forces a full recompute. The augmentation spec (see minorSpec in
+// internal/index) is deliberately NOT part of this identity.
+const MajorVersion = 3
 
 var vecOnce bool
 
@@ -104,7 +111,7 @@ func vecTableName(modelName string, version int) string {
 
 // EnsureVecTable creates the vec0 table for a model if it does not exist.
 func (s *Store) EnsureVecTable(modelName string, dims int) error {
-	name := vecTableName(modelName, EmbeddingVersion)
+	name := vecTableName(modelName, MajorVersion)
 	_, err := s.db.Exec(fmt.Sprintf(
 		`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(chunk_id INTEGER PRIMARY KEY, embedding float[%d] distance_metric=cosine)`,
 		name, dims))
@@ -124,7 +131,7 @@ type FileMeta struct {
 func (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {
 	rows, err := s.db.Query(
 		`SELECT path, blob_sha, inference_model FROM files WHERE model_name = ? AND embedding_version = ?`,
-		modelName, EmbeddingVersion)
+		modelName, MajorVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -157,14 +164,14 @@ func deleteFileTx(tx *sql.Tx, path, modelName string) error {
 	var fileID int64
 	err := tx.QueryRow(
 		`SELECT id FROM files WHERE path = ? AND model_name = ? AND embedding_version = ?`,
-		path, modelName, EmbeddingVersion).Scan(&fileID)
+		path, modelName, MajorVersion).Scan(&fileID)
 	if err == sql.ErrNoRows {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	vec := vecTableName(modelName, EmbeddingVersion)
+	vec := vecTableName(modelName, MajorVersion)
 	if _, err := tx.Exec(fmt.Sprintf(
 		`DELETE FROM %s WHERE chunk_id IN (SELECT id FROM chunks WHERE file_id = ?)`, vec), fileID); err != nil {
 		return err
@@ -191,7 +198,7 @@ func (s *Store) PutFile(path, modelName, blobSha, inferenceModel string, chunks 
 
 	res, err := tx.Exec(
 		`INSERT INTO files (path, model_name, embedding_version, blob_sha, inference_model) VALUES (?, ?, ?, ?, ?)`,
-		path, modelName, EmbeddingVersion, blobSha, inferenceModel)
+		path, modelName, MajorVersion, blobSha, inferenceModel)
 	if err != nil {
 		return err
 	}
@@ -200,7 +207,7 @@ func (s *Store) PutFile(path, modelName, blobSha, inferenceModel string, chunks 
 		return err
 	}
 
-	vec := vecTableName(modelName, EmbeddingVersion)
+	vec := vecTableName(modelName, MajorVersion)
 	for i, c := range chunks {
 		cres, err := tx.Exec(
 			`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col)
@@ -238,14 +245,14 @@ func ChunkKey(headingContext, text string) string {
 // instead of re-embedding them. Duplicate keys collapse harmlessly (identical
 // deterministic input yields an identical embedding).
 func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]embed.Embedding, error) {
-	vec := vecTableName(modelName, EmbeddingVersion)
+	vec := vecTableName(modelName, MajorVersion)
 	rows, err := s.db.Query(fmt.Sprintf(
 		`SELECT c.heading_context, c.text, v.embedding
 		 FROM chunks c
 		 JOIN files f ON f.id = c.file_id
 		 JOIN %s v ON v.chunk_id = c.id
 		 WHERE f.path = ? AND f.model_name = ? AND f.embedding_version = ?`, vec),
-		path, modelName, EmbeddingVersion)
+		path, modelName, MajorVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -271,12 +278,12 @@ func deserializeFloat32(b []byte) embed.Embedding {
 }
 
 // CleanupOrphans drops vec tables and removes files/chunks rows for any model
-// that is not in activeModels (at the current EmbeddingVersion). This is how a
+// that is not in activeModels (at the current MajorVersion). This is how a
 // model-name change reclaims storage instead of silently mixing vectors.
 func (s *Store) CleanupOrphans(activeModels []string) error {
 	keep := map[string]struct{}{}
 	for _, m := range activeModels {
-		keep[vecTableName(m, EmbeddingVersion)] = struct{}{}
+		keep[vecTableName(m, MajorVersion)] = struct{}{}
 	}
 
 	rows, err := s.db.Query(
@@ -360,7 +367,7 @@ type SearchResult struct {
 // Search queries a model's vec table for the topK nearest chunks to the query
 // embedding.
 func (s *Store) Search(modelName string, query embed.Embedding, topK int) ([]SearchResult, error) {
-	vec := vecTableName(modelName, EmbeddingVersion)
+	vec := vecTableName(modelName, MajorVersion)
 	blob, err := sqlite_vec.SerializeFloat32(query)
 	if err != nil {
 		return nil, err
@@ -400,13 +407,13 @@ func (s *Store) Stats(modelName string) (Stats, error) {
 	var st Stats
 	err := s.db.QueryRow(
 		`SELECT COUNT(*) FROM files WHERE model_name = ? AND embedding_version = ?`,
-		modelName, EmbeddingVersion).Scan(&st.Files)
+		modelName, MajorVersion).Scan(&st.Files)
 	if err != nil {
 		return st, err
 	}
 	err = s.db.QueryRow(
 		`SELECT COUNT(*) FROM chunks c JOIN files f ON c.file_id = f.id
 		 WHERE f.model_name = ? AND f.embedding_version = ?`,
-		modelName, EmbeddingVersion).Scan(&st.Chunks)
+		modelName, MajorVersion).Scan(&st.Chunks)
 	return st, err
 }
