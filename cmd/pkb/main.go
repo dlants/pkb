@@ -213,7 +213,7 @@ func runChunk(args []string) error {
 			return err
 		}
 	} else {
-		chunks = chunk.ChunkMarkdown(string(content), *maxSize)
+		chunks = chunk.ChunkMarkdown(string(content), path, *maxSize)
 	}
 
 	kind := route.Type.String()
@@ -221,15 +221,28 @@ func runChunk(args []string) error {
 		kind = route.Grammar
 	}
 	fmt.Printf("%s (%s): %d chunks\n", path, kind, len(chunks))
-	for i, c := range chunks {
-		fmt.Printf("\n--- chunk %d | lines %d-%d | %d chars ---\n", i, c.Start.Line, c.End.Line, len(c.Text))
-		fmt.Printf("breadcrumb: %s\n%s\n", c.HeadingContext, c.Text)
+	for _, c := range chunks {
+		fmt.Printf("\n%s\n\n%s\n", chunkHeading(c.HeadingContext, c.Start.Line), c.Text)
 	}
 	return nil
 }
 
+// chunkHeading renders the shared header used by both search results and the
+// chunk preview. The breadcrumb is prefixed with the file path for both code and
+// markdown; we attach the chunk's starting line to that leading path in
+// editor-friendly file:Ln form, e.g. "## path/to/file.go:L28 > type State" or
+// "## docs/readme.md:L2 > # Title".
+func chunkHeading(breadcrumb string, startLine int) string {
+	file, rest, found := strings.Cut(breadcrumb, " > ")
+	loc := fmt.Sprintf("## %s:L%d", file, startLine)
+	if found {
+		loc += " > " + rest
+	}
+	return loc
+}
+
 // formatResults renders search results as score-ordered markdown sections.
-func formatResults(root paths.AbsPath, results []store.SearchResult) string {
+func formatResults(_ paths.AbsPath, results []store.SearchResult) string {
 	if len(results) == 0 {
 		return "No results found.\n"
 	}
@@ -238,8 +251,7 @@ func formatResults(root paths.AbsPath, results []store.SearchResult) string {
 		if i > 0 {
 			b.WriteString("\n---\n\n")
 		}
-		abs := root.Join(paths.GitRootRelativePath(r.Path))
-		fmt.Fprintf(&b, "## Result %d (score: %.3f)\nFile: %s\n\n%s\n", i+1, r.Score, abs, r.Text)
+		fmt.Fprintf(&b, "%s\n\n%s\n", chunkHeading(r.HeadingContext, r.StartLine), r.Text)
 	}
 	return b.String()
 }

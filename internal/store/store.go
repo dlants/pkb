@@ -349,9 +349,12 @@ func (s *Store) CleanupOrphans(activeModels []string) error {
 
 // SearchResult is one hit from a vector search.
 type SearchResult struct {
-	Path  string
-	Text  string
-	Score float64
+	Path           string
+	Text           string
+	HeadingContext string
+	StartLine      int
+	EndLine        int
+	Score          float64
 }
 
 // Search queries a model's vec table for the topK nearest chunks to the query
@@ -363,7 +366,7 @@ func (s *Store) Search(modelName string, query embed.Embedding, topK int) ([]Sea
 		return nil, err
 	}
 	rows, err := s.db.Query(fmt.Sprintf(
-		`SELECT f.path, c.text, v.distance
+		`SELECT f.path, c.text, c.heading_context, c.start_line, c.end_line, v.distance
 		 FROM %s v
 		 JOIN chunks c ON c.id = v.chunk_id
 		 JOIN files f ON f.id = c.file_id
@@ -377,7 +380,7 @@ func (s *Store) Search(modelName string, query embed.Embedding, topK int) ([]Sea
 	for rows.Next() {
 		var r SearchResult
 		var distance float64
-		if err := rows.Scan(&r.Path, &r.Text, &distance); err != nil {
+		if err := rows.Scan(&r.Path, &r.Text, &r.HeadingContext, &r.StartLine, &r.EndLine, &distance); err != nil {
 			return nil, err
 		}
 		r.Score = 1 - distance

@@ -94,7 +94,7 @@ func TestReindexSearchStats(t *testing.T) {
 	out, err = captureStdout(t, func() error { return runSearch([]string{"authentication"}) })
 	require.NoError(t, err)
 	require.NotEqual(t, "No results found.\n", out)
-	require.Contains(t, out, "Result 1")
+	require.Contains(t, out, ":L")
 
 	out, err = captureStdout(t, func() error { return runStats(nil) })
 	require.NoError(t, err)

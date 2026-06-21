@@ -387,7 +387,7 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 			return indexResult{}, err
 		}
 	} else {
-		chunks = chunk.ChunkMarkdown(string(content), chunk.TargetChunkSize)
+		chunks = chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize)
 	}
 
 	contextualized := make([]string, len(chunks))
