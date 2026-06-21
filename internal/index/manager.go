@@ -102,6 +102,27 @@ func (o *Options) inferenceName() string {
 	return o.Inference.ModelName()
 }
 
+// promptVersion is a hand-maintained version of the augmentation prompt
+// template (see augmentPrompt). Bump it whenever the prompt text changes so the
+// recorded minor spec reflects the augmentation that produced a chunk's blurb.
+// It is part of the minor spec only: changing it never invalidates an existing
+// embedding (augmentation merely contributes extra text to the embedded input).
+const promptVersion = "1"
+
+// minorSpec serializes the augmentation configuration -- whether augmentation
+// was enabled, the inference-model identity, and the prompt version -- into a
+// compact, deterministic string for recording and inspection. It is
+// deliberately excluded from embedding compatibility/reuse decisions: a stored
+// vector remains valid even when the minor spec changes, because augmentation
+// only adds text to the embedded input. When augmentation is disabled the spec
+// is the empty-augmentation form ("off||").
+func (o *Options) minorSpec() string {
+	if o.Inference == nil {
+		return "off||"
+	}
+	return fmt.Sprintf("on|%s|%s", o.Inference.ModelName(), promptVersion)
+}
+
 // route returns the file type for a path, applying any extension overrides.
 func (o *Options) route(path paths.GitRootRelativePath) filetype.FileType {
 	ext := strings.ToLower(filepath.Ext(string(path)))

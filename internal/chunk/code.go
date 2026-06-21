@@ -2,6 +2,7 @@ package chunk
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -53,6 +54,8 @@ func ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([
 		idx:         idx,
 		pathContext: pathContext,
 		winStart:    -1,
+		longLines:   computeLongLines(content, maxChunkSize),
+		emittedLong: map[int]bool{},
 	}
 	sw.sweepChildren(root, int(root.StartByte()))
 	sw.flush()
@@ -85,7 +88,21 @@ type sweeper struct {
 	winStart int
 	winEnd   int
 
+	// longLines are lines whose byte length exceeds the budget. They are never
+	// digested: the first node that falls on one aborts and emits the line
+	// trimmed to budget as a single chunk (tracked in emittedLong so a line
+	// holding several definition spans is emitted exactly once).
+	longLines   []lineSpan
+	emittedLong map[int]bool
+
 	out []ChunkInfo
+}
+
+// lineSpan is a half-open byte range [start, end) covering a single line,
+// excluding its trailing newline.
+type lineSpan struct {
+	start int
+	end   int
 }
 
 // sweepChildren visits the named children of node in source order, attaching a
@@ -147,6 +164,11 @@ func (s *sweeper) sweepChildren(node *tree_sitter.Node, leadStart int) {
 // node's effective left edge: it equals the node's own start byte unless a
 // leading comment run attaches to it, in which case it points at the run start.
 func (s *sweeper) visitNode(node *tree_sitter.Node, attachStart int) {
+	if span, ok := s.longLineAt(int(node.StartByte())); ok {
+		s.emitLongLine(span)
+		return
+	}
+
 	if span, ok := s.spanFor(node); ok {
 		s.enterSpan(span, node, attachStart)
 		return
@@ -325,6 +347,67 @@ func adjacent(source []byte, from, to int) bool {
 		}
 	}
 	return true
+}
+
+// computeLongLines returns the byte ranges of lines whose length exceeds budget.
+func computeLongLines(source []byte, budget int) []lineSpan {
+	var out []lineSpan
+	lineStart := 0
+	for i := 0; i <= len(source); i++ {
+		if i == len(source) || source[i] == '\n' {
+			if i-lineStart > budget {
+				out = append(out, lineSpan{start: lineStart, end: i})
+			}
+			lineStart = i + 1
+		}
+	}
+	return out
+}
+
+// longLineAt returns the over-budget line containing off, if any.
+func (s *sweeper) longLineAt(off int) (lineSpan, bool) {
+	for _, ls := range s.longLines {
+		if ls.start > off {
+			break
+		}
+		if off >= ls.start && off < ls.end {
+			return ls, true
+		}
+	}
+	return lineSpan{}, false
+}
+
+// emitLongLine flushes the pending window and emits the line trimmed to budget
+// as a single chunk, at most once per line. The breadcrumb is the bare path
+// context: a long line is aborted before any definition span is entered, so it
+// never picks up a span breadcrumb.
+func (s *sweeper) emitLongLine(ls lineSpan) {
+	if s.emittedLong[ls.start] {
+		return
+	}
+	s.emittedLong[ls.start] = true
+	s.flush()
+	end := ls.end
+	if end-ls.start > s.budget {
+		end = ls.start + s.budget
+		for end > ls.start && !utf8.RuneStart(s.source[end]) {
+			end--
+		}
+	}
+	text := string(s.source[ls.start:end])
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	bc := s.breadcrumb()
+	if s.breadcrumbFn != nil {
+		bc = s.breadcrumbFn(ls.start, end)
+	}
+	s.out = append(s.out, ChunkInfo{
+		Text:           text,
+		HeadingContext: bc,
+		Start:          posFromByte(s.source, ls.start),
+		End:            posFromByte(s.source, end),
+	})
 }
 
 // lineStartByte returns the byte offset of the beginning of the line containing

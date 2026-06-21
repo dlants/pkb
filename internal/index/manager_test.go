@@ -242,6 +242,17 @@ func (r *recordingModel) inputs() []string {
 	return append([]string(nil), r.embedded...)
 }
 
+func TestMinorSpec(t *testing.T) {
+	disabled := &Options{}
+	require.Equal(t, "off||", disabled.minorSpec())
+
+	enabled := &Options{Inference: infer.NewMockModel("infer-v1")}
+	require.Equal(t, "on|infer-v1|"+promptVersion, enabled.minorSpec())
+
+	other := &Options{Inference: infer.NewMockModel("infer-v2")}
+	require.NotEqual(t, enabled.minorSpec(), other.minorSpec())
+}
+
 // failingInfer always errors, exercising the graceful-degradation path.
 type failingInfer struct{ name string }
 
