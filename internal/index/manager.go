@@ -223,7 +223,7 @@ func Reindex(o *Options) (State, error) {
 			return State{}, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, complete: meta.Complete}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
 		}
 	}
 
@@ -270,13 +270,14 @@ func Reindex(o *Options) (State, error) {
 		prevEntry, wasIndexed := indexed[path]
 		if inTree && o.candidate(path) {
 			model := o.Model
-			// Skip a file only when it was fully indexed (complete=1) by the same
-			// embedding model against the same blob. The minor (augmentation) spec
-			// is deliberately excluded: an augmentation-spec change (inference
-			// model or prompt) never invalidates a vector, so it triggers no
-			// re-embedding or re-augmentation. A complete=0 file is always
-			// reprocessed, and reprocessing is cheap (per-chunk reuse hits).
-			if wasIndexed && prevEntry.complete && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+			// Skip a file only when it was indexed by the same embedding model
+			// against the same blob. Because each file is written in a single
+			// transaction, a recorded file row always reflects a fully indexed
+			// file. The minor (augmentation) spec is deliberately excluded: an
+			// augmentation-spec change (inference model or prompt) never
+			// invalidates a vector, so it triggers no re-embedding or
+			// re-augmentation.
+			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 				continue
 			}
 			// If a different model previously embedded this path (e.g. routing
@@ -375,7 +376,7 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 			return CostEstimate{}, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, complete: meta.Complete}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
 		}
 	}
 
@@ -514,7 +515,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			continue
 		}
 		prevEntry, wasIndexed := indexed[path]
-		if !fromScratch && wasIndexed && prevEntry.complete && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 			continue
 		}
 		content, err := os.ReadFile(o.Repo.Root.Join(path).String())
@@ -688,20 +689,12 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 	}
 	embedTime := time.Since(embedStart)
 
-	// Persist incrementally under a fresh generation: each chunk is written in
-	// its own transaction (StartFile/InsertChunk) so a crash keeps every chunk
-	// already embedded and augmented, and FinalizeFile makes the new generation
-	// visible atomically while dropping the superseded one.
-	fileID, newGen, err := o.Store.StartFile(string(path), model.ModelName(), blobSha, minorSpec)
-	if err != nil {
-		return indexResult{}, err
-	}
-	for i, c := range chunks {
-		if err := o.Store.InsertChunk(fileID, newGen, model.ModelName(), c, contextualized[i], augmentations[i], augSpecs[i], embeddings[i]); err != nil {
-			return indexResult{}, err
-		}
-	}
-	if err := o.Store.FinalizeFile(fileID, newGen, model.ModelName()); err != nil {
+	// Persist the whole file in one transaction: the expensive embedding and
+	// augmentation work above is already done in memory, so this write is quick.
+	// A crash before it commits leaves the previously indexed state intact, and
+	// the file is simply reindexed on the next run (reusing unchanged chunks via
+	// ChunkEmbeddings).
+	if err := o.Store.PutFile(string(path), model.ModelName(), blobSha, minorSpec, chunks, contextualized, augmentations, augSpecs, embeddings); err != nil {
 		return indexResult{}, err
 	}
 	return indexResult{chunks: len(chunks), chars: chars, embedTime: embedTime}, nil
@@ -780,12 +773,10 @@ func stripThinking(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// indexedEntry records which model embedded a path, the stored blob sha, and
-// whether the file was fully indexed (complete) by that model.
+// indexedEntry records which model embedded a path and the stored blob sha.
 type indexedEntry struct {
-	model    string
-	sha      string
-	complete bool
+	model string
+	sha   string
 }
 
 // Search embeds the query with every active model, queries each model's vec

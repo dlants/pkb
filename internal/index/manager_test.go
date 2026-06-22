@@ -257,7 +257,7 @@ func (r *recordingModel) inputs() []string {
 	return append([]string(nil), r.embedded...)
 }
 
-func TestCrashMidFileReusesCommittedGeneration(t *testing.T) {
+func TestCrashMidFileReusesCommittedChunks(t *testing.T) {
 	h := newHarness(t)
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
 	h.commit("init")
@@ -278,8 +278,8 @@ func TestCrashMidFileReusesCommittedGeneration(t *testing.T) {
 	_, err = Reindex(o)
 	require.Error(t, err, "injected failure should abort the run")
 
-	// Retry to completion. The unchanged first chunk is reused from the
-	// committed generation and is never re-embedded; only the changed chunk is
+	// Retry to completion. The unchanged first chunk is reused from the last
+	// committed index and is never re-embedded; only the changed chunk is
 	// embedded on the retry.
 	before := rec.inputs()
 	_, err = Reindex(o)
@@ -287,7 +287,7 @@ func TestCrashMidFileReusesCommittedGeneration(t *testing.T) {
 	retry := rec.inputs()[len(before):]
 	require.Len(t, retry, 1, "retry re-embeds only the changed chunk")
 
-	// The committed index holds exactly one generation of two chunks.
+	// The committed index holds exactly two chunks.
 	stats, err := st.Stats("mock")
 	require.NoError(t, err)
 	require.Equal(t, 1, stats.Files)

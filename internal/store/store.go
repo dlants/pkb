@@ -74,9 +74,6 @@ func (s *Store) init() error {
 			model_name TEXT NOT NULL,
 			embedding_version INTEGER NOT NULL,
 			blob_sha TEXT NOT NULL,
-			inference_model TEXT NOT NULL DEFAULT '',
-			complete INTEGER NOT NULL DEFAULT 1,
-			indexed_gen INTEGER NOT NULL DEFAULT 0,
 			minor_spec TEXT NOT NULL DEFAULT '',
 			UNIQUE(path, model_name, embedding_version)
 		);
@@ -90,7 +87,6 @@ func (s *Store) init() error {
 			start_col INTEGER NOT NULL,
 			end_line INTEGER NOT NULL,
 			end_col INTEGER NOT NULL,
-			gen INTEGER NOT NULL DEFAULT 0,
 			augmentation TEXT NOT NULL DEFAULT '',
 			aug_spec TEXT NOT NULL DEFAULT ''
 		);
@@ -108,15 +104,10 @@ func (s *Store) init() error {
 		}
 		return nil
 	}
-	// Migrate pre-existing databases that lack the newer columns. Defaults are
-	// chosen so existing rows remain valid: gen=0=indexed_gen, complete=1.
+	// Migrate pre-existing databases that lack the newer columns.
 	for _, m := range []struct{ table, def string }{
 		{"chunks", "heading_context TEXT NOT NULL DEFAULT ''"},
-		{"files", "inference_model TEXT NOT NULL DEFAULT ''"},
-		{"files", "complete INTEGER NOT NULL DEFAULT 1"},
-		{"files", "indexed_gen INTEGER NOT NULL DEFAULT 0"},
 		{"files", "minor_spec TEXT NOT NULL DEFAULT ''"},
-		{"chunks", "gen INTEGER NOT NULL DEFAULT 0"},
 		{"chunks", "augmentation TEXT NOT NULL DEFAULT ''"},
 		{"chunks", "aug_spec TEXT NOT NULL DEFAULT ''"},
 	} {
@@ -146,17 +137,15 @@ func (s *Store) EnsureVecTable(modelName string, dims int) error {
 // blob sha and the inference-model identity that produced its augmented
 // embeddings (empty when augmentation was disabled).
 type FileMeta struct {
-	Sha            string
-	InferenceModel string
-	Complete       bool
-	MinorSpec      string
+	Sha       string
+	MinorSpec string
 }
 
 // IndexedFiles returns a map of relative path -> FileMeta for files already
 // indexed by the given model.
 func (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {
 	rows, err := s.db.Query(
-		`SELECT path, blob_sha, inference_model, complete, minor_spec FROM files WHERE model_name = ? AND embedding_version = ?`,
+		`SELECT path, blob_sha, minor_spec FROM files WHERE model_name = ? AND embedding_version = ?`,
 		modelName, MajorVersion)
 	if err != nil {
 		return nil, err
@@ -164,12 +153,11 @@ func (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {
 	defer rows.Close()
 	out := map[string]FileMeta{}
 	for rows.Next() {
-		var path, sha, inferenceModel, minorSpec string
-		var complete int
-		if err := rows.Scan(&path, &sha, &inferenceModel, &complete, &minorSpec); err != nil {
+		var path, sha, minorSpec string
+		if err := rows.Scan(&path, &sha, &minorSpec); err != nil {
 			return nil, err
 		}
-		out[path] = FileMeta{Sha: sha, InferenceModel: inferenceModel, Complete: complete != 0, MinorSpec: minorSpec}
+		out[path] = FileMeta{Sha: sha, MinorSpec: minorSpec}
 	}
 	return out, rows.Err()
 }
@@ -210,9 +198,14 @@ func deleteFileTx(tx *sql.Tx, path, modelName string) error {
 	return err
 }
 
-// PutFile (re)indexes a single file: it deletes any existing rows for the path
-// and inserts the new chunks + embeddings in one transaction.
-func (s *Store) PutFile(path, modelName, blobSha, inferenceModel string, chunks []chunk.ChunkInfo, contextualized []string, embeddings []embed.Embedding) error {
+// PutFile (re)indexes a single file in one transaction: it deletes any existing
+// rows for the path, inserts the file row recording the new blob sha and minor
+// spec, then inserts every chunk (with its augmentation blurb, aug spec, and
+// vector). Because the whole write is a single transaction, a crash leaves the
+// previously committed state intact, so the file is simply reindexed on the
+// next run; expensive embedding/inference work has already been done in memory
+// by the caller before this is invoked.
+func (s *Store) PutFile(path, modelName, blobSha, minorSpec string, chunks []chunk.ChunkInfo, contextualized, augmentations, augSpecs []string, embeddings []embed.Embedding) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -224,8 +217,8 @@ func (s *Store) PutFile(path, modelName, blobSha, inferenceModel string, chunks 
 	}
 
 	res, err := tx.Exec(
-		`INSERT INTO files (path, model_name, embedding_version, blob_sha, inference_model) VALUES (?, ?, ?, ?, ?)`,
-		path, modelName, MajorVersion, blobSha, inferenceModel)
+		`INSERT INTO files (path, model_name, embedding_version, blob_sha, minor_spec) VALUES (?, ?, ?, ?, ?)`,
+		path, modelName, MajorVersion, blobSha, minorSpec)
 	if err != nil {
 		return err
 	}
@@ -237,9 +230,9 @@ func (s *Store) PutFile(path, modelName, blobSha, inferenceModel string, chunks 
 	vec := vecTableName(modelName, MajorVersion)
 	for i, c := range chunks {
 		cres, err := tx.Exec(
-			`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			fileID, c.Text, contextualized[i], c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col)
+			`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col, augmentation, aug_spec)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			fileID, c.Text, contextualized[i], c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col, augmentations[i], augSpecs[i])
 		if err != nil {
 			return err
 		}
@@ -257,127 +250,6 @@ func (s *Store) PutFile(path, modelName, blobSha, inferenceModel string, chunks 
 	}
 
 	return tx.Commit()
-}
-
-// StartFile begins an incremental, generation-guarded (re)index of a file. It
-// ensures the file row exists, records the target blob sha and minor spec,
-// marks the row incomplete, clears any half-written rows left by a prior
-// crashed attempt (any chunk whose gen differs from the committed
-// indexed_gen), and returns the file id plus the new generation
-// (indexed_gen + 1) under which fresh chunks should be written. The committed
-// generation's chunks are left intact so they remain searchable and reusable
-// until FinalizeFile swaps generations.
-func (s *Store) StartFile(path, modelName, blobSha, minorSpec string) (fileID, newGen int64, err error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return 0, 0, err
-	}
-	defer tx.Rollback()
-
-	var indexedGen int64
-	err = tx.QueryRow(
-		`SELECT id, indexed_gen FROM files WHERE path = ? AND model_name = ? AND embedding_version = ?`,
-		path, modelName, MajorVersion).Scan(&fileID, &indexedGen)
-	switch {
-	case err == sql.ErrNoRows:
-		res, ierr := tx.Exec(
-			`INSERT INTO files (path, model_name, embedding_version, blob_sha, inference_model, complete, indexed_gen, minor_spec)
-			 VALUES (?, ?, ?, ?, '', 0, 0, ?)`,
-			path, modelName, MajorVersion, blobSha, minorSpec)
-		if ierr != nil {
-			return 0, 0, ierr
-		}
-		if fileID, ierr = res.LastInsertId(); ierr != nil {
-			return 0, 0, ierr
-		}
-		indexedGen = 0
-	case err != nil:
-		return 0, 0, err
-	default:
-		if _, uerr := tx.Exec(
-			`UPDATE files SET blob_sha = ?, minor_spec = ?, complete = 0 WHERE id = ?`,
-			blobSha, minorSpec, fileID); uerr != nil {
-			return 0, 0, uerr
-		}
-	}
-
-	if err = deleteChunksOtherGenTx(tx, modelName, fileID, indexedGen); err != nil {
-		return 0, 0, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return 0, 0, err
-	}
-	return fileID, indexedGen + 1, nil
-}
-
-// InsertChunk persists a single chunk (and its vector) under the given
-// generation in its own transaction, so progress survives a crash. The
-// augmentation blurb and the minor spec that produced it are stored on the row
-// for inspection.
-func (s *Store) InsertChunk(fileID, gen int64, modelName string, c chunk.ChunkInfo, contextualized, augmentation, augSpec string, embedding embed.Embedding) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	cres, err := tx.Exec(
-		`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col, gen, augmentation, aug_spec)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		fileID, c.Text, contextualized, c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col, gen, augmentation, augSpec)
-	if err != nil {
-		return err
-	}
-	chunkID, err := cres.LastInsertId()
-	if err != nil {
-		return err
-	}
-	blob, err := sqlite_vec.SerializeFloat32(embedding)
-	if err != nil {
-		return err
-	}
-	vec := vecTableName(modelName, MajorVersion)
-	if _, err := tx.Exec(fmt.Sprintf(`INSERT INTO %s (chunk_id, embedding) VALUES (?, ?)`, vec), chunkID, blob); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// FinalizeFile commits a generation swap: it advances indexed_gen to newGen,
-// marks the file complete, and drops every chunk (and vector) of any other
-// generation. Only after this does the new generation become visible to Search
-// and ChunkEmbeddings; the old generation's free pages are reclaimed by the
-// end-of-run Vacuum.
-func (s *Store) FinalizeFile(fileID, newGen int64, modelName string) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec(
-		`UPDATE files SET indexed_gen = ?, complete = 1 WHERE id = ?`, newGen, fileID); err != nil {
-		return err
-	}
-	if err := deleteChunksOtherGenTx(tx, modelName, fileID, newGen); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// deleteChunksOtherGenTx removes every chunk (and its vec row) of a file whose
-// gen differs from keepGen. StartFile uses it to discard a crashed attempt's
-// half-written rows; FinalizeFile uses it to drop the superseded generation.
-func deleteChunksOtherGenTx(tx *sql.Tx, modelName string, fileID, keepGen int64) error {
-	vec := vecTableName(modelName, MajorVersion)
-	if _, err := tx.Exec(fmt.Sprintf(
-		`DELETE FROM %s WHERE chunk_id IN (SELECT id FROM chunks WHERE file_id = ? AND gen <> ?)`, vec),
-		fileID, keepGen); err != nil {
-		return err
-	}
-	_, err := tx.Exec(`DELETE FROM chunks WHERE file_id = ? AND gen <> ?`, fileID, keepGen)
-	return err
 }
 
 // ChunkKey is the reuse key for a chunk: the deterministic inputs to its
@@ -399,11 +271,9 @@ type ReuseChunk struct {
 
 // ChunkEmbeddings returns a map of ChunkKey -> ReuseChunk for a path/model, so
 // an incremental reindex can reuse vectors (and their stored augmentation
-// blurbs) for unchanged chunks instead of re-embedding/re-augmenting them. Only
-// rows of the file's committed generation (c.gen = f.indexed_gen) are returned,
-// so a partially written new generation is never reused. Duplicate keys
-// collapse harmlessly (identical deterministic input yields an identical
-// embedding).
+// blurbs) for unchanged chunks instead of re-embedding/re-augmenting them.
+// Duplicate keys collapse harmlessly (identical deterministic input yields an
+// identical embedding).
 func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]ReuseChunk, error) {
 	vec := vecTableName(modelName, MajorVersion)
 	rows, err := s.db.Query(fmt.Sprintf(
@@ -411,7 +281,7 @@ func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]ReuseChunk, 
 		 FROM chunks c
 		 JOIN files f ON f.id = c.file_id
 		 JOIN %s v ON v.chunk_id = c.id
-		 WHERE f.path = ? AND f.model_name = ? AND f.embedding_version = ? AND c.gen = f.indexed_gen`, vec),
+		 WHERE f.path = ? AND f.model_name = ? AND f.embedding_version = ?`, vec),
 		path, modelName, MajorVersion)
 	if err != nil {
 		return nil, err
@@ -537,7 +407,7 @@ func (s *Store) Search(modelName string, query embed.Embedding, topK int) ([]Sea
 		 FROM %s v
 		 JOIN chunks c ON c.id = v.chunk_id
 		 JOIN files f ON f.id = c.file_id
-		 WHERE v.embedding MATCH ? AND v.k = ? AND c.gen = f.indexed_gen
+		 WHERE v.embedding MATCH ? AND v.k = ?
 		 ORDER BY v.distance`, vec), blob, topK)
 	if err != nil {
 		return nil, err
@@ -573,7 +443,7 @@ func (s *Store) Stats(modelName string) (Stats, error) {
 	}
 	err = s.db.QueryRow(
 		`SELECT COUNT(*) FROM chunks c JOIN files f ON c.file_id = f.id
-		 WHERE f.model_name = ? AND f.embedding_version = ? AND c.gen = f.indexed_gen`,
+		 WHERE f.model_name = ? AND f.embedding_version = ?`,
 		modelName, MajorVersion).Scan(&st.Chunks)
 	return st, err
 }

@@ -14,13 +14,13 @@ PKB uses a pluggable **embedding** model (all files) and an optional **inference
 
 The index is a single SQLite file (`pkb.db`) with the `sqlite-vec` extension statically linked. Two app tables plus one `vec0` virtual table per embedding model:
 
-- **`files`** — `id`, `path`, `model_name`, `embedding_version` (the global `MajorVersion`), `blob_sha`, `inference_model`, `complete`, `indexed_gen`, `minor_spec`; `UNIQUE(path, model_name, embedding_version)`.
-- **`chunks`** — `id`, `file_id` (FK → `files`, cascade delete), `text`, `contextualized_text`, `heading_context`, `start_line`, `start_col`, `end_line`, `end_col`, `gen`, `augmentation`, `aug_spec`.
+- **`files`** — `id`, `path`, `model_name`, `embedding_version` (the global `MajorVersion`), `blob_sha`, `minor_spec`; `UNIQUE(path, model_name, embedding_version)`.
+- **`chunks`** — `id`, `file_id` (FK → `files`, cascade delete), `text`, `contextualized_text`, `heading_context`, `start_line`, `start_col`, `end_line`, `end_col`, `augmentation`, `aug_spec`.
 - **`vec_<model>_v<major>`** — `vec0` virtual table, `chunk_id INTEGER PRIMARY KEY` → `embedding float[dims] distance_metric=cosine` (e.g. `vec_voyage_code_3_256_v3`). sqlite-vec also creates its own shadow tables (`*_chunks`, `*_rowids`, `*_info`, `*_vector_chunks00`).
 
 **Major vs minor versioning.** The vec table is keyed by `model_name` + `MajorVersion`, so bumping the major version (chunking algorithm, breadcrumbs, tree-sitter/scm, embedding model, or dimensions) re-keys the index and forces a full re-embed. `minor_spec`/`aug_spec` (augmentation on/off, inference model, prompt version) are recorded but **never** invalidate a vector.
 
-**Generations (crash-safe incremental reindex).** Each file is reindexed under a fresh generation (`indexed_gen + 1`): `StartFile` discards half-written chunks from a crashed attempt and leaves the committed generation searchable; new chunks are written one transaction at a time under the new `gen`; `FinalizeFile` atomically advances `indexed_gen` and drops the superseded generation's rows. `Search` and `ChunkEmbeddings` only read rows where `c.gen = f.indexed_gen`, so a partial generation is invisible and per-chunk reuse (keyed by `ChunkKey(heading_context, text)`) lets unchanged chunks skip both the embedding and inference calls.
+**Per-file crash safety.** A full reindex is "wipe `pkb.db`, then run reindex." Each file is (re)indexed by `PutFile` in a single transaction: it deletes the path's old rows, inserts the file row recording the new `blob_sha` + `minor_spec`, and inserts every chunk + vector. The expensive embedding/inference work happens in memory first, so the write is quick; a crash before commit leaves the previously committed file rows intact. On resume, a file whose recorded `blob_sha` already matches the tree (same embedding model) is skipped, so completed files are not redone — recovery is at file granularity (an interrupted file is simply reindexed). Per-chunk reuse (keyed by `ChunkKey(heading_context, text)` via `ChunkEmbeddings`, read before the rewrite) lets unchanged chunks of a changed file skip both the embedding and inference calls.
 
 ## Commands
 
