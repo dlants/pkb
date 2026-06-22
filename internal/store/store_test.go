@@ -41,34 +41,32 @@ func emb(t *testing.T, m *embed.MockModel, text string) embed.Embedding {
 	return e
 }
 
-// writeGen writes a full generation for a path: start, insert each chunk,
-// finalize. Returns the new generation.
-func writeGen(t *testing.T, s *Store, m *embed.MockModel, path, blobSha, minorSpec string, chunks []chunk.ChunkInfo, augs []string) int64 {
+// putFile (re)indexes a path via PutFile, deriving the contextualized text,
+// aug specs, and embeddings from the supplied chunks/blurbs.
+func putFile(t *testing.T, s *Store, m *embed.MockModel, path, blobSha, minorSpec string, chunks []chunk.ChunkInfo, augs []string) {
 	t.Helper()
-	fileID, gen, err := s.StartFile(path, m.ModelName(), blobSha, minorSpec)
-	if err != nil {
-		t.Fatalf("StartFile: %v", err)
-	}
+	contextualized := make([]string, len(chunks))
+	augSpecs := make([]string, len(chunks))
+	embeddings := make([]embed.Embedding, len(chunks))
 	for i, c := range chunks {
-		if err := s.InsertChunk(fileID, gen, m.ModelName(), c, c.Text, augs[i], minorSpec, emb(t, m, c.Text)); err != nil {
-			t.Fatalf("InsertChunk: %v", err)
-		}
+		contextualized[i] = c.Text
+		augSpecs[i] = minorSpec
+		embeddings[i] = emb(t, m, c.Text)
 	}
-	if err := s.FinalizeFile(fileID, gen, m.ModelName()); err != nil {
-		t.Fatalf("FinalizeFile: %v", err)
+	if err := s.PutFile(path, m.ModelName(), blobSha, minorSpec, chunks, contextualized, augs, augSpecs, embeddings); err != nil {
+		t.Fatalf("PutFile: %v", err)
 	}
-	return gen
 }
 
-func TestGenerationLifecycle(t *testing.T) {
+func TestPutFileLifecycle(t *testing.T) {
 	s, m := openTestStore(t)
 	path := "doc.md"
 
 	c1 := mkChunk("alpha chunk")
 	c2 := mkChunk("beta chunk")
-	writeGen(t, s, m, path, "sha1", "on|x|1", []chunk.ChunkInfo{c1, c2}, []string{"blurbA", "blurbB"})
+	putFile(t, s, m, path, "sha1", "on|x|1", []chunk.ChunkInfo{c1, c2}, []string{"blurbA", "blurbB"})
 
-	// Finalized file is searchable.
+	// Indexed file is searchable.
 	res, err := s.Search(m.ModelName(), emb(t, m, "alpha chunk"), 5)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
@@ -80,7 +78,6 @@ func TestGenerationLifecycle(t *testing.T) {
 		t.Fatalf("expected alpha chunk top hit, got %q", res[0].Text)
 	}
 
-	// Stats counts the committed generation.
 	st, err := s.Stats(m.ModelName())
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
@@ -106,113 +103,27 @@ func TestGenerationLifecycle(t *testing.T) {
 	}
 }
 
-func TestPartialGenerationInvisible(t *testing.T) {
+func TestPutFileReplacesOldChunks(t *testing.T) {
 	s, m := openTestStore(t)
 	path := "doc.md"
 
-	old := mkChunk("old chunk")
-	writeGen(t, s, m, path, "sha1", "on|x|1", []chunk.ChunkInfo{old}, []string{"oldBlurb"})
+	putFile(t, s, m, path, "sha1", "off||", []chunk.ChunkInfo{mkChunk("old chunk")}, []string{""})
+	// Reindex the same path with new content: old chunks must be replaced.
+	putFile(t, s, m, path, "sha2", "off||", []chunk.ChunkInfo{mkChunk("new chunk")}, []string{""})
 
-	// Start a new generation and write part of it, but do not finalize.
-	fileID, gen, err := s.StartFile(path, m.ModelName(), "sha2", "on|x|1")
+	st, err := s.Stats(m.ModelName())
 	if err != nil {
-		t.Fatalf("StartFile: %v", err)
+		t.Fatalf("Stats: %v", err)
 	}
-	newChunk := mkChunk("new chunk")
-	if err := s.InsertChunk(fileID, gen, m.ModelName(), newChunk, newChunk.Text, "newBlurb", "on|x|1", emb(t, m, newChunk.Text)); err != nil {
-		t.Fatalf("InsertChunk: %v", err)
+	if st.Files != 1 || st.Chunks != 1 {
+		t.Fatalf("expected 1 file / 1 chunk after replace, got %d / %d", st.Files, st.Chunks)
 	}
-
-	// Search still returns only the committed generation.
 	res, err := s.Search(m.ModelName(), emb(t, m, "new chunk"), 5)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	for _, r := range res {
-		if r.Text == "new chunk" {
-			t.Fatalf("uncommitted generation should be invisible to Search")
-		}
-	}
-
-	// Reuse map only sees the committed generation too.
-	reuse, err := s.ChunkEmbeddings(path, m.ModelName())
-	if err != nil {
-		t.Fatalf("ChunkEmbeddings: %v", err)
-	}
-	if _, ok := reuse[ChunkKey("", "new chunk")]; ok {
-		t.Fatalf("uncommitted chunk should not be reusable")
-	}
-	if _, ok := reuse[ChunkKey("", "old chunk")]; !ok {
-		t.Fatalf("committed chunk should still be reusable")
-	}
-
-	// Finalize: new generation visible, old generation dropped.
-	if err := s.FinalizeFile(fileID, gen, m.ModelName()); err != nil {
-		t.Fatalf("FinalizeFile: %v", err)
-	}
-	st, err := s.Stats(m.ModelName())
-	if err != nil {
-		t.Fatalf("Stats: %v", err)
-	}
-	if st.Chunks != 1 {
-		t.Fatalf("expected 1 chunk after finalize, got %d", st.Chunks)
-	}
-	res, err = s.Search(m.ModelName(), emb(t, m, "new chunk"), 5)
-	if err != nil {
-		t.Fatalf("Search: %v", err)
-	}
 	if len(res) != 1 || res[0].Text != "new chunk" {
-		t.Fatalf("expected only new chunk after finalize, got %v", res)
-	}
-}
-
-func TestStartFileClearsCrashedAttempt(t *testing.T) {
-	s, m := openTestStore(t)
-	path := "doc.md"
-
-	good := mkChunk("good chunk")
-	writeGen(t, s, m, path, "sha1", "off||", []chunk.ChunkInfo{good}, []string{""})
-
-	// Simulate a crashed attempt: start gen, write a chunk, never finalize.
-	fileID, gen, err := s.StartFile(path, m.ModelName(), "sha2", "off||")
-	if err != nil {
-		t.Fatalf("StartFile: %v", err)
-	}
-	half := mkChunk("half chunk")
-	if err := s.InsertChunk(fileID, gen, m.ModelName(), half, half.Text, "", "off||", emb(t, m, half.Text)); err != nil {
-		t.Fatalf("InsertChunk: %v", err)
-	}
-
-	// Retry: StartFile must clear the half-written gen and the old committed
-	// generation stays intact.
-	fileID2, gen2, err := s.StartFile(path, m.ModelName(), "sha2", "off||")
-	if err != nil {
-		t.Fatalf("StartFile retry: %v", err)
-	}
-	if fileID2 != fileID {
-		t.Fatalf("expected same file id, got %d vs %d", fileID2, fileID)
-	}
-	retry := mkChunk("retry chunk")
-	if err := s.InsertChunk(fileID2, gen2, m.ModelName(), retry, retry.Text, "", "off||", emb(t, m, retry.Text)); err != nil {
-		t.Fatalf("InsertChunk retry: %v", err)
-	}
-	if err := s.FinalizeFile(fileID2, gen2, m.ModelName()); err != nil {
-		t.Fatalf("FinalizeFile: %v", err)
-	}
-
-	st, err := s.Stats(m.ModelName())
-	if err != nil {
-		t.Fatalf("Stats: %v", err)
-	}
-	if st.Chunks != 1 {
-		t.Fatalf("expected exactly 1 chunk, got %d (stale gen not cleared?)", st.Chunks)
-	}
-	res, err := s.Search(m.ModelName(), emb(t, m, "retry chunk"), 5)
-	if err != nil {
-		t.Fatalf("Search: %v", err)
-	}
-	if len(res) != 1 || res[0].Text != "retry chunk" {
-		t.Fatalf("expected only retry chunk, got %v", res)
+		t.Fatalf("expected only new chunk, got %v", res)
 	}
 }
 
@@ -220,7 +131,7 @@ func TestMigrationFromOldSchema(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "old.db")
 
-	// Build a database with the pre-generations schema and an existing row.
+	// Build a database with the pre-augmentation schema and an existing row.
 	raw, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
@@ -269,14 +180,11 @@ func TestMigrationFromOldSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected migrated legacy file")
 	}
-	if !meta.Complete {
-		t.Fatalf("expected legacy file to default to complete=true")
-	}
 	if meta.Sha != "oldsha" {
 		t.Fatalf("expected preserved sha, got %q", meta.Sha)
 	}
 
-	// Existing chunk (gen=0=indexed_gen) remains visible via Stats.
+	// Existing chunk remains visible via Stats.
 	st, err := s.Stats("mock@8")
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
@@ -286,10 +194,10 @@ func TestMigrationFromOldSchema(t *testing.T) {
 	}
 }
 
-func TestIndexedFilesExposesCompleteAndMinorSpec(t *testing.T) {
+func TestIndexedFilesExposesMinorSpec(t *testing.T) {
 	s, m := openTestStore(t)
 	path := "doc.md"
-	writeGen(t, s, m, path, "sha1", "on|model@1|1", []chunk.ChunkInfo{mkChunk("x")}, []string{""})
+	putFile(t, s, m, path, "sha1", "on|model@1|1", []chunk.ChunkInfo{mkChunk("x")}, []string{""})
 
 	files, err := s.IndexedFiles(m.ModelName())
 	if err != nil {
@@ -299,22 +207,7 @@ func TestIndexedFilesExposesCompleteAndMinorSpec(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected file %q", path)
 	}
-	if !meta.Complete {
-		t.Fatalf("expected complete=true after finalize")
-	}
 	if meta.MinorSpec != "on|model@1|1" {
 		t.Fatalf("expected minor spec recorded, got %q", meta.MinorSpec)
-	}
-
-	// An unfinalized start marks the file incomplete.
-	if _, _, err := s.StartFile(path, m.ModelName(), "sha2", "off||"); err != nil {
-		t.Fatalf("StartFile: %v", err)
-	}
-	files, err = s.IndexedFiles(m.ModelName())
-	if err != nil {
-		t.Fatalf("IndexedFiles: %v", err)
-	}
-	if files[path].Complete {
-		t.Fatalf("expected complete=false during an in-progress generation")
 	}
 }
