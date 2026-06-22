@@ -263,8 +263,78 @@ func Reindex(o *Options) (State, error) {
 		charsEmbedded int
 		embedTime     time.Duration
 		indexStart    = time.Now()
+		lastProgress  = time.Now()
 	)
-	const charsPerToken = 3 // rough approximation for tok/s reporting
+	const (
+		charsPerToken    = 3 // rough approximation for tok/s reporting
+		verboseFileLimit = 50
+		progressInterval = time.Minute
+	)
+	// maxBatchChars bounds a single embedding request. Voyage caps a request at
+	// 120000 tokens across the whole batch; at ~3 chars/token that is ~360000
+	// chars, so we keep a margin. Chunks are aggregated across files into one
+	// batch (the single level of batching); a file is written only once all of
+	// its chunks have been embedded.
+	const maxBatchChars = 250000
+	var (
+		pending    []*preparedFile
+		batchTexts []string
+		batchRefs  []embedRef
+		batchChars int
+	)
+	report := func(pf *preparedFile) {
+		filesIndexed++
+		chunksIndexed += len(pf.chunks)
+		charsEmbedded += pf.chars
+		elapsed := time.Since(indexStart).Seconds()
+		embedTokPerSec := 0.0
+		if s := embedTime.Seconds(); s > 0 {
+			embedTokPerSec = float64(charsEmbedded) / charsPerToken / s
+		}
+		if filesIndexed <= verboseFileLimit {
+			fmt.Fprintf(os.Stderr, "indexed %s (%d chunks) | %d files, %d chunks, %.1f chunks/sec, embed ~%.0f tok/sec\n",
+				pf.path, len(pf.chunks), filesIndexed, chunksIndexed, float64(chunksIndexed)/elapsed, embedTokPerSec)
+			if filesIndexed == verboseFileLimit {
+				fmt.Fprintf(os.Stderr, "... suppressing per-file output; reporting high-level progress every %s\n", progressInterval)
+			}
+		} else if time.Since(lastProgress) >= progressInterval {
+			lastProgress = time.Now()
+			fmt.Fprintf(os.Stderr, "progress: %d/%d files indexed, %d chunks, %.1f chunks/sec, embed ~%.0f tok/sec\n",
+				filesIndexed, est.files, chunksIndexed, float64(chunksIndexed)/elapsed, embedTokPerSec)
+		}
+	}
+	flush := func() error {
+		if len(batchTexts) == 0 {
+			return nil
+		}
+		embedStart := time.Now()
+		fresh, err := o.Model.EmbedChunks(batchTexts)
+		if err != nil {
+			return err
+		}
+		embedTime += time.Since(embedStart)
+		for j, ref := range batchRefs {
+			ref.pf.embeddings[ref.idx] = fresh[j]
+			ref.pf.remaining--
+		}
+		batchTexts = nil
+		batchRefs = nil
+		batchChars = 0
+		// Write every file whose chunks are now all embedded, in original order.
+		kept := pending[:0]
+		for _, pf := range pending {
+			if pf.remaining > 0 {
+				kept = append(kept, pf)
+				continue
+			}
+			if err := o.writeFile(pf, o.Model); err != nil {
+				return err
+			}
+			report(pf)
+		}
+		pending = kept
+		return nil
+	}
 	for path := range touched {
 		blobSha, inTree := treeMap[path]
 		prevEntry, wasIndexed := indexed[path]
@@ -287,21 +357,29 @@ func Reindex(o *Options) (State, error) {
 					return State{}, err
 				}
 			}
-			res, err := o.indexFile(path, blobSha, model)
+			pf, err := o.prepareFile(path, blobSha, model)
 			if err != nil {
 				return State{}, err
 			}
-			filesIndexed++
-			chunksIndexed += res.chunks
-			charsEmbedded += res.chars
-			embedTime += res.embedTime
-			elapsed := time.Since(indexStart).Seconds()
-			embedTokPerSec := 0.0
-			if s := embedTime.Seconds(); s > 0 {
-				embedTokPerSec = float64(charsEmbedded) / charsPerToken / s
+			if len(pf.embedIdx) == 0 {
+				// Fully reused: nothing to embed, write immediately.
+				if err := o.writeFile(pf, model); err != nil {
+					return State{}, err
+				}
+				report(pf)
+				continue
 			}
-			fmt.Fprintf(os.Stderr, "indexed %s (%d chunks) | %d files, %d chunks, %.1f chunks/sec, embed ~%.0f tok/sec\n",
-				path, res.chunks, filesIndexed, chunksIndexed, float64(chunksIndexed)/elapsed, embedTokPerSec)
+			pending = append(pending, pf)
+			for _, idx := range pf.embedIdx {
+				batchTexts = append(batchTexts, pf.contextualized[idx])
+				batchRefs = append(batchRefs, embedRef{pf: pf, idx: idx})
+				batchChars += len(pf.contextualized[idx])
+				if batchChars >= maxBatchChars {
+					if err := flush(); err != nil {
+						return State{}, err
+					}
+				}
+			}
 		} else {
 			if wasIndexed {
 				if err := o.Store.DeleteFile(string(path), prevEntry.model); err != nil {
@@ -309,6 +387,9 @@ func Reindex(o *Options) (State, error) {
 				}
 			}
 		}
+	}
+	if err := flush(); err != nil {
+		return State{}, err
 	}
 
 	var stats store.Stats
@@ -543,7 +624,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 				continue
 			}
 			est.chunks++
-			est.embedTokens += len(contextualize(c.HeadingContext, "", c.Text)) / cost.CharsPerToken
+			est.embedTokens += len(contextualize(filetype.LineComment(string(path)), c.HeadingContext, "", c.Text)) / cost.CharsPerToken
 			if o.Inference != nil && isText {
 				est.inferInputTokens += (len(content) + len(c.HeadingContext) + len(c.Text)) / cost.CharsPerToken
 				est.inferOutputTokens += cost.AugmentMaxTokens
@@ -559,13 +640,30 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 	return est, nil
 }
 
-// indexResult reports per-file work for progress logging: the number of chunks
-// embedded, the total characters embedded (a proxy for tokens), and the wall
-// time spent in the embedding call itself (excluding inference augmentation).
-type indexResult struct {
-	chunks    int
-	chars     int
-	embedTime time.Duration
+// preparedFile holds everything needed to persist one file except the freshly
+// computed embeddings: chunking, reuse resolution and augmentation are all done
+// up front, and embedIdx lists the chunk indices still awaiting embedding.
+// remaining counts how many of those are not yet filled in (decremented as
+// batches flush); the file is written only when it reaches zero.
+type preparedFile struct {
+	path           paths.GitRootRelativePath
+	blobSha        string
+	minorSpec      string
+	chunks         []chunk.ChunkInfo
+	contextualized []string
+	augmentations  []string
+	augSpecs       []string
+	embeddings     []embed.Embedding
+	embedIdx       []int
+	remaining      int
+	chars          int
+}
+
+// embedRef points a slot in a cross-file embedding batch back to the chunk it
+// belongs to so freshly returned vectors can be scattered into place.
+type embedRef struct {
+	pf  *preparedFile
+	idx int
 }
 
 // chunkFile chunks a file's content along the appropriate boundaries: code
@@ -583,17 +681,23 @@ func (o *Options) chunkFile(path paths.GitRootRelativePath, content []byte) ([]c
 	return chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize), nil
 }
 
-func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) (indexResult, error) {
+// prepareFile does all per-file work except the embedding call and the database
+// write: it chunks the file, resolves reuse, augments reuse-miss text chunks,
+// and builds the contextualized text for every chunk. The returned preparedFile
+// carries reused vectors already in place and embedIdx listing the chunks that
+// still need embedding (in a cross-file batch).
+func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) (*preparedFile, error) {
 	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 	if err != nil {
-		return indexResult{}, err
+		return nil, err
 	}
 	chunks, err := o.chunkFile(path, content)
 	if err != nil {
-		return indexResult{}, err
+		return nil, err
 	}
 
 	isText := o.route(path) != filetype.Code
+	comment := filetype.LineComment(string(path))
 	minorSpec := o.minorSpec()
 
 	// Load the committed-generation reuse map keyed on ChunkKey (heading
@@ -603,7 +707,7 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 	// changed elsewhere or the augmentation spec changed.
 	existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
 	if err != nil {
-		return indexResult{}, err
+		return nil, err
 	}
 
 	// Resolve, per chunk: whether it is a reuse hit, the augmentation blurb, and
@@ -659,60 +763,77 @@ func (o *Options) indexFile(path paths.GitRootRelativePath, blobSha string, mode
 	}
 
 	// Build the embedded text for every chunk from its heading breadcrumb and
-	// augmentation blurb. Embed only reuse misses, in a single batched call,
-	// carrying reused vectors over unchanged.
+	// augmentation blurb. Reused vectors are carried over in place; reuse misses
+	// are recorded in embedIdx to be embedded later in a cross-file batch.
 	contextualized := make([]string, len(chunks))
 	embeddings := make([]embed.Embedding, len(chunks))
-	var toEmbed []string
-	var toEmbedIdx []int
+	var embedIdx []int
 	var chars int
 	for i, c := range chunks {
-		contextualized[i] = contextualize(c.HeadingContext, augmentations[i], c.Text)
+		contextualized[i] = contextualize(comment, c.HeadingContext, augmentations[i], c.Text)
 		if reuse[i] {
 			embeddings[i] = reuseEmb[i]
 			continue
 		}
 		chars += len(contextualized[i])
-		toEmbed = append(toEmbed, contextualized[i])
-		toEmbedIdx = append(toEmbedIdx, i)
+		embedIdx = append(embedIdx, i)
 	}
 
-	embedStart := time.Now()
-	if len(toEmbed) > 0 {
-		fresh, err := model.EmbedChunks(toEmbed)
-		if err != nil {
-			return indexResult{}, err
-		}
-		for j, e := range fresh {
-			embeddings[toEmbedIdx[j]] = e
-		}
-	}
-	embedTime := time.Since(embedStart)
-
-	// Persist the whole file in one transaction: the expensive embedding and
-	// augmentation work above is already done in memory, so this write is quick.
-	// A crash before it commits leaves the previously indexed state intact, and
-	// the file is simply reindexed on the next run (reusing unchanged chunks via
-	// ChunkEmbeddings).
-	if err := o.Store.PutFile(string(path), model.ModelName(), blobSha, minorSpec, chunks, contextualized, augmentations, augSpecs, embeddings); err != nil {
-		return indexResult{}, err
-	}
-	return indexResult{chunks: len(chunks), chars: chars, embedTime: embedTime}, nil
+	return &preparedFile{
+		path:           path,
+		blobSha:        blobSha,
+		minorSpec:      minorSpec,
+		chunks:         chunks,
+		contextualized: contextualized,
+		augmentations:  augmentations,
+		augSpecs:       augSpecs,
+		embeddings:     embeddings,
+		embedIdx:       embedIdx,
+		remaining:      len(embedIdx),
+		chars:          chars,
+	}, nil
 }
 
-// contextualize builds the text actually embedded for a chunk: the raw text,
-// wrapped first in its heading-breadcrumb context and then (outermost) in its
-// augmentation blurb, each as a <context>...</context> block. Empty components
-// are omitted so an un-augmented chunk embeds just its heading context + text.
-func contextualize(headingContext, augmentation, text string) string {
+// writeFile persists a fully embedded file in a single transaction. The
+// expensive embedding and augmentation work is already done, so the write is
+// quick. A crash before it commits leaves the previously indexed state intact,
+// and the file is simply reindexed on the next run (reusing unchanged chunks via
+// ChunkEmbeddings).
+func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error {
+	return o.Store.PutFile(string(pf.path), model.ModelName(), pf.blobSha, pf.minorSpec, pf.chunks, pf.contextualized, pf.augmentations, pf.augSpecs, pf.embeddings)
+}
+
+// contextualize builds the text actually embedded for a chunk: the raw chunk
+// text prefixed by its heading breadcrumb and (outermost) its augmentation
+// blurb. When the file has a known line-comment prefix the metadata is rendered
+// as zero-indented comments in the file's own language, which keeps the embedded
+// text in distribution for code embedding models; the chunk text itself is left
+// untouched so its original indentation is preserved. Files without a comment
+// prefix (markdown/plaintext) fall back to <context>...</context> blocks. Empty
+// components are omitted.
+func contextualize(comment, headingContext, augmentation, text string) string {
 	s := text
 	if headingContext != "" {
-		s = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", headingContext, s)
+		s = metaBlock(comment, headingContext) + "\n\n" + s
 	}
 	if augmentation != "" {
-		s = fmt.Sprintf("<context>\n%s\n</context>\n\n%s", augmentation, s)
+		s = metaBlock(comment, augmentation) + "\n\n" + s
 	}
 	return s
+}
+
+// metaBlock renders a metadata string as a zero-indented comment block using the
+// given line-comment prefix, one prefix per line. With an empty prefix it falls
+// back to a <context>...</context> block.
+func metaBlock(comment, s string) string {
+	if comment == "" {
+		return fmt.Sprintf("<context>\n%s\n</context>", s)
+	}
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = comment + " " + l
+	}
+	return strings.Join(lines, "\n")
 }
 
 // augmentNoneSentinel is the exact token the model is told to emit when a chunk
