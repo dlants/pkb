@@ -27,7 +27,7 @@ import (
 // pkb chunking logic. Bumping it isolates old vectors into separate vec tables
 // and forces a full recompute. The augmentation spec (see minorSpec in
 // internal/index) is deliberately NOT part of this identity.
-const MajorVersion = 3
+const MajorVersion = 4
 
 var vecOnce bool
 

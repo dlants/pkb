@@ -53,6 +53,34 @@ var codeExts = map[string]string{
 	".yml":  "yaml",
 }
 
+// lineComments maps recognized source extensions to their single-line comment
+// prefix. It is used to render chunk metadata (breadcrumb / augmentation) as a
+// comment in the file's own language, which keeps the embedded text in
+// distribution for code embedding models. Extensions without a natural line
+// comment (notably JSON) borrow "//" since the text is only ever embedded, never
+// parsed.
+var lineComments = map[string]string{
+	".ts":   "//",
+	".tsx":  "//",
+	".js":   "//",
+	".jsx":  "//",
+	".go":   "//",
+	".rs":   "//",
+	".json": "//",
+	".py":   "#",
+	".hcl":  "#",
+	".tf":   "#",
+	".toml": "#",
+	".yaml": "#",
+	".yml":  "#",
+}
+
+// LineComment returns the single-line comment prefix for a file path's
+// extension, or "" if none is known (e.g. markdown/plaintext).
+func LineComment(path string) string {
+	return lineComments[strings.ToLower(filepath.Ext(path))]
+}
+
 // RouteExt returns the Route for a file extension (including the leading dot).
 func RouteExt(ext string) Route {
 	if grammar, ok := codeExts[strings.ToLower(ext)]; ok {
