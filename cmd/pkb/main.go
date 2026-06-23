@@ -48,6 +48,8 @@ func main() {
 		err = runStats(rest)
 	case "chunk":
 		err = runChunk(rest)
+	case "healthcheck":
+		err = runHealthcheck(rest)
 	case "version", "--version", "-v":
 		err = runVersion(rest)
 	default:
@@ -70,6 +72,7 @@ usage:
   pkb search <query>   search the index
   pkb stats            print index statistics
   pkb chunk <file>     chunk a file and pretty-print the chunks
+  pkb healthcheck      verify the index + state marker against the git tree
   pkb version          print the pkb version
 
 pkb runs from anywhere inside a git repository; it discovers the repo root,
@@ -290,6 +293,48 @@ func runVersion(args []string) error {
 	}
 	fmt.Printf("pkb %s\n", version)
 	return nil
+}
+
+func runHealthcheck(args []string) error {
+	fs := flag.NewFlagSet("healthcheck", flag.ExitOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	opts, cleanup, err := setup()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	rep, err := index.Healthcheck(opts)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("HEAD:          %s\n", rep.HeadCommit)
+	if rep.StateMissing {
+		fmt.Println("state:         missing")
+	} else {
+		fmt.Printf("state commit:  %s\n", rep.StateCommit)
+	}
+	fmt.Printf("expected files: %d\n", rep.ExpectedFiles)
+	fmt.Printf("indexed files:  %d\n", rep.IndexedFiles)
+	fmt.Printf("indexed chunks: %d\n", rep.IndexedChunks)
+
+	if len(rep.Issues) == 0 {
+		fmt.Println("\nhealthy: index and state marker match the git tree")
+		return nil
+	}
+
+	fmt.Printf("\n%d issue(s):\n", len(rep.Issues))
+	for _, iss := range rep.Issues {
+		if iss.Path == "" {
+			fmt.Printf("  - %s\n", iss.Msg)
+		} else {
+			fmt.Printf("  - %s: %s\n", iss.Path, iss.Msg)
+		}
+	}
+	return fmt.Errorf("healthcheck found %d issue(s)", len(rep.Issues))
 }
 
 func runChunk(args []string) error {
