@@ -624,7 +624,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 				continue
 			}
 			est.chunks++
-			est.embedTokens += len(contextualize(filetype.LineComment(string(path)), c.HeadingContext, "", c.Text)) / cost.CharsPerToken
+			est.embedTokens += len(Contextualize(filetype.LineComment(string(path)), c.HeadingContext, "", c.Text)) / cost.CharsPerToken
 			if o.Inference != nil && isText {
 				est.inferInputTokens += (len(content) + len(c.HeadingContext) + len(c.Text)) / cost.CharsPerToken
 				est.inferOutputTokens += cost.AugmentMaxTokens
@@ -765,33 +765,44 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, mo
 	// Build the embedded text for every chunk from its heading breadcrumb and
 	// augmentation blurb. Reused vectors are carried over in place; reuse misses
 	// are recorded in embedIdx to be embedded later in a cross-file batch.
-	contextualized := make([]string, len(chunks))
-	embeddings := make([]embed.Embedding, len(chunks))
-	var embedIdx []int
-	var chars int
+	pf := compactPrepared(path, comment, chunks, augmentations, augSpecs, reuse, reuseEmb)
+	pf.blobSha = blobSha
+	pf.minorSpec = minorSpec
+	return pf, nil
+}
+
+// compactPrepared builds the embedded text for every chunk and assembles the
+// parallel slices that make up a preparedFile, dropping any "zero-signal" chunk
+// whose contextualized text is empty or whitespace-only. Such a chunk carries no
+// retrievable content and, if embedded, would send an empty string to the
+// embedder -- which some providers (e.g. Bedrock Cohere embed-v4) reject with a
+// ValidationException. Dropping it here removes both the chunk row and its
+// vector together, so the embedding count stays aligned with what PutFile
+// writes. Reused vectors are carried over in place; reuse misses are recorded in
+// embedIdx (as indices into the compacted slices) to be embedded later.
+func compactPrepared(path paths.GitRootRelativePath, comment string, chunks []chunk.ChunkInfo, augmentations, augSpecs []string, reuse []bool, reuseEmb []embed.Embedding) *preparedFile {
+	pf := &preparedFile{path: path}
 	for i, c := range chunks {
-		contextualized[i] = contextualize(comment, c.HeadingContext, augmentations[i], c.Text)
-		if reuse[i] {
-			embeddings[i] = reuseEmb[i]
+		ctx := Contextualize(comment, c.HeadingContext, augmentations[i], c.Text)
+		if strings.TrimSpace(ctx) == "" {
+			fmt.Fprintf(os.Stderr, "warning: skipping empty chunk %d in %s (no embeddable content)\n", i, path)
 			continue
 		}
-		chars += len(contextualized[i])
-		embedIdx = append(embedIdx, i)
+		j := len(pf.chunks)
+		pf.chunks = append(pf.chunks, c)
+		pf.contextualized = append(pf.contextualized, ctx)
+		pf.augmentations = append(pf.augmentations, augmentations[i])
+		pf.augSpecs = append(pf.augSpecs, augSpecs[i])
+		if reuse[i] {
+			pf.embeddings = append(pf.embeddings, reuseEmb[i])
+			continue
+		}
+		pf.embeddings = append(pf.embeddings, nil)
+		pf.chars += len(ctx)
+		pf.embedIdx = append(pf.embedIdx, j)
 	}
-
-	return &preparedFile{
-		path:           path,
-		blobSha:        blobSha,
-		minorSpec:      minorSpec,
-		chunks:         chunks,
-		contextualized: contextualized,
-		augmentations:  augmentations,
-		augSpecs:       augSpecs,
-		embeddings:     embeddings,
-		embedIdx:       embedIdx,
-		remaining:      len(embedIdx),
-		chars:          chars,
-	}, nil
+	pf.remaining = len(pf.embedIdx)
+	return pf
 }
 
 // writeFile persists a fully embedded file in a single transaction. The
@@ -803,7 +814,7 @@ func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error 
 	return o.Store.PutFile(string(pf.path), model.ModelName(), pf.blobSha, pf.minorSpec, pf.chunks, pf.contextualized, pf.augmentations, pf.augSpecs, pf.embeddings)
 }
 
-// contextualize builds the text actually embedded for a chunk: the raw chunk
+// Contextualize builds the text actually embedded for a chunk: the raw chunk
 // text prefixed by its heading breadcrumb and (outermost) its augmentation
 // blurb. When the file has a known line-comment prefix the metadata is rendered
 // as zero-indented comments in the file's own language, which keeps the embedded
@@ -811,7 +822,7 @@ func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error 
 // untouched so its original indentation is preserved. Files without a comment
 // prefix (markdown/plaintext) fall back to <context>...</context> blocks. Empty
 // components are omitted.
-func contextualize(comment, headingContext, augmentation, text string) string {
+func Contextualize(comment, headingContext, augmentation, text string) string {
 	s := text
 	if headingContext != "" {
 		s = metaBlock(comment, headingContext) + "\n\n" + s
