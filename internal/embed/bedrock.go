@@ -94,7 +94,48 @@ func (b *BedrockCohere) EmbedChunks(chunks []string) ([]Embedding, error) {
 	return b.embed(chunks, "search_document")
 }
 
+// maxCohereBatchTexts is the per-request cap Bedrock Cohere embed-v4 enforces on
+// the number of input texts. A single InvokeModel with more than this many texts
+// fails the whole request with an opaque "Invalid parameter combination"
+// ValidationException, so embed splits larger batches into ≤96-text requests.
+const maxCohereBatchTexts = 96
+
+// embed embeds texts in order, splitting into sub-requests of at most
+// maxCohereBatchTexts and concatenating the results so the returned embeddings
+// stay aligned 1:1 with the inputs.
 func (b *BedrockCohere) embed(texts []string, inputType string) ([]Embedding, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	out := make([]Embedding, 0, len(texts))
+	for _, batch := range splitBatches(texts, maxCohereBatchTexts) {
+		sub, err := b.embedBatch(batch, inputType)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sub...)
+	}
+	return out, nil
+}
+
+// splitBatches partitions texts into contiguous, order-preserving sub-slices of
+// at most size elements each.
+func splitBatches(texts []string, size int) [][]string {
+	if size < 1 {
+		size = 1
+	}
+	var batches [][]string
+	for start := 0; start < len(texts); start += size {
+		end := start + size
+		if end > len(texts) {
+			end = len(texts)
+		}
+		batches = append(batches, texts[start:end])
+	}
+	return batches
+}
+
+func (b *BedrockCohere) embedBatch(texts []string, inputType string) ([]Embedding, error) {
 	body, err := json.Marshal(cohereRequest{
 		Texts:          texts,
 		InputType:      inputType,
