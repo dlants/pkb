@@ -24,6 +24,10 @@ The index is a single SQLite file (`pkb.db`) with the `sqlite-vec` extension sta
 
 ## Commands
 
+## Versioning
+
+`pkb version` (also `--version`/`-v`) prints the module version via `runtime/debug.ReadBuildInfo()`: a clean `vX.Y.Z` for `go install ...@latest` builds off a tag, or `(devel)` for local builds. Releases are auto-tagged by `.github/workflows/tag-release.yml`: on every push to main (ignoring the `pkb.db`/`pkb-state.toml` reindex commits) it bumps the highest `vX.Y.Z` tag's patch and pushes the new tag (seeding `v0.1.0` if none exist), so `@latest` always tracks main. Push a tag manually for minor/major bumps; the next auto-bump continues from there.
+
 ### Build
 
 ```bash
@@ -46,7 +50,7 @@ This repo dogfoods its own pkb setup. The `pkb` binary lives at the repo root (`
 ./pkb search "<natural language query>"   # -k N sets result count (default 5)
 ./pkb stats                               # index commit, indexedAt, file/chunk counts
 ./pkb reindex                             # sync the index against HEAD. No need to do this manually, it will happen on push
-./pkb chunk <file>                        # display how this file would be chunked (for debugging)
+./pkb chunk <file>                        # show each chunk exactly as it is embedded (heading breadcrumb rendered as comments/context blocks ahead of the chunk text; augmentation omitted since it needs inference). For debugging.
 ```
 
 Each result is a scored snippet with its file path — treat it as a pointer and open the file to read the real code. The index reflects the last indexed commit, not your working tree; don't worry about reindexing local changes, the pre-push hook handles it.

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/infer"
@@ -661,6 +662,64 @@ func TestBudgetGateDoesNotChargeReuse(t *testing.T) {
 	require.NoError(t, os.Remove(filepath.Join(h.root, "pkb-state.toml")))
 	_, err = Reindex(o)
 	require.NoError(t, err, "reuse hits must not be charged against the budget")
+}
+
+func TestCompactPreparedDropsZeroSignalChunks(t *testing.T) {
+	// A chunk whose contextualized text is whitespace-only carries no
+	// embeddable content; embedding it would send an empty string to the
+	// provider. compactPrepared must drop the chunk row and its vector slot
+	// together so the parallel slices passed to PutFile stay aligned.
+	chunks := []chunk.ChunkInfo{
+		{Text: "package main", HeadingContext: "a.go"},
+		{Text: "   ", HeadingContext: ""}, // zero-signal: Contextualize -> "   "
+		{Text: "func main() {}", HeadingContext: "a.go"},
+	}
+	augmentations := []string{"", "", ""}
+	augSpecs := []string{"off||", "off||", "off||"}
+	reuse := []bool{false, false, false}
+	reuseEmb := make([]embed.Embedding, 3)
+
+	pf := compactPrepared("a.go", "//", chunks, augmentations, augSpecs, reuse, reuseEmb)
+
+	require.Len(t, pf.chunks, 2, "the whitespace-only chunk must be dropped")
+	n := len(pf.chunks)
+	require.Len(t, pf.contextualized, n)
+	require.Len(t, pf.augmentations, n)
+	require.Len(t, pf.augSpecs, n)
+	require.Len(t, pf.embeddings, n)
+	require.Equal(t, []int{0, 1}, pf.embedIdx)
+	require.Equal(t, n, pf.remaining)
+	for _, c := range pf.contextualized {
+		require.NotEmpty(t, strings.TrimSpace(c), "no empty text may survive compaction")
+	}
+}
+
+// failOnEmptyModel records every embedding input and fails if it is ever asked
+// to embed an empty or whitespace-only string, mirroring how Bedrock Cohere
+// rejects empty inputs.
+type failOnEmptyModel struct{ *embed.MockModel }
+
+func (m *failOnEmptyModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {
+	for i, c := range chunks {
+		if strings.TrimSpace(c) == "" {
+			return nil, fmt.Errorf("empty embed input at %d", i)
+		}
+	}
+	return m.MockModel.EmbedChunks(chunks)
+}
+
+func TestReindexNeverEmbedsEmptyString(t *testing.T) {
+	h := newHarness(t)
+	h.write("a.md", "# A\n\nalpha content")
+	h.write("b.go", "package b\n\nfunc B() {}\n")
+	h.write("only-heading.md", "# Title\n")
+	h.write("blanks.md", "# H\n\n\n\n")
+	sha := h.commit("init")
+	model := &failOnEmptyModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, _ := h.opts(t, model)
+	st, err := Reindex(o)
+	require.NoError(t, err, "reindex must never send an empty string to the embedder")
+	require.Equal(t, sha, st.Commit)
 }
 
 func TestStripThinking(t *testing.T) {

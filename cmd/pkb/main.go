@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -47,6 +48,8 @@ func main() {
 		err = runStats(rest)
 	case "chunk":
 		err = runChunk(rest)
+	case "version", "--version", "-v":
+		err = runVersion(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", cmd)
 		usage()
@@ -67,6 +70,7 @@ usage:
   pkb search <query>   search the index
   pkb stats            print index statistics
   pkb chunk <file>     chunk a file and pretty-print the chunks
+  pkb version          print the pkb version
 
 pkb runs from anywhere inside a git repository; it discovers the repo root,
 reads pkb.toml / .pkb/config.toml and .pkbignore, and stores the index at
@@ -272,6 +276,22 @@ func runStats(args []string) error {
 // runChunk reads a file, chunks it the same way the indexer would (tree-sitter
 // for recognized code, markdown chunker otherwise), and pretty-prints the
 // resulting chunks. It does not touch the index, config, or any provider.
+// runVersion prints the module version. When pkb is built with `go install`,
+// the version is embedded in the build info; for local/dev builds it falls back
+// to "(devel)".
+func runVersion(args []string) error {
+	fs := flag.NewFlagSet("version", flag.ExitOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	version := "(devel)"
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		version = info.Main.Version
+	}
+	fmt.Printf("pkb %s\n", version)
+	return nil
+}
+
 func runChunk(args []string) error {
 	fs := flag.NewFlagSet("chunk", flag.ExitOnError)
 	maxSize := fs.Int("max", chunk.TargetChunkSize, "max chunk size in characters")
@@ -307,8 +327,15 @@ func runChunk(args []string) error {
 		kind = route.Grammar
 	}
 	fmt.Printf("%s (%s): %d chunks\n", path, kind, len(chunks))
+	// Show each chunk exactly as it is embedded: the heading breadcrumb (and, at
+	// index time, an inference blurb) rendered as comments/context blocks ahead
+	// of the raw chunk text. Augmentation is non-deterministic inference output
+	// unavailable offline, so it is omitted here just as the cost estimate omits
+	// it.
+	comment := filetype.LineComment(path)
 	for _, c := range chunks {
-		fmt.Printf("\n%s\n\n%s\n", chunkHeading(c.HeadingContext, c.Start.Line), c.Text)
+		embedded := index.Contextualize(comment, c.HeadingContext, "", c.Text)
+		fmt.Printf("\n%s\n\n%s\n", chunkHeading(c.HeadingContext, c.Start.Line), embedded)
 	}
 	return nil
 }
