@@ -82,6 +82,50 @@ func (h *harness) opts(t *testing.T, model embed.EmbeddingModel) (*Options, *sto
 	return &Options{Repo: repo, Store: st, Model: model, Ignore: NewIgnore(nil)}, st
 }
 
+func TestHealthcheckHealthyAndStale(t *testing.T) {
+	h := newHarness(t)
+	h.write("a.md", "# A\n\nalpha content")
+	h.write("b.md", "# B\n\nbeta content")
+	h.commit("init")
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	rep, err := Healthcheck(o)
+	require.NoError(t, err)
+	require.Empty(t, rep.Issues, "expected healthy index, got: %v", rep.Issues)
+	require.Equal(t, 2, rep.ExpectedFiles)
+	require.Equal(t, 2, rep.IndexedFiles)
+
+	// Advance HEAD without reindexing: the index and state are now stale.
+	h.write("a.md", "# A\n\nalpha content changed")
+	h.write("c.md", "# C\n\ngamma content")
+	h.commit("changes")
+
+	rep, err = Healthcheck(o)
+	require.NoError(t, err)
+	require.NotEmpty(t, rep.Issues)
+	msgs := strings.Join(issueStrings(rep), "\n")
+	require.Contains(t, msgs, "does not match HEAD")
+	require.Contains(t, msgs, "c.md: expected file is missing from the index")
+	require.Contains(t, msgs, "a.md: stale blob")
+}
+
+func issueStrings(rep HealthReport) []string {
+	out := make([]string, len(rep.Issues))
+	for i, iss := range rep.Issues {
+		if iss.Path == "" {
+			out[i] = iss.Msg
+		} else {
+			out[i] = iss.Path + ": " + iss.Msg
+		}
+	}
+	return out
+}
+
 func TestColdStartIndexesEverything(t *testing.T) {
 	h := newHarness(t)
 	h.write("a.md", "# A\n\nalpha content")

@@ -911,6 +911,120 @@ type indexedEntry struct {
 	sha   string
 }
 
+// HealthIssue is a single discrepancy found by Healthcheck. Path is the
+// repo-relative file the issue concerns, or empty for index-wide issues.
+type HealthIssue struct {
+	Path string
+	Msg  string
+}
+
+// HealthReport is the result of Healthcheck: the commits compared, the headline
+// counts, and every discrepancy found between the git tree, the SQLite index,
+// and the state marker. It is healthy exactly when Issues is empty.
+type HealthReport struct {
+	HeadCommit    string
+	StateCommit   string
+	StateMissing  bool
+	ExpectedFiles int
+	IndexedFiles  int
+	IndexedChunks int
+	Issues        []HealthIssue
+}
+
+func (r *HealthReport) addf(path, format string, args ...any) {
+	r.Issues = append(r.Issues, HealthIssue{Path: path, Msg: fmt.Sprintf(format, args...)})
+}
+
+// Healthcheck verifies the SQLite index and the state marker against the git
+// tree at HEAD without mutating anything. It checks that every expected file
+// (an indexable, non-ignored path in the tree) is indexed with the matching
+// blob sha, that no stale files linger in the index, and that the state
+// marker's commit and file/chunk counts agree with the index.
+func Healthcheck(o *Options) (HealthReport, error) {
+	repoRoot := string(o.Repo.Root)
+	var rep HealthReport
+
+	targetSha, err := o.Repo.ResolveRef("HEAD")
+	if err != nil {
+		return rep, err
+	}
+	rep.HeadCommit = targetSha
+
+	prev, err := readState(repoRoot)
+	if err != nil {
+		return rep, err
+	}
+	if prev == nil {
+		rep.StateMissing = true
+		rep.addf("", "no state marker (%s); run `pkb reindex`", statePath)
+		return rep, nil
+	}
+	rep.StateCommit = prev.Commit
+	if prev.Commit != targetSha {
+		rep.addf("", "state commit %s does not match HEAD %s", prev.Commit, targetSha)
+	}
+
+	treeFiles, err := o.Repo.LsTree("HEAD")
+	if err != nil {
+		return rep, err
+	}
+	expected := make(map[paths.GitRootRelativePath]string, len(treeFiles))
+	for _, f := range treeFiles {
+		if o.candidate(f.Path) {
+			expected[f.Path] = f.BlobSha
+		}
+	}
+	rep.ExpectedFiles = len(expected)
+
+	indexed := map[paths.GitRootRelativePath]indexedEntry{}
+	for _, m := range o.activeModels() {
+		files, err := o.Store.IndexedFiles(m.ModelName())
+		if err != nil {
+			return rep, err
+		}
+		for path, meta := range files {
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
+		}
+		s, err := o.Store.Stats(m.ModelName())
+		if err != nil {
+			return rep, err
+		}
+		rep.IndexedFiles += s.Files
+		rep.IndexedChunks += s.Chunks
+	}
+
+	for path, sha := range expected {
+		e, ok := indexed[path]
+		if !ok {
+			rep.addf(string(path), "expected file is missing from the index")
+			continue
+		}
+		if e.sha != sha {
+			rep.addf(string(path), "stale blob: index has %s, tree has %s", e.sha, sha)
+		}
+	}
+	for path := range indexed {
+		if _, ok := expected[path]; !ok {
+			rep.addf(string(path), "indexed but not an expected file (deleted or no longer indexable)")
+		}
+	}
+
+	if rep.IndexedFiles != prev.FileCount {
+		rep.addf("", "state fileCount %d does not match indexed file count %d", prev.FileCount, rep.IndexedFiles)
+	}
+	if rep.IndexedChunks != prev.ChunkCount {
+		rep.addf("", "state chunkCount %d does not match indexed chunk count %d", prev.ChunkCount, rep.IndexedChunks)
+	}
+
+	sort.SliceStable(rep.Issues, func(i, j int) bool {
+		if rep.Issues[i].Path != rep.Issues[j].Path {
+			return rep.Issues[i].Path < rep.Issues[j].Path
+		}
+		return rep.Issues[i].Msg < rep.Issues[j].Msg
+	})
+	return rep, nil
+}
+
 // Search embeds the query with every active model, queries each model's vec
 // table, and merges results by descending score (truncated to topK).
 func Search(o *Options, query string, topK int) ([]store.SearchResult, error) {
