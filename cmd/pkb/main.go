@@ -35,6 +35,8 @@ func main() {
 		os.Exit(2)
 	}
 
+	fmt.Fprintf(os.Stderr, "pkb %s\n", pkbVersion())
+
 	cmd, rest := args[0], args[1:]
 	var err error
 	switch cmd {
@@ -287,12 +289,17 @@ func runVersion(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	version := "(devel)"
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
-		version = info.Main.Version
-	}
-	fmt.Printf("pkb %s\n", version)
+	fmt.Printf("pkb %s\n", pkbVersion())
 	return nil
+}
+
+// pkbVersion returns the module version: a clean vX.Y.Z for builds installed
+// off a tag, or "(devel)" for local builds.
+func pkbVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "(devel)"
 }
 
 func runHealthcheck(args []string) error {
