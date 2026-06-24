@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Build pkb
-        run: go build -o pkb ./cmd/pkb
+        run: go build -o pkb .
 
       - name: Reindex
         env:
