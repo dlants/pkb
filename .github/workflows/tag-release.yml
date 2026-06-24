@@ -1,7 +1,7 @@
 name: tag release
 
 # Auto-tag main with an incremented semver patch so that
-# `go install github.com/dlants/pkb/cmd/pkb@latest` always resolves to the
+# `go install github.com/dlants/pkb@latest` always resolves to the
 # latest code on main. Runs after code lands; tag pushes don't trigger this
 # workflow (push tag events are filtered out by the branches filter), and the
 # pkb-index reindex commit is skipped via paths-ignore.

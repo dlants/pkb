@@ -35,8 +35,6 @@ func main() {
 		os.Exit(2)
 	}
 
-	fmt.Fprintf(os.Stderr, "pkb %s\n", pkbVersion())
-
 	cmd, rest := args[0], args[1:]
 	var err error
 	switch cmd {

@@ -67,13 +67,13 @@ PKB uses cgo (it statically links SQLite + sqlite-vec and the tree-sitter gramma
 Then install the binary onto your `$PATH` (it lands in `$GOBIN`, or `$(go env GOPATH)/bin`):
 
 ```bash
-go install github.com/dlants/pkb/cmd/pkb@latest
+go install github.com/dlants/pkb@latest
 ```
 
 Or, checkout this repo and build from source, then make the binary available in your PATH (or just copy + .gitignore it in your repo)
 
 ```bash
-go build -o pkb ./cmd/pkb
+go build -o pkb .
 ```
 
 # Configuration

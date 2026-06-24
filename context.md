@@ -31,7 +31,7 @@ The index is a single SQLite file (`pkb.db`) with the `sqlite-vec` extension sta
 ### Build
 
 ```bash
-go build -o pkb ./cmd/pkb
+go build -o pkb .
 ```
 
 ### Type Check / Vet / Test
@@ -44,7 +44,7 @@ go test ./...
 
 ## Searching this repo
 
-This repo dogfoods its own pkb setup. The `pkb` binary lives at the repo root (`./pkb`, built with `go build -o pkb ./cmd/pkb`), and the index `pkb.db` is checked into git, so search works out of the box. Reindexing is wired up via a git hook — see `setup-hooks.sh` (installs hooks) and `hooks/pre-push` (reindexes on push to the default branch and reminds you to commit `pkb.db`).
+This repo dogfoods its own pkb setup. The `pkb` binary lives at the repo root (`./pkb`, built with `go build -o pkb .`), and the index `pkb.db` is checked into git, so search works out of the box. Reindexing is wired up via a git hook — see `setup-hooks.sh` (installs hooks) and `hooks/pre-push` (reindexes on push to the default branch and reminds you to commit `pkb.db`).
 
 ```bash
 ./pkb search "<natural language query>"   # -k N sets result count (default 5)

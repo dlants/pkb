@@ -1,6 +1,6 @@
 // This file adds an offline end-to-end test of the index + search pipeline
 // driven entirely by mock providers (no network, no credentials). It exercises
-// the same Build paths cmd/pkb uses, verifying that provider selection is
+// the same Build paths the pkb CLI uses, verifying that provider selection is
 // config-driven and that augmentation, indexing, and search work together
 // without any real backend.
 package smoke
@@ -44,7 +44,7 @@ func TestEndToEndWithMockProviders(t *testing.T) {
 	runGit("add", "-A")
 	runGit("commit", "-m", "init")
 
-	// Build both models exactly as cmd/pkb does, via the provider factories,
+	// Build both models exactly as the pkb CLI does, via the provider factories,
 	// selecting the deterministic mock providers.
 	model, err := embed.Build("mock", "mock-embed", 8, "", "", "", "")
 	require.NoError(t, err)
