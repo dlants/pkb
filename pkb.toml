@@ -2,9 +2,10 @@ maxReindexCost = 5.0
 
 [embedding]
 provider = "voyage"
-model = "voyage-code-3"
+model = "voyage-context-4"
 dimensions = 256
 apikeyenv = "VOYAGE_API_KEY"
+contextualizeText = true
 
 [inference]
 provider = "anthropic"
