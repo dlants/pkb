@@ -56,6 +56,25 @@ apikeyenv = "OLLAMA_API_KEY"
 	require.Equal(t, "OLLAMA_API_KEY", cfg.Inference.APIKeyEnv)
 }
 
+func TestContextualizeTextDefaultsFalseAndRoundTrips(t *testing.T) {
+	cfg, err := Load(t.TempDir())
+	require.NoError(t, err)
+	require.False(t, cfg.Embedding.ContextualizeText)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"), []byte(`
+[embedding]
+provider = "voyage"
+model = "voyage-context-4"
+dimensions = 256
+contextualizeText = true
+`), 0o644))
+
+	cfg, err = Load(dir)
+	require.NoError(t, err)
+	require.True(t, cfg.Embedding.ContextualizeText)
+}
+
 func TestDefaultInferenceWhenAbsent(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"),

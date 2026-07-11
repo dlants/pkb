@@ -29,6 +29,12 @@ type ModelConfig struct {
 	// APIKeyEnv names the environment variable holding the API key for HTTP
 	// providers (e.g. OPENAI_API_KEY). Ignored by Bedrock.
 	APIKeyEnv string `toml:"apikeyenv"`
+	// ContextualizeText, when true and the embedding provider supports
+	// auto-chunking contextual embeddings, routes text files through the
+	// provider's whole-document contextual endpoint (skipping PKB chunking and
+	// inference augmentation) instead of the isolated per-chunk path. Code files
+	// are unaffected. Defaults to false.
+	ContextualizeText bool `toml:"contextualizeText"`
 }
 
 // Config is the parsed repo-root configuration.

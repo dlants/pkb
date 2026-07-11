@@ -2,6 +2,7 @@ package embed
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -11,10 +12,11 @@ type MockModel struct {
 	Name string
 	Dims int
 
-	mu         sync.Mutex
-	chunkCalls int
-	queryCalls int
-	chunkCount int
+	mu            sync.Mutex
+	chunkCalls    int
+	queryCalls    int
+	chunkCount    int
+	documentCalls int
 }
 
 // NewMockModel returns a mock model with the given name and dimensions.
@@ -60,6 +62,46 @@ func (m *MockModel) EmbedChunks(chunks []string) ([]Embedding, error) {
 		out[i] = m.deterministicVector(c)
 	}
 	return out, nil
+}
+
+// EmbedDocument deterministically auto-chunks a document (splitting on blank
+// lines) and returns each chunk paired with a contextualized vector. The
+// contextual vector is sibling-dependent — it folds in the whole document — so
+// it is distinct from the isolated vector for the same chunk text.
+func (m *MockModel) EmbedDocument(document string) ([]ContextualChunk, error) {
+	m.mu.Lock()
+	m.documentCalls++
+	m.mu.Unlock()
+	var out []ContextualChunk
+	for _, part := range strings.Split(document, "\n\n") {
+		text := strings.TrimSpace(part)
+		if text == "" {
+			continue
+		}
+		out = append(out, ContextualChunk{
+			Text:      text,
+			Embedding: m.contextualVector(text, document),
+		})
+	}
+	return out, nil
+}
+
+// contextualVector derives a vector from the chunk text and the surrounding
+// document, so contextualized output differs from isolated embedding.
+func (m *MockModel) contextualVector(chunk, document string) Embedding {
+	vec := m.deterministicVector(chunk)
+	ctx := m.deterministicVector(document)
+	for i := range vec {
+		vec[i] += ctx[i]
+	}
+	return vec
+}
+
+// DocumentCalls returns the number of EmbedDocument invocations.
+func (m *MockModel) DocumentCalls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.documentCalls
 }
 
 // ChunkCalls returns the number of EmbedChunk+EmbedChunks invocations.
