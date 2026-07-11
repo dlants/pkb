@@ -31,6 +31,8 @@ func perMillion(d float64) float64 { return d / 1_000_000 }
 // "@dims" suffix or a Bedrock profile prefix), so e.g. "voyage-code-3@256" and
 // "us.cohere.embed-v4:0" both resolve.
 var embeddingPricesPerM = map[string]float64{
+	"voyage-context-4":       0.12,
+	"voyage-context-3":       0.18,
 	"voyage-code-3":          0.18,
 	"voyage-3":               0.18,
 	"voyage-2":               0.10,
