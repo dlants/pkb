@@ -10,6 +10,8 @@ grammars via cgo.
 
 PKB uses a pluggable **embedding** model (all files) and an optional **inference** model (augments markdown/text chunks before embedding; code is never augmented). Both are selected in `pkb.toml` via `[embedding]` / `[inference]` blocks. Providers: `bedrock` (corporate default — Cohere embed-v4 - Claude Haiku, IAM creds), `openai`/`openai-compatible` (OpenAI cloud or local servers like Ollama via `baseurl`), `gemini`, `none` (inference only — disables augmentation), and `mock` (tests). HTTP providers read the API key from the env var named by `apikeyenv` (`OPENAI_API_KEY` / `GEMINI_API_KEY` defaults). See README.md for the full config reference.
 
+Optional **contextualized text** path: setting `contextualizeText = true` in `[embedding]` (Voyage `voyage-context-4` only) makes text files skip PKB chunking + LLM augmentation and go whole to Voyage's `/v1/contextualizedembeddings` auto-chunk endpoint (large files split into ~120K-token windows with 10K overlap, chunks deduped by text). Code stays on the isolated AST+breadcrumb path; both regimes share one vec table under the same model id + dimension (no `ModelName` suffix, no `MajorVersion` bump). Mode is recorded per file as the `autochunk` minor_spec marker so flipping the option re-embeds only the affected text files (via `touchedPaths` mode-flip detection). Cost estimation (`internal/cost`) prices `voyage-context-4` (0.12) / `voyage-context-3` (0.18) and drops inference tokens for auto-chunk text files.
+
 ## Storage (SQLite)
 
 The index is a single SQLite file (`pkb.db`) with the `sqlite-vec` extension statically linked. Two app tables plus one `vec0` virtual table per embedding model:

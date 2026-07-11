@@ -914,6 +914,87 @@ func TestContextualizeTextOffIsNoOp(t *testing.T) {
 	require.Greater(t, inf.Calls(), 0, "option off keeps the inference augmentation path")
 }
 
+func TestContextualizeTextModeFlipReembedsTextOnly(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph")
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	// Option off: text goes through the isolated EmbedChunks path.
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 0, model.DocumentCalls())
+	chunkCallsOff := model.ChunkCalls()
+	require.Greater(t, chunkCallsOff, 0)
+
+	// Flip the option on against the same blobs: only the text file re-embeds.
+	o.ContextualizeText = true
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 1, model.DocumentCalls(), "flipping the option re-embeds the text file")
+	require.Equal(t, chunkCallsOff, model.ChunkCalls(), "code file is skipped on the flip (blob_sha)")
+}
+
+func TestContextualizeTextSharesOneVecTable(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph about widgets")
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	o.ContextualizeText = true
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	files, err := st.IndexedFiles(model.ModelName())
+	require.NoError(t, err)
+	require.Contains(t, files, "doc.md")
+	require.Contains(t, files, "p.go")
+	require.Len(t, files, 2, "code and text share one vec table under one model id")
+
+	codeHit, err := Search(o, "func Alpha", 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, codeHit, "code hits come from the shared table")
+	textHit, err := Search(o, "widgets paragraph", 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, textHit, "text hits come from the shared table")
+}
+
+func TestEstimateContextualTextDropsInferenceKeepsEmbedding(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+
+	// Option off: inference is projected for the text file.
+	oOff, stOff := h.opts(t, model)
+	defer stOff.Close()
+	oOff.Inference = infer.NewMockModel("infer-v1")
+	estOff, err := Estimate(oOff, false)
+	require.NoError(t, err)
+	require.Greater(t, estOff.InferInputTokens, 0)
+	require.Greater(t, estOff.InferDollars, 0.0)
+
+	// Option on: no inference component, embedding tokens still charged.
+	oOn, stOn := h.opts(t, model)
+	defer stOn.Close()
+	oOn.Inference = infer.NewMockModel("infer-v1")
+	oOn.ContextualizeText = true
+	estOn, err := Estimate(oOn, false)
+	require.NoError(t, err)
+	require.Equal(t, 0, estOn.InferInputTokens, "auto-chunk text files skip inference")
+	require.Equal(t, 0.0, estOn.InferDollars)
+	require.Greater(t, estOn.EmbedTokens, 0, "embedding tokens are still charged")
+}
+
 func TestStripThinking(t *testing.T) {
 	cases := []struct {
 		name string

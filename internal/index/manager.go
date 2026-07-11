@@ -110,6 +110,13 @@ func (o *Options) contextualModel() (embed.ContextualEmbeddingModel, bool) {
 	return cm, ok
 }
 
+// isContextual reports whether a path is embedded via the whole-document
+// auto-chunk path: the contextual text path is active and the file is not code.
+func (o *Options) isContextual(path paths.GitRootRelativePath) bool {
+	_, ok := o.contextualModel()
+	return ok && o.route(path) != filetype.Code
+}
+
 // activeModels returns the embedding models in use.
 func (o *Options) activeModels() []embed.EmbeddingModel {
 	return []embed.EmbeddingModel{o.Model}
@@ -240,7 +247,7 @@ func Reindex(o *Options) (State, error) {
 			return State{}, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, minorSpec: meta.MinorSpec}
 		}
 	}
 
@@ -364,7 +371,14 @@ func Reindex(o *Options) (State, error) {
 			// augmentation-spec change (inference model or prompt) never
 			// invalidates a vector, so it triggers no re-embedding or
 			// re-augmentation.
-			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+			// A stored autoChunkMinorSpec marks a file embedded via the
+			// whole-document auto-chunk path. Flipping the contextualizeText
+			// option changes which path a text file takes, so a file whose
+			// stored mode disagrees with the current mode must be re-embedded
+			// even though its blob and model name are unchanged. Code files are
+			// never on the auto-chunk path, so this never fires for them.
+			wasAutoChunk := prevEntry.minorSpec == autoChunkMinorSpec
+			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha && wasAutoChunk == o.isContextual(path) {
 				continue
 			}
 			// If a different model previously embedded this path (e.g. routing
@@ -374,7 +388,7 @@ func Reindex(o *Options) (State, error) {
 					return State{}, err
 				}
 			}
-			if cm, ok := o.contextualModel(); ok && o.route(path) != filetype.Code {
+			if cm, ok := o.contextualModel(); ok && o.isContextual(path) {
 				pf, err := o.prepareContextualFile(path, blobSha, cm)
 				if err != nil {
 					return State{}, err
@@ -485,7 +499,7 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 			return CostEstimate{}, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, minorSpec: meta.MinorSpec}
 		}
 	}
 
@@ -538,9 +552,28 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) (map[paths.GitRootRelativePath]struct{}, error) {
 	touched := map[paths.GitRootRelativePath]struct{}{}
 
+	// addModeFlips adds any already-indexed file whose recorded auto-chunk mode
+	// disagrees with the current contextualizeText decision. Flipping the option
+	// leaves the commit and blob shas unchanged, so a same-commit reindex would
+	// otherwise re-embed nothing; this forces the affected text files (and only
+	// those) back through the pipeline. Code files are never on the auto-chunk
+	// path, so their stored mode always matches and they are never added.
+	addModeFlips := func() {
+		for path, entry := range indexed {
+			if _, inTree := treeMap[path]; !inTree || !o.candidate(path) {
+				continue
+			}
+			wasAutoChunk := entry.minorSpec == autoChunkMinorSpec
+			if wasAutoChunk != o.isContextual(path) {
+				touched[path] = struct{}{}
+			}
+		}
+	}
+
 	full := prev == nil || prev.Commit == "" || !o.Repo.ObjectExists(prev.Commit)
 	if !full && prev.Commit == targetSha {
-		return touched, nil // nothing changed
+		addModeFlips()
+		return touched, nil // nothing changed except possible mode flips
 	}
 
 	if full {
@@ -575,6 +608,7 @@ func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.
 		if err := addDiff(prev.Commit, targetSha); err != nil {
 			return nil, err
 		}
+		addModeFlips()
 		return touched, nil
 	}
 
@@ -589,6 +623,7 @@ func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.
 	if err := addDiff(base, targetSha); err != nil {
 		return nil, err
 	}
+	addModeFlips()
 	return touched, nil
 }
 
@@ -624,7 +659,21 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			continue
 		}
 		prevEntry, wasIndexed := indexed[path]
-		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+		wasAutoChunk := prevEntry.minorSpec == autoChunkMinorSpec
+		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha && wasAutoChunk == o.isContextual(path) {
+			continue
+		}
+		// Auto-chunk text files are sent whole to the contextual endpoint and
+		// skip inference augmentation. Project their embedding tokens from the
+		// whole-file length and charge no inference.
+		if o.isContextual(path) {
+			content, err := os.ReadFile(o.Repo.Root.Join(path).String())
+			if err != nil {
+				return costEstimate{}, err
+			}
+			est.files++
+			est.chunks++
+			est.embedTokens += len(content) / cost.CharsPerToken
 			continue
 		}
 		content, err := os.ReadFile(o.Repo.Root.Join(path).String())
@@ -1012,10 +1061,12 @@ func stripThinking(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// indexedEntry records which model embedded a path and the stored blob sha.
+// indexedEntry records which model embedded a path, the stored blob sha, and
+// the recorded minor spec (used to detect an auto-chunk mode flip).
 type indexedEntry struct {
-	model string
-	sha   string
+	model     string
+	sha       string
+	minorSpec string
 }
 
 // HealthIssue is a single discrepancy found by Healthcheck. Path is the
@@ -1090,7 +1141,7 @@ func Healthcheck(o *Options) (HealthReport, error) {
 			return rep, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, minorSpec: meta.MinorSpec}
 		}
 		s, err := o.Store.Stats(m.ModelName())
 		if err != nil {
