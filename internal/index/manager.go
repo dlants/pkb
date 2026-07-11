@@ -91,6 +91,23 @@ type Options struct {
 	// before any paid work and aborts when it exceeds MaxReindexCost. A
 	// non-positive value disables the gate.
 	MaxReindexCost float64
+	// ContextualizeText, when true and the embedding model implements
+	// embed.ContextualEmbeddingModel, routes text files through the model's
+	// whole-document auto-chunking endpoint (skipping PKB chunking and
+	// inference augmentation) instead of the isolated per-chunk path. Code
+	// files are unaffected.
+	ContextualizeText bool
+}
+
+// contextualModel returns the embedding model as a ContextualEmbeddingModel
+// when the auto-chunk text path is enabled and the model supports it. The
+// second result reports whether the contextual text path is active.
+func (o *Options) contextualModel() (embed.ContextualEmbeddingModel, bool) {
+	if !o.ContextualizeText {
+		return nil, false
+	}
+	cm, ok := o.Model.(embed.ContextualEmbeddingModel)
+	return cm, ok
 }
 
 // activeModels returns the embedding models in use.
@@ -356,6 +373,17 @@ func Reindex(o *Options) (State, error) {
 				if err := o.Store.DeleteFile(string(path), prevEntry.model); err != nil {
 					return State{}, err
 				}
+			}
+			if cm, ok := o.contextualModel(); ok && o.route(path) != filetype.Code {
+				pf, err := o.prepareContextualFile(path, blobSha, cm)
+				if err != nil {
+					return State{}, err
+				}
+				if err := o.writeFile(pf, model); err != nil {
+					return State{}, err
+				}
+				report(pf)
+				continue
 			}
 			pf, err := o.prepareFile(path, blobSha, model)
 			if err != nil {
@@ -769,6 +797,85 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, mo
 	pf.blobSha = blobSha
 	pf.minorSpec = minorSpec
 	return pf, nil
+}
+
+// Auto-chunk windowing: a text file's estimated token count (chars/charsPerAutoChunkToken)
+// is compared against autoChunkTokenLimit. Files at or under the limit are sent
+// whole in one EmbedDocument call; larger files are split into overlapping
+// windows so no chunk boundary is lost across a split.
+const (
+	charsPerAutoChunkToken = 5
+	autoChunkTokenLimit    = 120000
+	autoChunkOverlapTokens = 10000
+	autoChunkMaxWindowByte = autoChunkTokenLimit * charsPerAutoChunkToken
+	autoChunkOverlapByte   = autoChunkOverlapTokens * charsPerAutoChunkToken
+)
+
+// prepareContextualFile builds a preparedFile for a text file via the model's
+// whole-document auto-chunking endpoint. PKB does not chunk the file and no
+// inference augmentation runs; instead the model returns its own chunks, each
+// with a contextualized vector. Chunks are file-tagged (no line ranges) and
+// carry no augmentation. Large files are sent in overlapping windows and the
+// resulting chunks are deduped by text identity. Per-chunk reuse does not apply
+// here; unchanged files are skipped wholesale by the caller's blob_sha check.
+func (o *Options) prepareContextualFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {
+	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
+	if err != nil {
+		return nil, err
+	}
+	windows := autoChunkWindows(string(content))
+	pf := &preparedFile{path: path, blobSha: blobSha, minorSpec: autoChunkMinorSpec}
+	seen := map[string]struct{}{}
+	for _, w := range windows {
+		chunks, err := cm.EmbedDocument(w)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range chunks {
+			text := strings.TrimSpace(c.Text)
+			if text == "" {
+				continue
+			}
+			if _, dup := seen[text]; dup {
+				continue
+			}
+			seen[text] = struct{}{}
+			pf.chunks = append(pf.chunks, chunk.ChunkInfo{Text: text})
+			pf.contextualized = append(pf.contextualized, text)
+			pf.augmentations = append(pf.augmentations, "")
+			pf.augSpecs = append(pf.augSpecs, autoChunkMinorSpec)
+			pf.embeddings = append(pf.embeddings, c.Embedding)
+			pf.chars += len(text)
+		}
+	}
+	return pf, nil
+}
+
+// autoChunkMinorSpec marks a file that was embedded via the whole-document
+// auto-chunking path (rather than the isolated per-chunk augmentation path).
+const autoChunkMinorSpec = "autochunk"
+
+// autoChunkWindows splits a document into byte windows for whole-document
+// embedding. A document at or under the window size is returned as a single
+// window; larger documents are split into windows of autoChunkMaxWindowByte
+// that overlap by autoChunkOverlapByte so no content falls between two windows.
+func autoChunkWindows(document string) []string {
+	if len(document) <= autoChunkMaxWindowByte {
+		return []string{document}
+	}
+	var windows []string
+	step := autoChunkMaxWindowByte - autoChunkOverlapByte
+	for start := 0; start < len(document); start += step {
+		end := start + autoChunkMaxWindowByte
+		if end > len(document) {
+			end = len(document)
+		}
+		windows = append(windows, document[start:end])
+		if end == len(document) {
+			break
+		}
+	}
+	return windows
 }
 
 // compactPrepared builds the embedded text for every chunk and assembles the

@@ -120,14 +120,15 @@ func setup() (*index.Options, func(), error) {
 	}
 
 	opts := &index.Options{
-		Repo:           repo,
-		Store:          st,
-		Model:          model,
-		Inference:      inferenceModel,
-		Ignore:         ignore,
-		ExtOverrides:   cfg.ExtOverrides,
-		MaxParallelism: cfg.MaxParallelism,
-		MaxReindexCost: cfg.MaxReindexCost,
+		Repo:              repo,
+		Store:             st,
+		Model:             model,
+		Inference:         inferenceModel,
+		Ignore:            ignore,
+		ExtOverrides:      cfg.ExtOverrides,
+		MaxParallelism:    cfg.MaxParallelism,
+		MaxReindexCost:    cfg.MaxReindexCost,
+		ContextualizeText: cfg.Embedding.ContextualizeText,
 	}
 	cleanup := func() { st.Close() }
 	return opts, cleanup, nil
