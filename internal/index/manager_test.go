@@ -766,6 +766,154 @@ func TestReindexNeverEmbedsEmptyString(t *testing.T) {
 	require.Equal(t, sha, st.Commit)
 }
 
+// recordingContextModel wraps a mock model and records the documents passed to
+// EmbedDocument so tests can assert windowing and that the whole-document path
+// was taken.
+type recordingContextModel struct {
+	*embed.MockModel
+	mu   sync.Mutex
+	docs []string
+}
+
+func (r *recordingContextModel) EmbedDocument(document string) ([]embed.ContextualChunk, error) {
+	r.mu.Lock()
+	r.docs = append(r.docs, document)
+	r.mu.Unlock()
+	return r.MockModel.EmbedDocument(document)
+}
+
+func (r *recordingContextModel) documents() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.docs...)
+}
+
+func TestContextualizeTextRoutesTextThroughEmbedDocument(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	inf := infer.NewMockModel("infer-v1")
+	o.Inference = inf
+	o.ContextualizeText = true
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, inf.Calls(), "auto-chunk text path must skip inference augmentation")
+	require.Equal(t, 0, model.ChunkCalls(), "text file must not go through the isolated EmbedChunks path")
+	require.Equal(t, 1, model.DocumentCalls(), "small text file is sent whole in one EmbedDocument call")
+
+	res, err := Search(o, "paragraph", 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, res)
+	for _, r := range res {
+		require.Equal(t, 0, r.StartLine, "auto-chunk text chunks are file-tagged with no line range")
+		require.Equal(t, 0, r.EndLine)
+	}
+}
+
+func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {
+	h := newHarness(t)
+	var b strings.Builder
+	filler := strings.Repeat("x", 2000)
+	for i := 0; b.Len() <= autoChunkMaxWindowByte+autoChunkOverlapByte; i++ {
+		fmt.Fprintf(&b, "paragraph number %06d %s\n\n", i, filler)
+	}
+	h.write("big.md", b.String())
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	o.ContextualizeText = true
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	docs := model.documents()
+	require.Greater(t, len(docs), 1, "an oversized file must be split into multiple windows")
+	// Consecutive windows overlap by autoChunkOverlapByte.
+	prev := docs[0]
+	require.Equal(t, autoChunkMaxWindowByte, len(prev))
+	require.Equal(t, prev[len(prev)-autoChunkOverlapByte:], docs[1][:autoChunkOverlapByte],
+		"consecutive windows must share the configured overlap")
+
+	res, err := Search(o, "paragraph", 4096)
+	require.NoError(t, err)
+	seen := map[string]struct{}{}
+	for _, r := range res {
+		_, dup := seen[r.Text]
+		require.False(t, dup, "overlap-induced duplicate chunks must be deduped before writing")
+		seen[r.Text] = struct{}{}
+	}
+}
+
+func TestContextualizeTextLeavesCodeOnIsolatedPath(t *testing.T) {
+	h := newHarness(t)
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	o.ContextualizeText = true
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, model.DocumentCalls(), "code files must never use the auto-chunk path")
+	require.Greater(t, model.ChunkCalls(), 0, "code files stay on the isolated EmbedChunks path")
+}
+
+func TestContextualizeTextReembedsOnEditSkipsUnchanged(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph")
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	o.ContextualizeText = true
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 1, model.DocumentCalls())
+
+	// Unchanged reindex is a blob_sha skip.
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 1, model.DocumentCalls(), "unchanged file must not be re-embedded")
+
+	// Editing the file re-sends the whole document.
+	h.write("doc.md", "# Top\n\nintro paragraph changed")
+	h.commit("edit")
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 2, model.DocumentCalls(), "edited file must be re-embedded whole")
+}
+
+func TestContextualizeTextOffIsNoOp(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph")
+	h.commit("init")
+
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	inf := infer.NewMockModel("infer-v1")
+	o.Inference = inf
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, model.DocumentCalls(), "option off must never call EmbedDocument")
+	require.Greater(t, inf.Calls(), 0, "option off keeps the inference augmentation path")
+}
+
 func TestStripThinking(t *testing.T) {
 	cases := []struct {
 		name string
