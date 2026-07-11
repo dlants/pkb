@@ -132,6 +132,8 @@ Invariants:
 
 ## Stage 2: Mock support + config field
 
+**Status: DONE.** Added `contextualizeText` (bool, default false) to `config.ModelConfig` in `internal/config/config.go` with TOML tag `contextualizeText`; it lives on the `[embedding]` block and round-trips via `Load()`'s merge-over-`Default()` (no `Default()` change needed since the zero value is false). `embed.MockModel` (`internal/embed/mock.go`) now implements `ContextualEmbeddingModel`: `EmbedDocument` deterministically auto-chunks by splitting on blank lines (`\n\n`), trims/skips empties, and returns each chunk with a `contextualVector(chunk, document)` that folds in the whole-document vector so contextual output is sibling-dependent and distinct from the isolated `EmbedChunk` vector. Added a `documentCalls` counter + `DocumentCalls()` accessor. Tests: `internal/config/config_test.go` (default false + round-trip true) and new `internal/embed/mock_test.go` (interface assertion, 3-chunk auto-chunk, contextual != isolated). Manager does not yet read the field (Stage 3). Full `go build/vet/test ./...` green; the only lint findings are pre-existing errcheck issues in untouched `gemini.go`/`openai.go`.
+
 - Goal: `embed.MockModel` implements `ContextualEmbeddingModel` (deterministic, but sibling-dependent so contextual output differs from isolated for the same chunk); `config.ModelConfig` gains `contextualizeText` with TOML tag, wired through `Default()`/`Load()` merge. No manager behavior change yet (field read but unused).
 - Verification:
   - Behavior: config round-trips the new key and defaults to false.
