@@ -15,3 +15,22 @@ type EmbeddingModel interface {
 	EmbedQuery(query string) (Embedding, error)
 	EmbedChunks(chunks []string) ([]Embedding, error)
 }
+
+// ContextualChunk is a single model-chosen chunk returned by an auto-chunking
+// contextual embedding call: the chunk's text paired with its vector.
+type ContextualChunk struct {
+	Text      string
+	Embedding Embedding
+}
+
+// ContextualEmbeddingModel is implemented by providers that can auto-chunk and
+// embed a whole document in one call, returning the model-chosen chunks with
+// their contextualized vectors. It is an optional capability on top of
+// EmbeddingModel; callers should type-assert to detect support.
+type ContextualEmbeddingModel interface {
+	EmbeddingModel
+	// EmbedDocument sends the whole document to the provider's auto-chunking
+	// endpoint and returns the model-chosen chunks in order, each paired with
+	// its vector at Dimensions().
+	EmbedDocument(document string) ([]ContextualChunk, error)
+}

@@ -86,6 +86,118 @@ func TestVoyageEmbed(t *testing.T) {
 	}
 }
 
+func newFakeVoyageContextServer(t *testing.T, dims int, chunks []string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/v1/contextualizedembeddings") {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		var req voyageContextRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if !req.EnableAutoChunking {
+			http.Error(w, "expected enable_auto_chunking", http.StatusBadRequest)
+			return
+		}
+		if len(req.Inputs) != 1 || len(req.Inputs[0]) != 1 {
+			http.Error(w, "expected a single whole-document input", http.StatusBadRequest)
+			return
+		}
+		var resp voyageContextResponse
+		var group struct {
+			Data []struct {
+				Embedding []float32 `json:"embedding"`
+				Index     int       `json:"index"`
+				Text      string    `json:"text"`
+			} `json:"data"`
+		}
+		for i, text := range chunks {
+			vec := make([]float32, dims)
+			for j := range vec {
+				vec[j] = float32(i*dims + j)
+			}
+			group.Data = append(group.Data, struct {
+				Embedding []float32 `json:"embedding"`
+				Index     int       `json:"index"`
+				Text      string    `json:"text"`
+			}{Embedding: vec, Index: i, Text: text})
+		}
+		resp.Data = append(resp.Data, group)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+}
+
+func TestVoyageEmbedDocument(t *testing.T) {
+	want := []string{"chunk one", "chunk two", "chunk three"}
+	srv := newFakeVoyageContextServer(t, 4, want)
+	defer srv.Close()
+
+	m, err := NewVoyage(srv.URL, "VOYAGE_API_KEY", "voyage-context-4", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunks, err := m.EmbedDocument("some whole document")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) != len(want) {
+		t.Fatalf("expected %d chunks, got %d", len(want), len(chunks))
+	}
+	for i, c := range chunks {
+		if c.Text != want[i] {
+			t.Fatalf("chunk %d: expected text %q, got %q", i, want[i], c.Text)
+		}
+		if len(c.Embedding) != 4 {
+			t.Fatalf("chunk %d: expected 4 dims, got %d", i, len(c.Embedding))
+		}
+	}
+}
+
+func TestVoyageEmbedDocumentIsContextualModel(t *testing.T) {
+	m, err := NewVoyage("http://example.invalid", "VOYAGE_API_KEY", "voyage-context-4", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := interface{}(m).(ContextualEmbeddingModel); !ok {
+		t.Fatal("Voyage should implement ContextualEmbeddingModel")
+	}
+}
+
+func TestVoyageEmbedDocumentErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"detail":"bad key"}`))
+	}))
+	defer srv.Close()
+
+	m, err := NewVoyage(srv.URL, "VOYAGE_API_KEY", "voyage-context-4", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.EmbedDocument("x"); err == nil {
+		t.Fatal("expected error on non-2xx status")
+	}
+}
+
+func TestVoyageEmbedDocumentDimensionMismatch(t *testing.T) {
+	srv := newFakeVoyageContextServer(t, 8, []string{"a", "b"})
+	defer srv.Close()
+
+	m, err := NewVoyage(srv.URL, "VOYAGE_API_KEY", "voyage-context-4", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.EmbedDocument("x"); err == nil {
+		t.Fatal("expected error on dimension mismatch")
+	}
+}
+
 func TestVoyageErrorStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
