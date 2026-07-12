@@ -171,6 +171,13 @@ Voyage models plus the conservative unknown-model fallback.
 
 ## Stage 2 — Delete `internal/infer` and its wiring
 
+> **Status: DONE.** Deleted `internal/infer/` entirely. `main.go`'s
+> `printEstimate` no longer prints inference input/output tokens (embedding
+> only); the `CostEstimate` inference fields remain for Stage 4. `internal/smoke`
+> dropped the `infer` import and the `infer.Build` rejection assertion. `cost.go`
+> still contains inference pricing/comments — that removal is Stage 4. Full
+> `go build`/`go vet`/`go test ./...` pass; `rg -l internal/infer` is empty.
+
 - Goal: `internal/infer` gone; `main.go` builds no inference model and prints no
   inference cost; `internal/smoke` drops the import.
 - Verification: `pkb reindex`/`estimate` run end-to-end with a mock embedder;
