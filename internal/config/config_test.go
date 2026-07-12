@@ -18,7 +18,7 @@ func TestLoadMergesOverDefaults(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"), []byte(`
 [embedding]
-provider = "bedrock"
+provider = "voyage"
 model = "my-model"
 dimensions = 512
 `), 0o644))
@@ -29,61 +29,40 @@ dimensions = 512
 	require.Equal(t, 512, cfg.Embedding.Dimensions)
 }
 
-func TestLoadInferenceAndHTTPFields(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"), []byte(`
-[embedding]
-provider = "openai"
-model = "text-embedding-3-small"
-dimensions = 1536
-baseurl = "https://api.openai.com"
-apikeyenv = "OPENAI_API_KEY"
-
-[inference]
-provider = "openai"
-model = "gpt-4o-mini"
-baseurl = "http://localhost:11434"
-apikeyenv = "OLLAMA_API_KEY"
-`), 0o644))
-
-	cfg, err := Load(dir)
-	require.NoError(t, err)
-	require.Equal(t, "https://api.openai.com", cfg.Embedding.BaseURL)
-	require.Equal(t, "OPENAI_API_KEY", cfg.Embedding.APIKeyEnv)
-	require.Equal(t, "openai", cfg.Inference.Provider)
-	require.Equal(t, "gpt-4o-mini", cfg.Inference.Model)
-	require.Equal(t, "http://localhost:11434", cfg.Inference.BaseURL)
-	require.Equal(t, "OLLAMA_API_KEY", cfg.Inference.APIKeyEnv)
-}
-
-func TestContextualizeTextDefaultsFalseAndRoundTrips(t *testing.T) {
-	cfg, err := Load(t.TempDir())
-	require.NoError(t, err)
-	require.False(t, cfg.Embedding.ContextualizeText)
-
+func TestLoadHTTPFields(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"), []byte(`
 [embedding]
 provider = "voyage"
-model = "voyage-context-4"
+model = "voyage-context-3"
 dimensions = 256
-contextualizeText = true
+baseurl = "https://api.voyageai.com"
+apikeyenv = "VOYAGE_API_KEY"
 `), 0o644))
-
-	cfg, err = Load(dir)
-	require.NoError(t, err)
-	require.True(t, cfg.Embedding.ContextualizeText)
-}
-
-func TestDefaultInferenceWhenAbsent(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"),
-		[]byte("[embedding]\nmodel = \"m\"\n"), 0o644))
 
 	cfg, err := Load(dir)
 	require.NoError(t, err)
-	require.Equal(t, Default().Inference, cfg.Inference)
-	require.Equal(t, "anthropic", cfg.Inference.Provider)
+	require.Equal(t, "https://api.voyageai.com", cfg.Embedding.BaseURL)
+	require.Equal(t, "VOYAGE_API_KEY", cfg.Embedding.APIKeyEnv)
+}
+
+func TestStrayInferenceKeysAreTolerated(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkb.toml"), []byte(`
+[embedding]
+provider = "voyage"
+model = "voyage-context-3"
+dimensions = 256
+contextualizeText = true
+
+[inference]
+provider = "openai"
+model = "gpt-4o-mini"
+`), 0o644))
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	require.Equal(t, "voyage-context-3", cfg.Embedding.Model)
 }
 
 func TestNestedConfigPath(t *testing.T) {

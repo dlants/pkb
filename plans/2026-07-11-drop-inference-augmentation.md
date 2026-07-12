@@ -212,6 +212,21 @@ Voyage models plus the conservative unknown-model fallback.
 
 ## Stage 4 — Drop inference + non-Voyage config and cost
 
+> **Status: DONE.** `ModelConfig` dropped `Region`/`Profile`/`ContextualizeText`;
+> `Config` dropped the `Inference` block and `MaxParallelism`. Default embedding
+> model is now `voyage-context-3` (the old `voyage-code-3` default is not
+> contextual and would fail the Stage-3 setup guard). `internal/cost` dropped
+> `AugmentMaxTokens`, the `Pricing` type, `inferencePricesPerM`,
+> `fallbackInferencePerM`, `InferencePricePerToken`, and all non-Voyage embedding
+> prices (Cohere/OpenAI) — leaving only `voyage-context-4`/`voyage-context-3`
+> plus the unknown-model fallback. `CostEstimate`/`costEstimate` lost their
+> inference/`EmbedDollars`/`InferDollars` fields and the reindex-cost log/error
+> lines dropped the inference-token columns. Config/cost tests retargeted to
+> Voyage-only, added `TestStrayInferenceKeysAreTolerated` covering that stray
+> `[inference]`/`contextualizeText` keys are ignored. Note: `minor_spec`/
+> `autoChunkMinorSpec` store machinery remains (Stage 5). Full
+> `go build`/`go vet`/`go test ./...` pass.
+
 - Goal: `ModelConfig` loses `Inference`, `ContextualizeText`, `Region`,
   `Profile`; `internal/cost` keeps only Voyage embedding prices and drops all
   inference pricing / `AugmentMaxTokens`; `CostEstimate` inference fields removed.

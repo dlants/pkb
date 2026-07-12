@@ -252,11 +252,11 @@ func Reindex(o *Options) (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	fmt.Fprintf(os.Stderr, "estimated reindex cost: $%.2f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens)\n",
-		est.dollars, est.files, est.chunks, est.embedTokens, est.inferInputTokens, est.inferOutputTokens)
+	fmt.Fprintf(os.Stderr, "estimated reindex cost: $%.2f (%d files, %d chunks, ~%d embed tokens)\n",
+		est.dollars, est.files, est.chunks, est.embedTokens)
 	if o.MaxReindexCost > 0 && est.dollars > o.MaxReindexCost {
-		return State{}, fmt.Errorf("estimated reindex cost $%.2f exceeds max reindex cost $%.2f (%d files, %d chunks, ~%d embed tokens, ~%d inference in/%d out tokens); reindex locally instead",
-			est.dollars, o.MaxReindexCost, est.files, est.chunks, est.embedTokens, est.inferInputTokens, est.inferOutputTokens)
+		return State{}, fmt.Errorf("estimated reindex cost $%.2f exceeds max reindex cost $%.2f (%d files, %d chunks, ~%d embed tokens); reindex locally instead",
+			est.dollars, o.MaxReindexCost, est.files, est.chunks, est.embedTokens)
 	}
 
 	var (
@@ -439,14 +439,10 @@ func Reindex(o *Options) (State, error) {
 // files/chunks need fresh work and the token/dollar totals that work is
 // expected to incur. It is the public form of the internal costEstimate.
 type CostEstimate struct {
-	Files             int
-	Chunks            int
-	EmbedTokens       int
-	InferInputTokens  int
-	InferOutputTokens int
-	EmbedDollars      float64
-	InferDollars      float64
-	Dollars           float64
+	Files       int
+	Chunks      int
+	EmbedTokens int
+	Dollars     float64
 }
 
 // Estimate projects the dollar cost of a reindex without performing any paid
@@ -501,14 +497,10 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 		return CostEstimate{}, err
 	}
 	return CostEstimate{
-		Files:             est.files,
-		Chunks:            est.chunks,
-		EmbedTokens:       est.embedTokens,
-		InferInputTokens:  est.inferInputTokens,
-		InferOutputTokens: est.inferOutputTokens,
-		EmbedDollars:      est.embedDollars,
-		InferDollars:      est.inferDollars,
-		Dollars:           est.dollars,
+		Files:       est.files,
+		Chunks:      est.chunks,
+		EmbedTokens: est.embedTokens,
+		Dollars:     est.dollars,
 	}, nil
 }
 
@@ -559,14 +551,11 @@ func (o *Options) touchedPaths(treeMap map[paths.GitRootRelativePath]string, ind
 // fresh work and the token/dollar totals that work is expected to cost. It is
 // computed with no API calls and no DB mutation.
 type costEstimate struct {
-	files             int
-	chunks            int
-	embedTokens       int
-	inferInputTokens  int
-	inferOutputTokens int
-	embedDollars      float64
-	inferDollars      float64
-	dollars           float64
+	files        int
+	chunks       int
+	embedTokens  int
+	embedDollars float64
+	dollars      float64
 }
 
 // estimate projects the dollar cost of indexing the touched set, counting only
@@ -632,7 +621,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 		}
 	}
 	est.embedDollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())
-	est.dollars = est.embedDollars + est.inferDollars
+	est.dollars = est.embedDollars
 	return est, nil
 }
 
@@ -885,7 +874,6 @@ func metaBlock(comment, s string) string {
 	}
 	return strings.Join(lines, "\n")
 }
-
 
 // indexedEntry records which model embedded a path, the stored blob sha, and
 // the recorded minor spec (used to detect an auto-chunk mode flip).
