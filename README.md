@@ -12,7 +12,7 @@ pkb stats              # print the current index marker (commit, file/chunk coun
 pkb chunk <file>       # display how this file would be chunked (for debugging)
 ```
 
-`pkb reindex` is meant to be run at a single well-defined moment — when code lands on the default branch (typically a CI step). PKB keeps track of the last commit that was indexed (in `pkb-state.toml`), and uses git to identify changed files, then brings the index up to date with the current commit.
+`pkb reindex` is meant to be run at a single well-defined moment — the recommended default is a **pre-commit hook**, so the refreshed index rides along in the same commit as your code. PKB keeps track of the last commit that was indexed (in `pkb-state.toml`), and uses git to identify changed files, then brings the index up to date with the current commit.
 
 This will create a pkb.db sql file at the root of your repo. Check that into your repo. Now, everyone in your repo has access to the full index, while you only pay the embedding cost once.
 
@@ -30,38 +30,27 @@ Commit `.gitattributes` along with `pkb.db`. If `pkb.db` is already in your hist
 
 ## Keeping the index fresh
 
-`pkb reindex` indexes the current `HEAD` and writes the indexed commit sha to `pkb-state.toml`. Because the refreshed `pkb.db` / `pkb-state.toml` then need to be committed, the index is always delivered one commit _behind_ the code it represents — the index commit on `main` contains an index that reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer.
+### Recommended: pre-commit hook
 
-The recommended trigger is **CI on merge to the default branch**, not a client-side git hook (a `pre-push` hook can't add a commit to the push that's already in flight, and would clobber the Git LFS pre-push hook). This repo ships such a workflow at [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml) — use it as the reference for your own setup. On push to `main` it:
+The recommended default is a **pre-commit hook** that refreshes the index _in the same commit_ as your code. Reindexing is fast and driven purely by per-file git blob shas, so this adds negligible overhead. `pkb reindex --staged` indexes the staging area (`git write-tree`) instead of `HEAD`, so it sees exactly the content the commit will contain — with no separate index commit and no lag between the code and the index that represents it.
 
-1. checks out with `lfs: true` and full history (`fetch-depth: 0`), so reindex can diff against the last indexed commit;
-2. builds `pkb` and runs `pkb reindex`;
-3. commits the refreshed `pkb.db` / `pkb-state.toml` and pushes them back.
-
-Two details keep this robust:
-
-- **LFS uploads must be explicit.** The commit step runs `git lfs install --local` and `git lfs push origin HEAD` _before_ `git push`, so the new `pkb.db` blob lands in LFS storage before its pointer is pushed. Relying on the implicit pre-push hook is fragile — if the blob is missing from LFS storage, later `lfs: true` checkouts fail with a `404`.
-- **No re-trigger loop.** The workflow has `paths-ignore: [pkb.db, pkb-state.toml]`, and `GITHUB_TOKEN` pushes don't trigger workflows anyway, so the index commit doesn't start another run. The commit message also carries `[skip ci]`.
-
-It needs `VOYAGE_API_KEY` set as **repository secrets** (Settings → Secrets and variables → Actions), and `contents: write` permission (already declared in the workflow).
-
-Locally you can always run `pkb reindex` by hand and commit the result — just make sure `git lfs install` has been run in your clone (see the Git LFS setup above) so the blob uploads on `git push`.
-
-### Pre-commit trigger (`--staged`)
-
-Because reindexing is fast and driven purely by per-file git blob shas, you can also refresh the index _in the same commit_ as your code with a **pre-commit** hook. `pkb reindex --staged` indexes the staging area (`git write-tree`) instead of `HEAD`, so it sees exactly the content the commit will contain — with no commit required. The staged blob shas equal the blob shas the commit will hold, so the very next post-commit `pkb reindex` is a no-op.
-
-A sample hook lives at [`hooks/pre-commit`](hooks/pre-commit): it runs `pkb reindex --staged` and then `git add pkb.db pkb-state.toml` so the refreshed index rides along in the same commit. Install it by pointing git at the `hooks/` directory:
+This repo ships a working hook at [`hooks/pre-commit`](hooks/pre-commit): it runs `pkb reindex --staged` and then `git add pkb.db pkb-state.toml` so the refreshed index rides along in the same commit. Install it by pointing git at the `hooks/` directory (this repo already does so):
 
 ```
 git config core.hooksPath hooks
 ```
 
-LFS caveat: `pkb.db` is LFS-tracked, so the `git add` in the hook stages the small LFS pointer (not the blob) — this is fine and does not fight the LFS `pre-push` hook. As with the manual flow, make sure `git lfs install` has been run in your clone so the blob uploads on `git push`.
+LFS caveat: `pkb.db` is LFS-tracked, so the `git add` in the hook stages the small LFS pointer (not the blob) — this is fine and does not fight the LFS `pre-push` hook. Make sure `git lfs install` has been run in your clone so the blob uploads on `git push`.
+
+### Alternative: manual reindex
+
+If you'd rather not run a hook, run `pkb reindex` by hand whenever code lands on the default branch and commit the refreshed `pkb.db` / `pkb-state.toml`. Because those files then need their own commit, the index is delivered one commit _behind_ the code it represents — the index commit on `main` reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer. Make sure `git lfs install` has been run in your clone (see the Git LFS setup above) so the blob uploads on `git push`.
+
+Avoid a `pre-push` hook for this: it can't add a commit to the push that's already in flight and would clobber the Git LFS pre-push hook.
 
 See these files in this repo for a complete working configuration:
 
-- [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml) — the CI reindex + LFS-aware commit workflow.
+- [`hooks/pre-commit`](hooks/pre-commit) — the recommended pre-commit reindex hook.
 - [`pkb.toml`](pkb.toml) — embedding model configuration (Voyage).
 - [`.gitattributes`](.gitattributes) — the Git LFS tracking rule for `pkb.db`.
 - [`pkb-state.toml`](pkb-state.toml) — the tracked index marker (indexed commit sha + file/chunk counts).
@@ -99,7 +88,7 @@ The default configuration uses **Voyage AI** embeddings (`voyage-context-3`, aut
 
 A repo-root config file — `pkb.toml` or `.pkb/config.toml` (first found wins) — selects the embedding model. Any unset field falls back to defaults, and a missing file uses defaults entirely.
 
-PKB always indexes `HEAD`. Run `pkb reindex` when the default branch is checked out (e.g. in CI after checkout) so the index tracks the default branch.
+PKB indexes `HEAD` by default, or the staging area with `--staged` (used by the recommended pre-commit hook). See [Keeping the index fresh](#keeping-the-index-fresh).
 
 ```toml
 exclude = ["node_modules", "dist", "vendor/generated"]
