@@ -20,7 +20,6 @@ import (
 	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/index"
-	"github.com/dlants/pkb/internal/infer"
 	"github.com/dlants/pkb/internal/paths"
 	"github.com/dlants/pkb/internal/store"
 )
@@ -109,26 +108,18 @@ func setup() (*index.Options, func(), error) {
 		return nil, nil, fmt.Errorf("building embedding model: %w", err)
 	}
 
-	inferenceModel, err := infer.Build(cfg.Inference.Provider, cfg.Inference.Model, cfg.Inference.Region, cfg.Inference.Profile, cfg.Inference.BaseURL, cfg.Inference.APIKeyEnv)
-	if err != nil {
-		return nil, nil, fmt.Errorf("building inference model: %w", err)
-	}
-
 	st, err := store.Open(filepath.Join(string(repo.Root), dbRelPath))
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening database: %w", err)
 	}
 
 	opts := &index.Options{
-		Repo:              repo,
-		Store:             st,
-		Model:             model,
-		Inference:         inferenceModel,
-		Ignore:            ignore,
-		ExtOverrides:      cfg.ExtOverrides,
-		MaxParallelism:    cfg.MaxParallelism,
-		MaxReindexCost:    cfg.MaxReindexCost,
-		ContextualizeText: cfg.Embedding.ContextualizeText,
+		Repo:           repo,
+		Store:          st,
+		Model:          model,
+		Ignore:         ignore,
+		ExtOverrides:   cfg.ExtOverrides,
+		MaxReindexCost: cfg.MaxReindexCost,
 	}
 	cleanup := func() { st.Close() }
 	return opts, cleanup, nil
@@ -211,10 +202,6 @@ func runEstimate(args []string) error {
 
 	fmt.Println("Estimated costs:")
 	fmt.Printf("- embedding: $%s/1M tok\n", sig3(cost.EmbeddingPricePerToken(opts.Model.ModelName())*1e6))
-	if opts.Inference != nil {
-		ip := cost.InferencePricePerToken(opts.Inference.ModelName())
-		fmt.Printf("- inference: $%s/1M input tok, $%s/1M output tok\n", sig3(ip.InputPerToken*1e6), sig3(ip.OutputPerToken*1e6))
-	}
 
 	next, err := index.Estimate(opts, false)
 	if err != nil {

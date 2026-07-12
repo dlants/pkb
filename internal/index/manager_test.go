@@ -12,7 +12,6 @@ import (
 	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
-	"github.com/dlants/pkb/internal/infer"
 	"github.com/dlants/pkb/internal/store"
 	"github.com/stretchr/testify/require"
 )
@@ -139,7 +138,7 @@ func TestColdStartIndexesEverything(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sha, state.Commit)
 	require.Equal(t, 2, state.FileCount)
-	require.Greater(t, model.ChunkCount(), 0)
+	require.Greater(t, model.DocumentCalls(), 0)
 }
 
 func TestNoOpWhenNothingChanged(t *testing.T) {
@@ -153,12 +152,12 @@ func TestNoOpWhenNothingChanged(t *testing.T) {
 
 	_, err := Reindex(o)
 	require.NoError(t, err)
-	calls := model.ChunkCalls()
+	calls := model.DocumentCalls()
 	require.Greater(t, calls, 0)
 
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	require.Equal(t, calls, model.ChunkCalls(), "second reindex should embed nothing")
+	require.Equal(t, calls, model.DocumentCalls(), "second reindex should embed nothing")
 }
 
 func TestIncrementalAddModifyDelete(t *testing.T) {
@@ -180,12 +179,12 @@ func TestIncrementalAddModifyDelete(t *testing.T) {
 	h.remove("del.md")
 	sha := h.commit("changes")
 
-	callsBefore := model.ChunkCalls()
+	callsBefore := model.DocumentCalls()
 	state, err := Reindex(o)
 	require.NoError(t, err)
 	require.Equal(t, sha, state.Commit)
 	require.Equal(t, 3, state.FileCount) // keep, mod, add
-	require.Greater(t, model.ChunkCalls(), callsBefore)
+	require.Greater(t, model.DocumentCalls(), callsBefore)
 
 	files, err := st.IndexedFiles("mock")
 	require.NoError(t, err)
@@ -225,35 +224,10 @@ func TestStagedReindexIndexesUncommittedThenNoOp(t *testing.T) {
 	// post-commit reindex embeds nothing.
 	h.commit("add staged")
 	o.Staged = false
-	callsBefore := model.ChunkCalls()
+	callsBefore := model.DocumentCalls()
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	require.Equal(t, callsBefore, model.ChunkCalls(), "post-commit reindex should be a no-op")
-}
-
-func TestTextFilePerChunkReuseOnChange(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
-	h.commit("init")
-
-	model := embed.NewMockModel("mock", 3)
-	o, st := h.opts(t, model)
-	defer st.Close()
-
-	_, err := Reindex(o)
-	require.NoError(t, err)
-	total := model.ChunkCount()
-	require.Equal(t, 2, total, "fixture should produce two chunks")
-
-	// Change only the body of the second section. Reuse is now per-chunk for
-	// text files too (keyed on the deterministic ChunkKey), so only the edited
-	// chunk re-embeds; the unchanged chunk keeps its vector.
-	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nrewritten nested paragraph")
-	h.commit("edit body")
-
-	_, err = Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, total+1, model.ChunkCount(), "only the changed chunk re-embeds")
+	require.Equal(t, callsBefore, model.DocumentCalls(), "post-commit reindex should be a no-op")
 }
 
 func TestTextFileUnchangedBlobReusesAll(t *testing.T) {
@@ -267,47 +241,13 @@ func TestTextFileUnchangedBlobReusesAll(t *testing.T) {
 
 	_, err := Reindex(o)
 	require.NoError(t, err)
-	calls := model.ChunkCalls()
+	calls := model.DocumentCalls()
 
-	// No change at all: the whole file's vectors are reused, nothing re-embeds.
+	// No change at all: the whole file is reused via blob_sha, nothing re-embeds.
 	h.commit("empty")
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	require.Equal(t, calls, model.ChunkCalls(), "unchanged text file should embed nothing")
-}
-
-func TestTextFileInferenceIdentityChangeReusesVectors(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
-	h.commit("init")
-
-	model := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
-	o, st := h.opts(t, model)
-	infer1 := infer.NewMockModel("infer-v1")
-	o.Inference = infer1
-	defer st.Close()
-
-	_, err := Reindex(o)
-	require.NoError(t, err)
-	total := model.ChunkCount()
-	require.Equal(t, 2, total)
-	require.Len(t, model.inputs(), 2, "initial run embeds every chunk")
-	require.Equal(t, 2, infer1.Calls(), "initial run augments every chunk")
-
-	// Switch the inference model without touching file content. The augmentation
-	// (minor) spec never invalidates a stored vector, so reuse-by-ChunkKey keeps
-	// every chunk's embedding and stored blurb -- the second run must do no
-	// embedding and no inference work. Force a full revisit (a config-only change
-	// leaves no git diff) by clearing the marker.
-	infer2 := infer.NewMockModel("infer-v2")
-	o.Inference = infer2
-	require.NoError(t, os.Remove(filepath.Join(h.root, "pkb-state.toml")))
-	before := len(model.inputs())
-	_, err = Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, total, model.ChunkCount(), "inference-model switch reuses existing vectors")
-	require.Equal(t, before, len(model.inputs()), "inference-model switch re-embeds nothing")
-	require.Equal(t, 0, infer2.Calls(), "inference-model switch re-augments nothing")
+	require.Equal(t, calls, model.DocumentCalls(), "unchanged text file should embed nothing")
 }
 
 // recordingModel wraps a mock embedding model and captures the exact chunk
@@ -339,7 +279,7 @@ func (r *recordingModel) inputs() []string {
 
 func TestCrashMidFileReusesCommittedChunks(t *testing.T) {
 	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 2\n}\n")
 	h.commit("init")
 
 	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
@@ -349,10 +289,10 @@ func TestCrashMidFileReusesCommittedChunks(t *testing.T) {
 	_, err := Reindex(o)
 	require.NoError(t, err)
 	firstRun := rec.inputs()
-	require.Len(t, firstRun, 2, "fixture should embed two chunks on first run")
+	require.Len(t, firstRun, 3, "fixture should embed three chunks on first run")
 
-	// Edit only the second section, then crash the next embed call.
-	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nrewritten nested paragraph")
+	// Edit only the second function, then crash the next embed call.
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 22\n}\n")
 	h.commit("edit body")
 	rec.failOnce = true
 	_, err = Reindex(o)
@@ -371,104 +311,11 @@ func TestCrashMidFileReusesCommittedChunks(t *testing.T) {
 	stats, err := st.Stats("mock")
 	require.NoError(t, err)
 	require.Equal(t, 1, stats.Files)
-	require.Equal(t, 2, stats.Chunks)
+	require.Equal(t, 3, stats.Chunks)
 }
 
 func TestMinorSpec(t *testing.T) {
-	disabled := &Options{}
-	require.Equal(t, "off||", disabled.minorSpec())
-
-	enabled := &Options{Inference: infer.NewMockModel("infer-v1")}
-	require.Equal(t, "on|infer-v1|"+promptVersion, enabled.minorSpec())
-
-	other := &Options{Inference: infer.NewMockModel("infer-v2")}
-	require.NotEqual(t, enabled.minorSpec(), other.minorSpec())
-}
-
-// failingInfer always errors, exercising the graceful-degradation path.
-type failingInfer struct{ name string }
-
-func (f *failingInfer) ModelName() string               { return f.name }
-func (f *failingInfer) Complete(string) (string, error) { return "", fmt.Errorf("boom") }
-
-func TestAugmentationPrependsBlurbForTextFiles(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph")
-	h.commit("init")
-
-	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
-	o, st := h.opts(t, rec)
-	inf := infer.NewMockModel("infer-v1")
-	o.Inference = inf
-	defer st.Close()
-
-	_, err := Reindex(o)
-	require.NoError(t, err)
-
-	require.Greater(t, inf.Calls(), 0, "inference should run for text chunks")
-	inputs := rec.inputs()
-	require.NotEmpty(t, inputs)
-	for _, in := range inputs {
-		require.Contains(t, in, "context:", "embedded text should include the augmentation blurb")
-	}
-}
-
-func TestAugmentationSkipsCodeFiles(t *testing.T) {
-	h := newHarness(t)
-	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")
-	h.commit("init")
-
-	model := embed.NewMockModel("mock", 3)
-	o, st := h.opts(t, model)
-	inf := infer.NewMockModel("infer-v1")
-	o.Inference = inf
-	defer st.Close()
-
-	_, err := Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, 0, inf.Calls(), "code files must not be augmented")
-}
-
-func TestAugmentationFailureDegradesGracefully(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph")
-	h.commit("init")
-
-	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
-	o, st := h.opts(t, rec)
-	o.Inference = &failingInfer{name: "infer-v1"}
-	defer st.Close()
-
-	state, err := Reindex(o)
-	require.NoError(t, err, "inference failure must not abort the run")
-	require.Equal(t, 1, state.FileCount)
-	for _, in := range rec.inputs() {
-		require.NotContains(t, in, "context:", "failed inference falls back to deterministic text")
-	}
-}
-
-func TestReindexOnHeadingChangeMarkdown(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
-	h.commit("init")
-
-	model := embed.NewMockModel("mock", 3)
-	o, st := h.opts(t, model)
-	defer st.Close()
-
-	_, err := Reindex(o)
-	require.NoError(t, err)
-	total := model.ChunkCount()
-	require.Equal(t, 2, total, "fixture should produce two chunks")
-
-	// Rename the top heading: it is a parent breadcrumb of both chunks, so both
-	// must re-embed even though no chunk body text changed.
-	h.write("doc.md", "# Topic\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
-	h.commit("rename heading")
-
-	_, err = Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, total+2, model.ChunkCount(), "heading change must re-embed descendant chunks")
+	require.Equal(t, "off||", (&Options{}).minorSpec())
 }
 
 func TestReusesUnchangedChunksCode(t *testing.T) {
@@ -559,7 +406,7 @@ func TestRenameHandled(t *testing.T) {
 
 func TestPartialRunMarkerSafety(t *testing.T) {
 	h := newHarness(t)
-	h.write("a.md", "# A\n\nalpha content")
+	h.write("a.go", "package a\n\nfunc A() int {\n\treturn 1\n}\n")
 	h.commit("init")
 
 	failing := &embed.FailingModel{MockModel: embed.NewMockModel("mock", 3), FailAfter: 0}
@@ -735,8 +582,6 @@ func TestBudgetGateAbortsOverBudget(t *testing.T) {
 
 	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
 	o, st := h.opts(t, rec)
-	inf := infer.NewMockModel("infer-v1")
-	o.Inference = inf
 	o.MaxReindexCost = 1e-12 // any real work exceeds this
 	defer st.Close()
 
@@ -746,7 +591,6 @@ func TestBudgetGateAbortsOverBudget(t *testing.T) {
 
 	// No paid work and no mutation occurred.
 	require.Empty(t, rec.inputs(), "over-budget run must not embed")
-	require.Equal(t, 0, inf.Calls(), "over-budget run must not augment")
 	stats, err := st.Stats("mock")
 	require.NoError(t, err)
 	require.Equal(t, 0, stats.Files)
@@ -862,15 +706,11 @@ func TestContextualizeTextRoutesTextThroughEmbedDocument(t *testing.T) {
 
 	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
 	o, st := h.opts(t, model)
-	inf := infer.NewMockModel("infer-v1")
-	o.Inference = inf
-	o.ContextualizeText = true
 	defer st.Close()
 
 	_, err := Reindex(o)
 	require.NoError(t, err)
 
-	require.Equal(t, 0, inf.Calls(), "auto-chunk text path must skip inference augmentation")
 	require.Equal(t, 0, model.ChunkCalls(), "text file must not go through the isolated EmbedChunks path")
 	require.Equal(t, 1, model.DocumentCalls(), "small text file is sent whole in one EmbedDocument call")
 
@@ -895,7 +735,6 @@ func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {
 
 	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
 	o, st := h.opts(t, model)
-	o.ContextualizeText = true
 	defer st.Close()
 
 	_, err := Reindex(o)
@@ -926,7 +765,6 @@ func TestContextualizeTextLeavesCodeOnIsolatedPath(t *testing.T) {
 
 	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
 	o, st := h.opts(t, model)
-	o.ContextualizeText = true
 	defer st.Close()
 
 	_, err := Reindex(o)
@@ -943,7 +781,6 @@ func TestContextualizeTextReembedsOnEditSkipsUnchanged(t *testing.T) {
 
 	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
 	o, st := h.opts(t, model)
-	o.ContextualizeText = true
 	defer st.Close()
 
 	_, err := Reindex(o)
@@ -963,49 +800,6 @@ func TestContextualizeTextReembedsOnEditSkipsUnchanged(t *testing.T) {
 	require.Equal(t, 2, model.DocumentCalls(), "edited file must be re-embedded whole")
 }
 
-func TestContextualizeTextOffIsNoOp(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph")
-	h.commit("init")
-
-	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
-	o, st := h.opts(t, model)
-	inf := infer.NewMockModel("infer-v1")
-	o.Inference = inf
-	defer st.Close()
-
-	_, err := Reindex(o)
-	require.NoError(t, err)
-
-	require.Equal(t, 0, model.DocumentCalls(), "option off must never call EmbedDocument")
-	require.Greater(t, inf.Calls(), 0, "option off keeps the inference augmentation path")
-}
-
-func TestContextualizeTextModeFlipReembedsTextOnly(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph")
-	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")
-	h.commit("init")
-
-	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
-	o, st := h.opts(t, model)
-	defer st.Close()
-
-	// Option off: text goes through the isolated EmbedChunks path.
-	_, err := Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, 0, model.DocumentCalls())
-	chunkCallsOff := model.ChunkCalls()
-	require.Greater(t, chunkCallsOff, 0)
-
-	// Flip the option on against the same blobs: only the text file re-embeds.
-	o.ContextualizeText = true
-	_, err = Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, 1, model.DocumentCalls(), "flipping the option re-embeds the text file")
-	require.Equal(t, chunkCallsOff, model.ChunkCalls(), "code file is skipped on the flip (blob_sha)")
-}
-
 func TestContextualizeTextSharesOneVecTable(t *testing.T) {
 	h := newHarness(t)
 	h.write("doc.md", "# Top\n\nintro paragraph about widgets")
@@ -1014,7 +808,6 @@ func TestContextualizeTextSharesOneVecTable(t *testing.T) {
 
 	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
 	o, st := h.opts(t, model)
-	o.ContextualizeText = true
 	defer st.Close()
 
 	_, err := Reindex(o)
@@ -1034,51 +827,3 @@ func TestContextualizeTextSharesOneVecTable(t *testing.T) {
 	require.NotEmpty(t, textHit, "text hits come from the shared table")
 }
 
-func TestEstimateContextualTextDropsInferenceKeepsEmbedding(t *testing.T) {
-	h := newHarness(t)
-	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
-	h.commit("init")
-
-	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 8)}
-
-	// Option off: inference is projected for the text file.
-	oOff, stOff := h.opts(t, model)
-	defer stOff.Close()
-	oOff.Inference = infer.NewMockModel("infer-v1")
-	estOff, err := Estimate(oOff, false)
-	require.NoError(t, err)
-	require.Greater(t, estOff.InferInputTokens, 0)
-	require.Greater(t, estOff.InferDollars, 0.0)
-
-	// Option on: no inference component, embedding tokens still charged.
-	oOn, stOn := h.opts(t, model)
-	defer stOn.Close()
-	oOn.Inference = infer.NewMockModel("infer-v1")
-	oOn.ContextualizeText = true
-	estOn, err := Estimate(oOn, false)
-	require.NoError(t, err)
-	require.Equal(t, 0, estOn.InferInputTokens, "auto-chunk text files skip inference")
-	require.Equal(t, 0.0, estOn.InferDollars)
-	require.Greater(t, estOn.EmbedTokens, 0, "embedding tokens are still charged")
-}
-
-func TestStripThinking(t *testing.T) {
-	cases := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"no thinking", "just context", "just context"},
-		{"full block", "<think>reason here</think>\n\nthe context", "the context"},
-		{"dangling close", "reasoning...\n</think>\nthe context", "the context"},
-		{"multiline block", "<think>\nline1\nline2\n</think>\nctx", "ctx"},
-		{"only thinking", "<think>nothing else</think>", ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := stripThinking(c.in); got != c.want {
-				t.Errorf("stripThinking(%q) = %q, want %q", c.in, got, c.want)
-			}
-		})
-	}
-}

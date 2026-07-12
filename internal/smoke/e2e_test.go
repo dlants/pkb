@@ -48,8 +48,6 @@ func TestEndToEndWithMockProviders(t *testing.T) {
 	// selecting the deterministic mock providers.
 	model, err := embed.Build("mock", "mock-embed", 8, "", "", "", "")
 	require.NoError(t, err)
-	inferenceModel, err := infer.Build("mock", "mock-infer", "", "", "", "")
-	require.NoError(t, err)
 
 	repo, err := git.Open(root)
 	require.NoError(t, err)
@@ -58,11 +56,10 @@ func TestEndToEndWithMockProviders(t *testing.T) {
 	defer st.Close()
 
 	opts := &index.Options{
-		Repo:      repo,
-		Store:     st,
-		Model:     model,
-		Inference: inferenceModel,
-		Ignore:    index.NewIgnore(nil),
+		Repo:   repo,
+		Store:  st,
+		Model:  model,
+		Ignore: index.NewIgnore(nil),
 	}
 
 	state, err := index.Reindex(opts)

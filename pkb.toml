@@ -7,7 +7,8 @@ dimensions = 256
 apikeyenv = "VOYAGE_API_KEY"
 contextualizeText = true
 
+# Text is embedded via voyage-context-4's contextualized endpoint
+# (contextualizeText above), which supplies document context directly, and code
+# is never augmented -- so no LLM augmentation is used.
 [inference]
-provider = "anthropic"
-model = "claude-haiku-4-5"
-apikeyenv = "ANTHROPIC_API_KEY"
+provider = "none"
