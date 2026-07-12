@@ -25,9 +25,8 @@ import (
 // that changes the meaning of an embedding changes: the chunking algorithm,
 // breadcrumb/heading-context handling, tree-sitter grammars, or the tags.scm /
 // pkb chunking logic. Bumping it isolates old vectors into separate vec tables
-// and forces a full recompute. The augmentation spec (see minorSpec in
-// internal/index) is deliberately NOT part of this identity.
-const MajorVersion = 4
+// and forces a full recompute.
+const MajorVersion = 5
 
 var vecOnce bool
 
@@ -74,7 +73,6 @@ func (s *Store) init() error {
 			model_name TEXT NOT NULL,
 			embedding_version INTEGER NOT NULL,
 			blob_sha TEXT NOT NULL,
-			minor_spec TEXT NOT NULL DEFAULT '',
 			UNIQUE(path, model_name, embedding_version)
 		);
 		CREATE TABLE IF NOT EXISTS chunks (
@@ -86,9 +84,7 @@ func (s *Store) init() error {
 			start_line INTEGER NOT NULL,
 			start_col INTEGER NOT NULL,
 			end_line INTEGER NOT NULL,
-			end_col INTEGER NOT NULL,
-			augmentation TEXT NOT NULL DEFAULT '',
-			aug_spec TEXT NOT NULL DEFAULT ''
+			end_col INTEGER NOT NULL
 		);
 	`)
 	if err != nil {
@@ -107,9 +103,6 @@ func (s *Store) init() error {
 	// Migrate pre-existing databases that lack the newer columns.
 	for _, m := range []struct{ table, def string }{
 		{"chunks", "heading_context TEXT NOT NULL DEFAULT ''"},
-		{"files", "minor_spec TEXT NOT NULL DEFAULT ''"},
-		{"chunks", "augmentation TEXT NOT NULL DEFAULT ''"},
-		{"chunks", "aug_spec TEXT NOT NULL DEFAULT ''"},
 	} {
 		if err := addColumn(m.table, m.def); err != nil {
 			return err
@@ -134,18 +127,16 @@ func (s *Store) EnsureVecTable(modelName string, dims int) error {
 }
 
 // FileMeta records the reuse-relevant metadata stored for an indexed file: the
-// blob sha and the inference-model identity that produced its augmented
-// embeddings (empty when augmentation was disabled).
+// blob sha.
 type FileMeta struct {
-	Sha       string
-	MinorSpec string
+	Sha string
 }
 
 // IndexedFiles returns a map of relative path -> FileMeta for files already
 // indexed by the given model.
 func (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {
 	rows, err := s.db.Query(
-		`SELECT path, blob_sha, minor_spec FROM files WHERE model_name = ? AND embedding_version = ?`,
+		`SELECT path, blob_sha FROM files WHERE model_name = ? AND embedding_version = ?`,
 		modelName, MajorVersion)
 	if err != nil {
 		return nil, err
@@ -153,11 +144,11 @@ func (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {
 	defer rows.Close()
 	out := map[string]FileMeta{}
 	for rows.Next() {
-		var path, sha, minorSpec string
-		if err := rows.Scan(&path, &sha, &minorSpec); err != nil {
+		var path, sha string
+		if err := rows.Scan(&path, &sha); err != nil {
 			return nil, err
 		}
-		out[path] = FileMeta{Sha: sha, MinorSpec: minorSpec}
+		out[path] = FileMeta{Sha: sha}
 	}
 	return out, rows.Err()
 }
@@ -199,13 +190,12 @@ func deleteFileTx(tx *sql.Tx, path, modelName string) error {
 }
 
 // PutFile (re)indexes a single file in one transaction: it deletes any existing
-// rows for the path, inserts the file row recording the new blob sha and minor
-// spec, then inserts every chunk (with its augmentation blurb, aug spec, and
-// vector). Because the whole write is a single transaction, a crash leaves the
-// previously committed state intact, so the file is simply reindexed on the
-// next run; expensive embedding/inference work has already been done in memory
-// by the caller before this is invoked.
-func (s *Store) PutFile(path, modelName, blobSha, minorSpec string, chunks []chunk.ChunkInfo, contextualized, augmentations, augSpecs []string, embeddings []embed.Embedding) error {
+// rows for the path, inserts the file row recording the new blob sha, then
+// inserts every chunk (with its vector). Because the whole write is a single
+// transaction, a crash leaves the previously committed state intact, so the
+// file is simply reindexed on the next run; expensive embedding work has
+// already been done in memory by the caller before this is invoked.
+func (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInfo, contextualized []string, embeddings []embed.Embedding) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -217,8 +207,8 @@ func (s *Store) PutFile(path, modelName, blobSha, minorSpec string, chunks []chu
 	}
 
 	res, err := tx.Exec(
-		`INSERT INTO files (path, model_name, embedding_version, blob_sha, minor_spec) VALUES (?, ?, ?, ?, ?)`,
-		path, modelName, MajorVersion, blobSha, minorSpec)
+		`INSERT INTO files (path, model_name, embedding_version, blob_sha) VALUES (?, ?, ?, ?)`,
+		path, modelName, MajorVersion, blobSha)
 	if err != nil {
 		return err
 	}
@@ -230,9 +220,9 @@ func (s *Store) PutFile(path, modelName, blobSha, minorSpec string, chunks []chu
 	vec := vecTableName(modelName, MajorVersion)
 	for i, c := range chunks {
 		cres, err := tx.Exec(
-			`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col, augmentation, aug_spec)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			fileID, c.Text, contextualized[i], c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col, augmentations[i], augSpecs[i])
+			`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			fileID, c.Text, contextualized[i], c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col)
 		if err != nil {
 			return err
 		}
@@ -253,31 +243,20 @@ func (s *Store) PutFile(path, modelName, blobSha, minorSpec string, chunks []chu
 }
 
 // ChunkKey is the reuse key for a chunk: the deterministic inputs to its
-// embedding (heading breadcrumb + raw text). It deliberately excludes any
-// non-deterministic augmentation, so a chunk re-embeds when its text or any
-// parent heading/breadcrumb changes, but is reused otherwise.
+// embedding (heading breadcrumb + raw text). A chunk re-embeds when its text or
+// any parent heading/breadcrumb changes, but is reused otherwise.
 func ChunkKey(headingContext, text string) string {
 	return headingContext + "\x00" + text
 }
 
-// ReuseChunk carries the reusable state for an unchanged chunk: its stored
-// embedding plus the augmentation blurb that was embedded with it (empty when
-// the chunk was never augmented).
-type ReuseChunk struct {
-	Embedding    embed.Embedding
-	Augmentation string
-	AugSpec      string
-}
-
-// ChunkEmbeddings returns a map of ChunkKey -> ReuseChunk for a path/model, so
-// an incremental reindex can reuse vectors (and their stored augmentation
-// blurbs) for unchanged chunks instead of re-embedding/re-augmenting them.
-// Duplicate keys collapse harmlessly (identical deterministic input yields an
-// identical embedding).
-func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]ReuseChunk, error) {
+// ChunkEmbeddings returns a map of ChunkKey -> embedding for a path/model, so an
+// incremental reindex can reuse vectors for unchanged chunks instead of
+// re-embedding them. Duplicate keys collapse harmlessly (identical
+// deterministic input yields an identical embedding).
+func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]embed.Embedding, error) {
 	vec := vecTableName(modelName, MajorVersion)
 	rows, err := s.db.Query(fmt.Sprintf(
-		`SELECT c.heading_context, c.text, c.augmentation, c.aug_spec, v.embedding
+		`SELECT c.heading_context, c.text, v.embedding
 		 FROM chunks c
 		 JOIN files f ON f.id = c.file_id
 		 JOIN %s v ON v.chunk_id = c.id
@@ -287,14 +266,14 @@ func (s *Store) ChunkEmbeddings(path, modelName string) (map[string]ReuseChunk, 
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string]ReuseChunk{}
+	out := map[string]embed.Embedding{}
 	for rows.Next() {
-		var headingContext, text, augmentation, augSpec string
+		var headingContext, text string
 		var blob []byte
-		if err := rows.Scan(&headingContext, &text, &augmentation, &augSpec, &blob); err != nil {
+		if err := rows.Scan(&headingContext, &text, &blob); err != nil {
 			return nil, err
 		}
-		out[ChunkKey(headingContext, text)] = ReuseChunk{Embedding: deserializeFloat32(blob), Augmentation: augmentation, AugSpec: augSpec}
+		out[ChunkKey(headingContext, text)] = deserializeFloat32(blob)
 	}
 	return out, rows.Err()
 }

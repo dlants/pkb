@@ -370,14 +370,11 @@ func runChunk(args []string) error {
 		kind = route.Grammar
 	}
 	fmt.Printf("%s (%s): %d chunks\n", path, kind, len(chunks))
-	// Show each chunk exactly as it is embedded: the heading breadcrumb (and, at
-	// index time, an inference blurb) rendered as comments/context blocks ahead
-	// of the raw chunk text. Augmentation is non-deterministic inference output
-	// unavailable offline, so it is omitted here just as the cost estimate omits
-	// it.
+	// Show each chunk exactly as it is embedded: the heading breadcrumb rendered
+	// as comments/context blocks ahead of the raw chunk text.
 	comment := filetype.LineComment(path)
 	for _, c := range chunks {
-		embedded := index.Contextualize(comment, c.HeadingContext, "", c.Text)
+		embedded := index.Contextualize(comment, c.HeadingContext, c.Text)
 		fmt.Printf("\n%s\n\n%s\n", chunkHeading(c.HeadingContext, c.Start.Line), embedded)
 	}
 	return nil
