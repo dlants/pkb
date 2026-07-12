@@ -186,6 +186,18 @@ Voyage models plus the conservative unknown-model fallback.
 
 ## Stage 3 — Voyage-only embeddings + contextual requirement
 
+> **Status: DONE.** Deleted `internal/embed/{bedrock,openai,gemini}.go` and
+> their tests. `Build` collapsed to `voyage`/`mock` (empty provider defaults to
+> voyage) and its signature dropped the Bedrock-only `region`/`profile` args
+> (config still carries those fields until Stage 4; they are simply no longer
+> passed). `setup()` in `main.go` now asserts the built model implements
+> `embed.ContextualEmbeddingModel` and fails fast with a clear error otherwise.
+> AWS SDK deps removed from `go.mod`/`go.sum` via `go mod tidy`. Updated the
+> `internal/smoke` `embed.Build` calls to the new signature and added
+> `internal/embed/factory_test.go` covering that every provider is contextual and
+> that unknown providers error. Full `go build`/`go vet`/`go test ./...` pass;
+> `rg -in "bedrock|cohere|gemini|openai|aws" internal/embed go.mod` is empty.
+
 - Goal: delete `internal/embed/{bedrock,openai,gemini}.go` (+tests); collapse
   `Build` to voyage/mock; `setup()` asserts the model implements
   `ContextualEmbeddingModel` and errors otherwise; drop AWS SDK from
