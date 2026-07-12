@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -21,7 +19,6 @@ import (
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
-	"github.com/dlants/pkb/internal/infer"
 	"github.com/dlants/pkb/internal/paths"
 	"github.com/dlants/pkb/internal/store"
 )
@@ -75,17 +72,10 @@ type Options struct {
 	Repo  *git.Repo
 	Store *store.Store
 	// Model embeds all files (code and text).
-	Model embed.EmbeddingModel
-	// Inference, when non-nil, augments text/markdown chunks before embedding.
-	// Its identity is folded into text-file reuse so switching models
-	// invalidates stale augmented vectors. Nil disables augmentation.
-	Inference infer.InferenceModel
-	Ignore    *Ignore
+	Model  embed.EmbeddingModel
+	Ignore *Ignore
 	// ExtOverrides forces a file extension to a file type ("code"/"text").
 	ExtOverrides map[string]string
-	// MaxParallelism bounds concurrent inference (augmentation) calls during
-	// indexing. Values below 1 are treated as 1.
-	MaxParallelism int
 	// MaxReindexCost caps the projected dollar cost of a single run (a
 	// per-run cap, not a cumulative spend limit). Reindex estimates the cost
 	// before any paid work and aborts when it exceeds MaxReindexCost. A
@@ -96,21 +86,12 @@ type Options struct {
 	// blob shas equal the blob shas the commit will contain, so a subsequent
 	// post-commit reindex is a no-op.
 	Staged bool
-	// ContextualizeText, when true and the embedding model implements
-	// embed.ContextualEmbeddingModel, routes text files through the model's
-	// whole-document auto-chunking endpoint (skipping PKB chunking and
-	// inference augmentation) instead of the isolated per-chunk path. Code
-	// files are unaffected.
-	ContextualizeText bool
 }
 
-// contextualModel returns the embedding model as a ContextualEmbeddingModel
-// when the auto-chunk text path is enabled and the model supports it. The
-// second result reports whether the contextual text path is active.
+// contextualModel returns the embedding model as a ContextualEmbeddingModel.
+// The second result reports whether the model supports the contextual
+// whole-document path (all text files use it).
 func (o *Options) contextualModel() (embed.ContextualEmbeddingModel, bool) {
-	if !o.ContextualizeText {
-		return nil, false
-	}
 	cm, ok := o.Model.(embed.ContextualEmbeddingModel)
 	return cm, ok
 }
@@ -127,25 +108,11 @@ func (o *Options) activeModels() []embed.EmbeddingModel {
 	return []embed.EmbeddingModel{o.Model}
 }
 
-// promptVersion is a hand-maintained version of the augmentation prompt
-// template (see augmentPrompt). Bump it whenever the prompt text changes so the
-// recorded minor spec reflects the augmentation that produced a chunk's blurb.
-// It is part of the minor spec only: changing it never invalidates an existing
-// embedding (augmentation merely contributes extra text to the embedded input).
-const promptVersion = "1"
-
-// minorSpec serializes the augmentation configuration -- whether augmentation
-// was enabled, the inference-model identity, and the prompt version -- into a
-// compact, deterministic string for recording and inspection. It is
-// deliberately excluded from embedding compatibility/reuse decisions: a stored
-// vector remains valid even when the minor spec changes, because augmentation
-// only adds text to the embedded input. When augmentation is disabled the spec
-// is the empty-augmentation form ("off||").
+// minorSpec is the recorded minor spec for the per-chunk (code) path. With
+// augmentation removed it is a constant; it is excluded from embedding
+// compatibility/reuse decisions.
 func (o *Options) minorSpec() string {
-	if o.Inference == nil {
-		return "off||"
-	}
-	return fmt.Sprintf("on|%s|%s", o.Inference.ModelName(), promptVersion)
+	return "off||"
 }
 
 // route returns the file type for a path, applying any extension overrides.
@@ -655,7 +622,6 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 				return costEstimate{}, err
 			}
 		}
-		isText := o.route(path) != filetype.Code
 		est.files++
 		for _, c := range chunks {
 			if _, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
@@ -663,17 +629,9 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			}
 			est.chunks++
 			est.embedTokens += len(Contextualize(filetype.LineComment(string(path)), c.HeadingContext, "", c.Text)) / cost.CharsPerToken
-			if o.Inference != nil && isText {
-				est.inferInputTokens += (len(content) + len(c.HeadingContext) + len(c.Text)) / cost.CharsPerToken
-				est.inferOutputTokens += cost.AugmentMaxTokens
-			}
 		}
 	}
 	est.embedDollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())
-	if o.Inference != nil {
-		ip := cost.InferencePricePerToken(o.Inference.ModelName())
-		est.inferDollars = float64(est.inferInputTokens)*ip.InputPerToken + float64(est.inferOutputTokens)*ip.OutputPerToken
-	}
 	est.dollars = est.embedDollars + est.inferDollars
 	return est, nil
 }
@@ -734,7 +692,6 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, mo
 		return nil, err
 	}
 
-	isText := o.route(path) != filetype.Code
 	comment := filetype.LineComment(string(path))
 	minorSpec := o.minorSpec()
 
@@ -763,41 +720,6 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, mo
 			augSpecs[i] = rc.AugSpec
 			reuseEmb[i] = rc.Embedding
 		}
-	}
-
-	// Augment only reuse-miss chunks of text/markdown files (the contextual-
-	// retrieval pattern): each gets a short blurb situating it within the whole
-	// document. Inference failures degrade to the deterministic text with a
-	// warning and never abort the run; reuse hits are never re-augmented.
-	if o.Inference != nil && isText {
-		parallelism := o.MaxParallelism
-		if parallelism < 1 {
-			parallelism = 1
-		}
-		sem := make(chan struct{}, parallelism)
-		var wg sync.WaitGroup
-		for i, c := range chunks {
-			if reuse[i] {
-				continue
-			}
-			wg.Add(1)
-			sem <- struct{}{}
-			go func(i int, c chunk.ChunkInfo) {
-				defer wg.Done()
-				defer func() { <-sem }()
-				blurb, err := o.Inference.Complete(augmentPrompt(string(content), c.HeadingContext, c.Text))
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "warning: inference failed for %s chunk %d, using deterministic context: %v\n", path, i, err)
-					return
-				}
-				blurb = stripThinking(blurb)
-				if blurb == "" || strings.TrimSpace(blurb) == augmentNoneSentinel {
-					return
-				}
-				augmentations[i] = blurb
-			}(i, c)
-		}
-		wg.Wait()
 	}
 
 	// Build the embedded text for every chunk from its heading breadcrumb and
@@ -964,63 +886,6 @@ func metaBlock(comment, s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// augmentNoneSentinel is the exact token the model is told to emit when a chunk
-// needs no added context. The pipeline maps it to an empty blurb so we never
-// embed filler. It is unlikely to appear as legitimate context output.
-const augmentNoneSentinel = "NONE"
-
-// augmentPrompt builds the contextual-retrieval prompt asking the inference
-// model for a single sentence that situates a chunk within its whole document,
-// adding only information not already recoverable from the chunk text itself.
-// The heading breadcrumb is passed explicitly so the model can anchor the chunk
-// without re-deriving its location, and the instructions are placed after the
-// chunk so they sit at the end of the context window where small models follow
-// them more reliably (at a small prompt-caching cost).
-func augmentPrompt(document, headingContext, chunkText string) string {
-	chunkBlock := chunkText
-	if headingContext != "" {
-		chunkBlock = fmt.Sprintf("%s\n\n%s", headingContext, chunkText)
-	}
-	return fmt.Sprintf(`<document>
-%s
-</document>
-
-Here is a chunk taken from the document above:
-<chunk>
-%s
-</chunk>
-
-When searching, the user is going to see the chunk without the rest of the document. Our job is to provide context to help the user understand the chunk when presented in isolation.
-
-If the chunk mentions "it", "he", "the benchmark", "this approach", but doesn't capture what the chunk is referncing, explain the reference.
-
-Examples:
--	"it" refers to chunking.
-- "this approach" refers to context augmentation.
-
-Resolve abbreviations and acronyms, when they are defined in the document.
-
-Examples:
-- pkb is "personal knowledge base", the name of this tool
-
-Bias towards brevity, if you can't find obvious context to add, output exactly %s and nothing else.`, document, chunkBlock, augmentNoneSentinel)
-}
-
-// thinkBlockRe matches a complete <think>...</think> reasoning block.
-var thinkBlockRe = regexp.MustCompile(`(?s)<think>.*?</think>`)
-
-// stripThinking removes reasoning output that thinking models (e.g. Qwen3) may
-// emit before their answer, so it never gets embedded as part of the context
-// blurb. It drops complete <think>...</think> blocks; if a dangling </think>
-// remains (some chat templates emit the opening tag implicitly), everything up
-// to and including it is dropped.
-func stripThinking(s string) string {
-	s = thinkBlockRe.ReplaceAllString(s, "")
-	if i := strings.LastIndex(s, "</think>"); i >= 0 {
-		s = s[i+len("</think>"):]
-	}
-	return strings.TrimSpace(s)
-}
 
 // indexedEntry records which model embedded a path, the stored blob sha, and
 // the recorded minor spec (used to detect an auto-chunk mode flip).
