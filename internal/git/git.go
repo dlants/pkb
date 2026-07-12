@@ -88,6 +88,17 @@ func (r *Repo) LsTree(ref string) ([]RepoFile, error) {
 	return files, nil
 }
 
+// WriteTree writes the current staging area (index) to the object database as a
+// tree and returns its sha. It does not create a commit or mutate the working
+// tree or index. The returned sha is a tree-ish consumable by LsTree.
+func (r *Repo) WriteTree() (string, error) {
+	out, err := r.run("write-tree")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // DiffNameStatus returns the changes between two commits.
 func (r *Repo) DiffNameStatus(from, to string) ([]Change, error) {
 	out, err := r.run("diff", "--name-status", from, to)
