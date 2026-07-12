@@ -239,6 +239,24 @@ Voyage models plus the conservative unknown-model fallback.
 
 ## Stage 5 — Simplify the store schema
 
+> **Status: DONE.** Dropped the `augmentation`/`aug_spec` chunk columns and the
+> `minor_spec` file column from the store schema + migrations; bumped
+> `store.MajorVersion` 4 → 5 to re-key the vec tables. `FileMeta` lost
+> `MinorSpec`; `PutFile` dropped its `minorSpec`/`augmentations`/`augSpecs`
+> params; `ChunkEmbeddings` now returns `map[string]embed.Embedding` (the
+> `ReuseChunk` struct is gone). In `internal/index`: removed `Options.minorSpec`,
+> `autoChunkMinorSpec`, the `indexedEntry.minorSpec` field, and all
+> auto-chunk-mode-flip logic in the reindex skip check, `touchedPaths`, and
+> `estimate` (for a fixed model name `isContextual(path)` is constant, so stored
+> mode is unnecessary). `preparedFile` dropped `minorSpec`/`augmentations`/
+> `augSpecs`; `prepareFile`/`prepareContextualFile`/`compactPrepared`/`Contextualize`/
+> `writeFile` simplified accordingly. `main.go`'s `chunk` preview call dropped the
+> augmentation arg. Tests: rewrote `store_test.go` helpers/asserts for the new
+> signatures (removed `TestIndexedFilesExposesMinorSpec`, bumped the migration
+> seed to version 5), removed `TestMinorSpec`, and updated
+> `TestCompactPreparedDropsZeroSignalChunks`. Full `go build`/`go vet`/`go test ./...`
+> pass. Note: `README.md`/`pkb.toml`/`LOCAL.md` doc cleanup remains (Stage 6).
+
 - Goal: drop `augmentation`, `aug_spec`, `minor_spec` columns + struct fields +
   query columns; bump `store.MajorVersion`; simplify
   `PutFile`/`IndexedFiles`/`ChunkEmbeddings` signatures and `internal/index`

@@ -108,13 +108,6 @@ func (o *Options) activeModels() []embed.EmbeddingModel {
 	return []embed.EmbeddingModel{o.Model}
 }
 
-// minorSpec is the recorded minor spec for the per-chunk (code) path. With
-// augmentation removed it is a constant; it is excluded from embedding
-// compatibility/reuse decisions.
-func (o *Options) minorSpec() string {
-	return "off||"
-}
-
 // route returns the file type for a path, applying any extension overrides.
 func (o *Options) route(path paths.GitRootRelativePath) filetype.FileType {
 	ext := strings.ToLower(filepath.Ext(string(path)))
@@ -233,7 +226,7 @@ func Reindex(o *Options) (State, error) {
 			return State{}, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, minorSpec: meta.MinorSpec}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
 		}
 	}
 
@@ -345,18 +338,8 @@ func Reindex(o *Options) (State, error) {
 			// Skip a file only when it was indexed by the same embedding model
 			// against the same blob. Because each file is written in a single
 			// transaction, a recorded file row always reflects a fully indexed
-			// file. The minor (augmentation) spec is deliberately excluded: an
-			// augmentation-spec change (inference model or prompt) never
-			// invalidates a vector, so it triggers no re-embedding or
-			// re-augmentation.
-			// A stored autoChunkMinorSpec marks a file embedded via the
-			// whole-document auto-chunk path. Flipping the contextualizeText
-			// option changes which path a text file takes, so a file whose
-			// stored mode disagrees with the current mode must be re-embedded
-			// even though its blob and model name are unchanged. Code files are
-			// never on the auto-chunk path, so this never fires for them.
-			wasAutoChunk := prevEntry.minorSpec == autoChunkMinorSpec
-			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha && wasAutoChunk == o.isContextual(path) {
+			// file.
+			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 				continue
 			}
 			// If a different model previously embedded this path (e.g. routing
@@ -467,7 +450,7 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 			return CostEstimate{}, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, minorSpec: meta.MinorSpec}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
 		}
 	}
 
@@ -507,9 +490,8 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 // touchedPaths computes the set of paths that might need work by comparing the
 // target tree's blob shas against the blob shas already recorded in the store.
 // A path is touched when it is a new/modified candidate (absent from the index
-// or with a differing blob sha), a deletion (indexed but no longer in the tree),
-// or an auto-chunk mode flip (an indexed candidate whose recorded mode disagrees
-// with the current contextualizeText decision). This is derived purely from the
+// or with a differing blob sha) or a deletion (indexed but no longer in the
+// tree). This is derived purely from the
 // tree and the stored blob shas, so it is correct regardless of commit history
 // shape and needs no commit inputs. A same-content embedding-model swap falls
 // out naturally: the new model has no stored blob shas, so every tree candidate
@@ -523,16 +505,6 @@ func (o *Options) touchedPaths(treeMap map[paths.GitRootRelativePath]string, ind
 		}
 		entry, wasIndexed := indexed[path]
 		if !wasIndexed || entry.sha != blobSha {
-			touched[path] = struct{}{}
-			continue
-		}
-		// Mode flip: the stored auto-chunk mode disagrees with the current
-		// contextualizeText decision. Flipping the option leaves blob shas
-		// unchanged, so this forces the affected text files back through the
-		// pipeline. Code files are never on the auto-chunk path, so their stored
-		// mode always matches and they are never added.
-		wasAutoChunk := entry.minorSpec == autoChunkMinorSpec
-		if wasAutoChunk != o.isContextual(path) {
 			touched[path] = struct{}{}
 		}
 	}
@@ -562,11 +534,7 @@ type costEstimate struct {
 // work that will actually be paid for. It mirrors Reindex's skip decision and
 // per-chunk reuse so reuse hits are never charged: a file fully indexed by the
 // same model against the same blob is skipped, and within a reindexed file only
-// reuse-miss chunks contribute embedding (and, for text files with augmentation
-// enabled, inference) tokens. Augmentation blurb length is unknown at estimate
-// time, so embedding tokens are projected from the un-augmented contextual text
-// -- a slight under-count of the augmentation contribution that the dominant
-// inference term already accounts for. No network or DB writes occur.
+// reuse-miss chunks contribute embedding tokens. No network or DB writes occur.
 func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry, fromScratch bool) (costEstimate, error) {
 	var est costEstimate
 	model := o.Model
@@ -576,13 +544,11 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			continue
 		}
 		prevEntry, wasIndexed := indexed[path]
-		wasAutoChunk := prevEntry.minorSpec == autoChunkMinorSpec
-		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha && wasAutoChunk == o.isContextual(path) {
+		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 			continue
 		}
-		// Auto-chunk text files are sent whole to the contextual endpoint and
-		// skip inference augmentation. Project their embedding tokens from the
-		// whole-file length and charge no inference.
+		// Text files are sent whole to the contextual endpoint. Project their
+		// embedding tokens from the whole-file length.
 		if o.isContextual(path) {
 			content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 			if err != nil {
@@ -604,7 +570,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 		// A model change purges the old rows, so reuse is keyed on the new
 		// model's name -- an empty map there, correctly charging every chunk. A
 		// from-scratch projection ignores reuse entirely and charges every chunk.
-		var existing map[string]store.ReuseChunk
+		var existing map[string]embed.Embedding
 		if !fromScratch {
 			existing, err = o.Store.ChunkEmbeddings(string(path), model.ModelName())
 			if err != nil {
@@ -617,7 +583,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 				continue
 			}
 			est.chunks++
-			est.embedTokens += len(Contextualize(filetype.LineComment(string(path)), c.HeadingContext, "", c.Text)) / cost.CharsPerToken
+			est.embedTokens += len(Contextualize(filetype.LineComment(string(path)), c.HeadingContext, c.Text)) / cost.CharsPerToken
 		}
 	}
 	est.embedDollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())
@@ -626,18 +592,15 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 }
 
 // preparedFile holds everything needed to persist one file except the freshly
-// computed embeddings: chunking, reuse resolution and augmentation are all done
+// computed embeddings: chunking and reuse resolution are all done
 // up front, and embedIdx lists the chunk indices still awaiting embedding.
 // remaining counts how many of those are not yet filled in (decremented as
 // batches flush); the file is written only when it reaches zero.
 type preparedFile struct {
 	path           paths.GitRootRelativePath
 	blobSha        string
-	minorSpec      string
 	chunks         []chunk.ChunkInfo
 	contextualized []string
-	augmentations  []string
-	augSpecs       []string
 	embeddings     []embed.Embedding
 	embedIdx       []int
 	remaining      int
@@ -667,10 +630,10 @@ func (o *Options) chunkFile(path paths.GitRootRelativePath, content []byte) ([]c
 }
 
 // prepareFile does all per-file work except the embedding call and the database
-// write: it chunks the file, resolves reuse, augments reuse-miss text chunks,
-// and builds the contextualized text for every chunk. The returned preparedFile
-// carries reused vectors already in place and embedIdx listing the chunks that
-// still need embedding (in a cross-file batch).
+// write: it chunks the file, resolves reuse, and builds the contextualized text
+// for every chunk. The returned preparedFile carries reused vectors already in
+// place and embedIdx listing the chunks that still need embedding (in a
+// cross-file batch).
 func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) (*preparedFile, error) {
 	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 	if err != nil {
@@ -682,41 +645,31 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, mo
 	}
 
 	comment := filetype.LineComment(string(path))
-	minorSpec := o.minorSpec()
 
 	// Load the committed-generation reuse map keyed on ChunkKey (heading
-	// breadcrumb + raw text). Reuse is valid for code and text alike: the minor
-	// (augmentation) spec never invalidates a vector, so an unchanged chunk keeps
-	// both its embedding and its stored augmentation blurb even when the file
-	// changed elsewhere or the augmentation spec changed.
+	// breadcrumb + raw text), so an unchanged chunk keeps its embedding even
+	// when the file changed elsewhere.
 	existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
 	if err != nil {
 		return nil, err
 	}
 
-	// Resolve, per chunk: whether it is a reuse hit, the augmentation blurb, and
-	// the aug_spec that produced that blurb. Reuse hits carry the stored blurb
-	// and spec verbatim; misses default to no blurb under the current spec.
+	// Resolve, per chunk, whether it is a reuse hit and carry over its stored
+	// vector; misses are re-embedded.
 	reuse := make([]bool, len(chunks))
-	augmentations := make([]string, len(chunks))
-	augSpecs := make([]string, len(chunks))
 	reuseEmb := make([]embed.Embedding, len(chunks))
 	for i, c := range chunks {
-		augSpecs[i] = minorSpec
-		if rc, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
+		if emb, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
 			reuse[i] = true
-			augmentations[i] = rc.Augmentation
-			augSpecs[i] = rc.AugSpec
-			reuseEmb[i] = rc.Embedding
+			reuseEmb[i] = emb
 		}
 	}
 
-	// Build the embedded text for every chunk from its heading breadcrumb and
-	// augmentation blurb. Reused vectors are carried over in place; reuse misses
-	// are recorded in embedIdx to be embedded later in a cross-file batch.
-	pf := compactPrepared(path, comment, chunks, augmentations, augSpecs, reuse, reuseEmb)
+	// Build the embedded text for every chunk from its heading breadcrumb.
+	// Reused vectors are carried over in place; reuse misses are recorded in
+	// embedIdx to be embedded later in a cross-file batch.
+	pf := compactPrepared(path, comment, chunks, reuse, reuseEmb)
 	pf.blobSha = blobSha
-	pf.minorSpec = minorSpec
 	return pf, nil
 }
 
@@ -733,19 +686,19 @@ const (
 )
 
 // prepareContextualFile builds a preparedFile for a text file via the model's
-// whole-document auto-chunking endpoint. PKB does not chunk the file and no
-// inference augmentation runs; instead the model returns its own chunks, each
-// with a contextualized vector. Chunks are file-tagged (no line ranges) and
-// carry no augmentation. Large files are sent in overlapping windows and the
-// resulting chunks are deduped by text identity. Per-chunk reuse does not apply
-// here; unchanged files are skipped wholesale by the caller's blob_sha check.
+// whole-document auto-chunking endpoint. PKB does not chunk the file; instead
+// the model returns its own chunks, each with a contextualized vector. Chunks
+// are file-tagged (no line ranges). Large files are sent in overlapping windows
+// and the resulting chunks are deduped by text identity. Per-chunk reuse does
+// not apply here; unchanged files are skipped wholesale by the caller's
+// blob_sha check.
 func (o *Options) prepareContextualFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {
 	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 	if err != nil {
 		return nil, err
 	}
 	windows := autoChunkWindows(string(content))
-	pf := &preparedFile{path: path, blobSha: blobSha, minorSpec: autoChunkMinorSpec}
+	pf := &preparedFile{path: path, blobSha: blobSha}
 	seen := map[string]struct{}{}
 	for _, w := range windows {
 		chunks, err := cm.EmbedDocument(w)
@@ -763,18 +716,12 @@ func (o *Options) prepareContextualFile(path paths.GitRootRelativePath, blobSha 
 			seen[text] = struct{}{}
 			pf.chunks = append(pf.chunks, chunk.ChunkInfo{Text: text})
 			pf.contextualized = append(pf.contextualized, text)
-			pf.augmentations = append(pf.augmentations, "")
-			pf.augSpecs = append(pf.augSpecs, autoChunkMinorSpec)
 			pf.embeddings = append(pf.embeddings, c.Embedding)
 			pf.chars += len(text)
 		}
 	}
 	return pf, nil
 }
-
-// autoChunkMinorSpec marks a file that was embedded via the whole-document
-// auto-chunking path (rather than the isolated per-chunk augmentation path).
-const autoChunkMinorSpec = "autochunk"
 
 // autoChunkWindows splits a document into byte windows for whole-document
 // embedding. A document at or under the window size is returned as a single
@@ -808,10 +755,10 @@ func autoChunkWindows(document string) []string {
 // vector together, so the embedding count stays aligned with what PutFile
 // writes. Reused vectors are carried over in place; reuse misses are recorded in
 // embedIdx (as indices into the compacted slices) to be embedded later.
-func compactPrepared(path paths.GitRootRelativePath, comment string, chunks []chunk.ChunkInfo, augmentations, augSpecs []string, reuse []bool, reuseEmb []embed.Embedding) *preparedFile {
+func compactPrepared(path paths.GitRootRelativePath, comment string, chunks []chunk.ChunkInfo, reuse []bool, reuseEmb []embed.Embedding) *preparedFile {
 	pf := &preparedFile{path: path}
 	for i, c := range chunks {
-		ctx := Contextualize(comment, c.HeadingContext, augmentations[i], c.Text)
+		ctx := Contextualize(comment, c.HeadingContext, c.Text)
 		if strings.TrimSpace(ctx) == "" {
 			fmt.Fprintf(os.Stderr, "warning: skipping empty chunk %d in %s (no embeddable content)\n", i, path)
 			continue
@@ -819,8 +766,6 @@ func compactPrepared(path paths.GitRootRelativePath, comment string, chunks []ch
 		j := len(pf.chunks)
 		pf.chunks = append(pf.chunks, c)
 		pf.contextualized = append(pf.contextualized, ctx)
-		pf.augmentations = append(pf.augmentations, augmentations[i])
-		pf.augSpecs = append(pf.augSpecs, augSpecs[i])
 		if reuse[i] {
 			pf.embeddings = append(pf.embeddings, reuseEmb[i])
 			continue
@@ -834,29 +779,25 @@ func compactPrepared(path paths.GitRootRelativePath, comment string, chunks []ch
 }
 
 // writeFile persists a fully embedded file in a single transaction. The
-// expensive embedding and augmentation work is already done, so the write is
-// quick. A crash before it commits leaves the previously indexed state intact,
-// and the file is simply reindexed on the next run (reusing unchanged chunks via
+// expensive embedding work is already done, so the write is quick. A crash
+// before it commits leaves the previously indexed state intact, and the file is
+// simply reindexed on the next run (reusing unchanged chunks via
 // ChunkEmbeddings).
 func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error {
-	return o.Store.PutFile(string(pf.path), model.ModelName(), pf.blobSha, pf.minorSpec, pf.chunks, pf.contextualized, pf.augmentations, pf.augSpecs, pf.embeddings)
+	return o.Store.PutFile(string(pf.path), model.ModelName(), pf.blobSha, pf.chunks, pf.contextualized, pf.embeddings)
 }
 
 // Contextualize builds the text actually embedded for a chunk: the raw chunk
-// text prefixed by its heading breadcrumb and (outermost) its augmentation
-// blurb. When the file has a known line-comment prefix the metadata is rendered
-// as zero-indented comments in the file's own language, which keeps the embedded
-// text in distribution for code embedding models; the chunk text itself is left
-// untouched so its original indentation is preserved. Files without a comment
-// prefix (markdown/plaintext) fall back to <context>...</context> blocks. Empty
-// components are omitted.
-func Contextualize(comment, headingContext, augmentation, text string) string {
+// text prefixed by its heading breadcrumb. When the file has a known
+// line-comment prefix the metadata is rendered as zero-indented comments in the
+// file's own language, which keeps the embedded text in distribution for code
+// embedding models; the chunk text itself is left untouched so its original
+// indentation is preserved. Files without a comment prefix (markdown/plaintext)
+// fall back to <context>...</context> blocks. Empty components are omitted.
+func Contextualize(comment, headingContext, text string) string {
 	s := text
 	if headingContext != "" {
 		s = metaBlock(comment, headingContext) + "\n\n" + s
-	}
-	if augmentation != "" {
-		s = metaBlock(comment, augmentation) + "\n\n" + s
 	}
 	return s
 }
@@ -875,12 +816,10 @@ func metaBlock(comment, s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// indexedEntry records which model embedded a path, the stored blob sha, and
-// the recorded minor spec (used to detect an auto-chunk mode flip).
+// indexedEntry records which model embedded a path and the stored blob sha.
 type indexedEntry struct {
-	model     string
-	sha       string
-	minorSpec string
+	model string
+	sha   string
 }
 
 // HealthIssue is a single discrepancy found by Healthcheck. Path is the
@@ -954,7 +893,7 @@ func Healthcheck(o *Options) (HealthReport, error) {
 			return rep, err
 		}
 		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha, minorSpec: meta.MinorSpec}
+			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
 		}
 		s, err := o.Store.Stats(m.ModelName())
 		if err != nil {

@@ -314,10 +314,6 @@ func TestCrashMidFileReusesCommittedChunks(t *testing.T) {
 	require.Equal(t, 3, stats.Chunks)
 }
 
-func TestMinorSpec(t *testing.T) {
-	require.Equal(t, "off||", (&Options{}).minorSpec())
-}
-
 func TestReusesUnchangedChunksCode(t *testing.T) {
 	h := newHarness(t)
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 2\n}\n\nfunc Gamma() int {\n\treturn 3\n}\n")
@@ -629,18 +625,14 @@ func TestCompactPreparedDropsZeroSignalChunks(t *testing.T) {
 		{Text: "   ", HeadingContext: ""}, // zero-signal: Contextualize -> "   "
 		{Text: "func main() {}", HeadingContext: "a.go"},
 	}
-	augmentations := []string{"", "", ""}
-	augSpecs := []string{"off||", "off||", "off||"}
 	reuse := []bool{false, false, false}
 	reuseEmb := make([]embed.Embedding, 3)
 
-	pf := compactPrepared("a.go", "//", chunks, augmentations, augSpecs, reuse, reuseEmb)
+	pf := compactPrepared("a.go", "//", chunks, reuse, reuseEmb)
 
 	require.Len(t, pf.chunks, 2, "the whitespace-only chunk must be dropped")
 	n := len(pf.chunks)
 	require.Len(t, pf.contextualized, n)
-	require.Len(t, pf.augmentations, n)
-	require.Len(t, pf.augSpecs, n)
 	require.Len(t, pf.embeddings, n)
 	require.Equal(t, []int{0, 1}, pf.embedIdx)
 	require.Equal(t, n, pf.remaining)
