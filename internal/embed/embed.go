@@ -5,7 +5,7 @@ package embed
 // Embedding is a dense vector representation of a chunk or query.
 type Embedding []float32
 
-// EmbeddingModel produces embeddings via some backend (Bedrock, mock, etc.).
+// EmbeddingModel produces embeddings via some backend (Voyage, mock, etc.).
 type EmbeddingModel interface {
 	// ModelName uniquely identifies the model; vec tables are keyed by it.
 	ModelName() string

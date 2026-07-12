@@ -45,7 +45,7 @@ func TestEndToEndWithMockProviders(t *testing.T) {
 
 	// Build both models exactly as the pkb CLI does, via the provider factories,
 	// selecting the deterministic mock providers.
-	model, err := embed.Build("mock", "mock-embed", 8, "", "", "", "")
+		model, err := embed.Build("mock", "mock-embed", 8, "", "")
 	require.NoError(t, err)
 
 	repo, err := git.Open(root)
@@ -74,6 +74,6 @@ func TestEndToEndWithMockProviders(t *testing.T) {
 // TestBuildRejectsUnknownProviders ensures config-driven selection surfaces
 // actionable errors for misconfigured providers.
 func TestBuildRejectsUnknownProviders(t *testing.T) {
-	_, err := embed.Build("nope", "m", 8, "", "", "", "")
+	_, err := embed.Build("nope", "m", 8, "", "")
 	require.Error(t, err)
 }

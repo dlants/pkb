@@ -103,9 +103,12 @@ func setup() (*index.Options, func(), error) {
 	}
 	ignore := index.NewIgnore(cfg.Exclude)
 
-	model, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.Region, cfg.Embedding.Profile, cfg.Embedding.BaseURL, cfg.Embedding.APIKeyEnv)
+	model, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.BaseURL, cfg.Embedding.APIKeyEnv)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building embedding model: %w", err)
+	}
+	if _, ok := model.(embed.ContextualEmbeddingModel); !ok {
+		return nil, nil, fmt.Errorf("embedding model %q does not support contextualized document embeddings; a contextual embedder (e.g. voyage-context-*) is required", model.ModelName())
 	}
 
 	st, err := store.Open(filepath.Join(string(repo.Root), dbRelPath))
