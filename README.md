@@ -47,6 +47,18 @@ It needs `VOYAGE_API_KEY` and `ANTHROPIC_API_KEY` set as **repository secrets** 
 
 Locally you can always run `pkb reindex` by hand and commit the result — just make sure `git lfs install` has been run in your clone (see the Git LFS setup above) so the blob uploads on `git push`.
 
+### Pre-commit trigger (`--staged`)
+
+Because reindexing is fast and driven purely by per-file git blob shas, you can also refresh the index _in the same commit_ as your code with a **pre-commit** hook. `pkb reindex --staged` indexes the staging area (`git write-tree`) instead of `HEAD`, so it sees exactly the content the commit will contain — with no commit required. The staged blob shas equal the blob shas the commit will hold, so the very next post-commit `pkb reindex` is a no-op.
+
+A sample hook lives at [`hooks/pre-commit`](hooks/pre-commit): it runs `pkb reindex --staged` and then `git add pkb.db pkb-state.toml` so the refreshed index rides along in the same commit. Install it by pointing git at the `hooks/` directory:
+
+```
+git config core.hooksPath hooks
+```
+
+LFS caveat: `pkb.db` is LFS-tracked, so the `git add` in the hook stages the small LFS pointer (not the blob) — this is fine and does not fight the LFS `pre-push` hook. As with the manual flow, make sure `git lfs install` has been run in your clone so the blob uploads on `git push`.
+
 See these files in this repo for a complete working configuration:
 
 - [`.github/workflows/pkb-index.yml`](.github/workflows/pkb-index.yml) — the CI reindex + LFS-aware commit workflow.

@@ -209,6 +209,8 @@ tracked, so `git add` of the pointer is fine.
   - `go vet` / build confirm no dead references remain.
 - Before moving on: full `go test ./...`, `go vet ./...` pass.
 
+**Status: DONE.** Added `Options.Staged` (`internal/index/manager.go`); when set, `Reindex` materializes the staging area via `Repo.WriteTree()` and lists that tree instead of `HEAD`. `targetSha` (recorded in the state marker for human output only) resolves `HEAD` as the parent commit, tolerating a missing `HEAD` (very first commit) by recording an empty commit. Added the `--staged` flag to `runReindex` in `main.go` and updated usage text. Added a sample hook at `hooks/pre-commit` (runs `pkb reindex --staged` then `git add pkb.db pkb-state.toml`; install via `git config core.hooksPath hooks`). Documented the pre-commit trigger + LFS caveat in `README.md` under a new "Pre-commit trigger (`--staged`)" subsection. Added `TestStagedReindexIndexesUncommittedThenNoOp` in `manager_test.go` verifying staged-but-uncommitted content indexes and a subsequent post-commit reindex is a no-op. Full `go build`/`go vet`/`go test ./...` green.
+
 ## Stage 4 — `--staged` CLI + pre-commit hook + docs
 
 - Goal: `pkb reindex --staged` indexes the staged tree; a sample pre-commit hook

@@ -67,7 +67,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `pkb - git-repo-rooted code+docs search index
 
 usage:
-  pkb reindex          reindex the repo against HEAD
+  pkb reindex          reindex the repo against HEAD (--staged for the git index)
   pkb estimate         estimate the cost of the next and a full reindex
   pkb search <query>   search the index
   pkb stats            print index statistics
@@ -137,6 +137,7 @@ func setup() (*index.Options, func(), error) {
 func runReindex(args []string) error {
 	fs := flag.NewFlagSet("reindex", flag.ExitOnError)
 	maxCost := fs.Float64("max-reindex-cost", -1, "override the configured per-run max reindex cost in dollars (<=0 disables the gate)")
+	staged := fs.Bool("staged", false, "index the staging area (git write-tree) instead of HEAD, for use in a pre-commit hook")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -148,6 +149,7 @@ func runReindex(args []string) error {
 	if isFlagSet(fs, "max-reindex-cost") {
 		opts.MaxReindexCost = *maxCost
 	}
+	opts.Staged = *staged
 
 	st, err := index.Reindex(opts)
 	if err != nil {
