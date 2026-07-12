@@ -91,6 +91,11 @@ type Options struct {
 	// before any paid work and aborts when it exceeds MaxReindexCost. A
 	// non-positive value disables the gate.
 	MaxReindexCost float64
+	// Staged, when true, indexes the staging area (git write-tree) rather than
+	// HEAD, so a pre-commit hook can index not-yet-committed content. The staged
+	// blob shas equal the blob shas the commit will contain, so a subsequent
+	// post-commit reindex is a no-op.
+	Staged bool
 	// ContextualizeText, when true and the embedding model implements
 	// embed.ContextualEmbeddingModel, routes text files through the model's
 	// whole-document auto-chunking endpoint (skipping PKB chunking and
@@ -216,12 +221,26 @@ func writeState(repoRoot string, s State) error {
 // Reindex brings the index in sync with HEAD and, only on success, advances
 // the marker.
 func Reindex(o *Options) (State, error) {
-	ref := "HEAD"
 	repoRoot := string(o.Repo.Root)
 
-	targetSha, err := o.Repo.ResolveRef(ref)
+	treeRef := "HEAD"
+	if o.Staged {
+		treeSha, err := o.Repo.WriteTree()
+		if err != nil {
+			return State{}, err
+		}
+		treeRef = treeSha
+	}
+
+	// targetSha is recorded in the state marker for human-facing output only;
+	// correctness comes from the per-file blob shas. For a staged run it is the
+	// parent HEAD commit (or empty when indexing the very first commit).
+	targetSha, err := o.Repo.ResolveRef("HEAD")
 	if err != nil {
-		return State{}, err
+		if !o.Staged {
+			return State{}, err
+		}
+		targetSha = ""
 	}
 
 	models := o.activeModels()
@@ -251,7 +270,7 @@ func Reindex(o *Options) (State, error) {
 		}
 	}
 
-	treeFiles, err := o.Repo.LsTree(ref)
+	treeFiles, err := o.Repo.LsTree(treeRef)
 	if err != nil {
 		return State{}, err
 	}

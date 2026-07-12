@@ -195,6 +195,42 @@ func TestIncrementalAddModifyDelete(t *testing.T) {
 	require.NotContains(t, files, "del.md")
 }
 
+func TestStagedReindexIndexesUncommittedThenNoOp(t *testing.T) {
+	h := newHarness(t)
+	h.write("committed.md", "# Committed\n\nalready committed content")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	// Stage a new file but do not commit it. A staged reindex indexes the
+	// write-tree snapshot, so the staged-but-uncommitted file is picked up.
+	h.write("staged.md", "# Staged\n\nnot yet committed")
+	h.git("add", "staged.md")
+
+	o.Staged = true
+	state, err := Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, 2, state.FileCount)
+
+	files, err := st.IndexedFiles("mock")
+	require.NoError(t, err)
+	require.Contains(t, files, "staged.md")
+
+	// Committing the staged content yields identical blob shas, so a normal
+	// post-commit reindex embeds nothing.
+	h.commit("add staged")
+	o.Staged = false
+	callsBefore := model.ChunkCalls()
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, callsBefore, model.ChunkCalls(), "post-commit reindex should be a no-op")
+}
+
 func TestTextFilePerChunkReuseOnChange(t *testing.T) {
 	h := newHarness(t)
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
