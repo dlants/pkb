@@ -28,9 +28,14 @@ import (
 
 // State is the persisted marker recording how far indexing has progressed.
 type State struct {
-	Commit     string `toml:"commit"`
-	FileCount  int    `toml:"fileCount"`
-	ChunkCount int    `toml:"chunkCount"`
+	Commit     string   `toml:"commit"`
+	FileCount  int      `toml:"fileCount"`
+	ChunkCount int      `toml:"chunkCount"`
+	// Model records the embedding model that produced this index. A same-commit
+	// swap of the embedding model leaves Commit unchanged, so it is compared
+	// against the active model to force a full re-embed when they differ (see
+	// touchedPaths).
+	Model string `toml:"model"`
 }
 
 const statePath = "pkb-state.toml"
@@ -260,15 +265,7 @@ func Reindex(o *Options) (State, error) {
 		treeMap[f.Path] = f.BlobSha
 	}
 
-	prev, err := readState(repoRoot)
-	if err != nil {
-		return State{}, err
-	}
-
-	touched, err := o.touchedPaths(prev, targetSha, treeMap, indexed)
-	if err != nil {
-		return State{}, err
-	}
+	touched := o.touchedPaths(treeMap, indexed)
 
 	est, err := o.estimate(touched, treeMap, indexed, false)
 	if err != nil {
@@ -447,6 +444,7 @@ func Reindex(o *Options) (State, error) {
 		Commit:     targetSha,
 		FileCount:  stats.Files,
 		ChunkCount: stats.Chunks,
+		Model:      o.Model.ModelName(),
 	}
 	if err := writeState(repoRoot, st); err != nil {
 		return State{}, err
@@ -478,12 +476,6 @@ type CostEstimate struct {
 // reindex against HEAD, mirroring Reindex's skip and reuse decisions exactly.
 func Estimate(o *Options, full bool) (CostEstimate, error) {
 	ref := "HEAD"
-	repoRoot := string(o.Repo.Root)
-
-	targetSha, err := o.Repo.ResolveRef(ref)
-	if err != nil {
-		return CostEstimate{}, err
-	}
 
 	models := o.activeModels()
 	for _, m := range models {
@@ -521,14 +513,7 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 			}
 		}
 	} else {
-		prev, err := readState(repoRoot)
-		if err != nil {
-			return CostEstimate{}, err
-		}
-		touched, err = o.touchedPaths(prev, targetSha, treeMap, indexed)
-		if err != nil {
-			return CostEstimate{}, err
-		}
+		touched = o.touchedPaths(treeMap, indexed)
 	}
 
 	est, err := o.estimate(touched, treeMap, indexed, full)
@@ -547,84 +532,47 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 	}, nil
 }
 
-// touchedPaths computes the set of paths that might need work, choosing the
-// incremental, divergence, or full strategy.
-func (o *Options) touchedPaths(prev *State, targetSha string, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) (map[paths.GitRootRelativePath]struct{}, error) {
+// touchedPaths computes the set of paths that might need work by comparing the
+// target tree's blob shas against the blob shas already recorded in the store.
+// A path is touched when it is a new/modified candidate (absent from the index
+// or with a differing blob sha), a deletion (indexed but no longer in the tree),
+// or an auto-chunk mode flip (an indexed candidate whose recorded mode disagrees
+// with the current contextualizeText decision). This is derived purely from the
+// tree and the stored blob shas, so it is correct regardless of commit history
+// shape and needs no commit inputs. A same-content embedding-model swap falls
+// out naturally: the new model has no stored blob shas, so every tree candidate
+// differs and is re-embedded.
+func (o *Options) touchedPaths(treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) map[paths.GitRootRelativePath]struct{} {
 	touched := map[paths.GitRootRelativePath]struct{}{}
 
-	// addModeFlips adds any already-indexed file whose recorded auto-chunk mode
-	// disagrees with the current contextualizeText decision. Flipping the option
-	// leaves the commit and blob shas unchanged, so a same-commit reindex would
-	// otherwise re-embed nothing; this forces the affected text files (and only
-	// those) back through the pipeline. Code files are never on the auto-chunk
-	// path, so their stored mode always matches and they are never added.
-	addModeFlips := func() {
-		for path, entry := range indexed {
-			if _, inTree := treeMap[path]; !inTree || !o.candidate(path) {
-				continue
-			}
-			wasAutoChunk := entry.minorSpec == autoChunkMinorSpec
-			if wasAutoChunk != o.isContextual(path) {
-				touched[path] = struct{}{}
-			}
+	for path, blobSha := range treeMap {
+		if !o.candidate(path) {
+			continue
 		}
-	}
-
-	full := prev == nil || prev.Commit == "" || !o.Repo.ObjectExists(prev.Commit)
-	if !full && prev.Commit == targetSha {
-		addModeFlips()
-		return touched, nil // nothing changed except possible mode flips
-	}
-
-	if full {
-		for path := range treeMap {
-			if o.candidate(path) {
-				touched[path] = struct{}{}
-			}
+		entry, wasIndexed := indexed[path]
+		if !wasIndexed || entry.sha != blobSha {
+			touched[path] = struct{}{}
+			continue
 		}
-		for path := range indexed {
+		// Mode flip: the stored auto-chunk mode disagrees with the current
+		// contextualizeText decision. Flipping the option leaves blob shas
+		// unchanged, so this forces the affected text files back through the
+		// pipeline. Code files are never on the auto-chunk path, so their stored
+		// mode always matches and they are never added.
+		wasAutoChunk := entry.minorSpec == autoChunkMinorSpec
+		if wasAutoChunk != o.isContextual(path) {
 			touched[path] = struct{}{}
 		}
-		return touched, nil
 	}
 
-	addDiff := func(from, to string) error {
-		changes, err := o.Repo.DiffNameStatus(from, to)
-		if err != nil {
-			return err
+	// Deletions: a path recorded in the store but absent from the target tree.
+	for path := range indexed {
+		if _, inTree := treeMap[path]; !inTree {
+			touched[path] = struct{}{}
 		}
-		for _, c := range changes {
-			if c.Path != "" {
-				touched[c.Path] = struct{}{}
-			}
-			if c.OldPath != "" {
-				touched[c.OldPath] = struct{}{}
-			}
-		}
-		return nil
 	}
 
-	if o.Repo.IsAncestor(prev.Commit, targetSha) {
-		if err := addDiff(prev.Commit, targetSha); err != nil {
-			return nil, err
-		}
-		addModeFlips()
-		return touched, nil
-	}
-
-	// Divergence: union of diffs from the merge-base to each side.
-	base, err := o.Repo.MergeBase(prev.Commit, targetSha)
-	if err != nil {
-		return nil, err
-	}
-	if err := addDiff(base, prev.Commit); err != nil {
-		return nil, err
-	}
-	if err := addDiff(base, targetSha); err != nil {
-		return nil, err
-	}
-	addModeFlips()
-	return touched, nil
+	return touched
 }
 
 // costEstimate summarizes a projected reindex run: how many files/chunks need

@@ -661,6 +661,38 @@ func TestModelChangeCleansUpOrphanTable(t *testing.T) {
 	require.Contains(t, newFiles, "doc.md")
 }
 
+func TestModelChangeForcesFullReembedSameCommit(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Doc\n\ntext content here")
+	h.commit("init")
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "pkb.db"))
+	require.NoError(t, err)
+	defer st.Close()
+	repo, err := git.Open(h.root)
+	require.NoError(t, err)
+	m1 := embed.NewMockModel("mock-v1", 3)
+	o := &Options{Repo: repo, Store: st, Model: m1, Ignore: NewIgnore(nil)}
+	_, err = Reindex(o)
+	require.NoError(t, err)
+
+	// Swap the embedding model without changing the commit or removing the
+	// state marker; the swap alone must force a full re-embed under the new
+	// model.
+	o.Model = embed.NewMockModel("mock-v2", 3)
+	res, err := Reindex(o)
+	require.NoError(t, err)
+	require.Greater(t, res.FileCount, 0, "model swap should re-embed files")
+
+	newFiles, err := st.IndexedFiles("mock-v2")
+	require.NoError(t, err)
+	require.Contains(t, newFiles, "doc.md")
+
+	old, err := st.IndexedFiles("mock-v1")
+	require.NoError(t, err)
+	require.Empty(t, old, "orphaned model rows should be cleaned up")
+}
+
 func TestBudgetGateAbortsOverBudget(t *testing.T) {
 	h := newHarness(t)
 	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
