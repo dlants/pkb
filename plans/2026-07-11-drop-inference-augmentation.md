@@ -270,6 +270,14 @@ Voyage models plus the conservative unknown-model fallback.
 
 ## Stage 6 — Docs + config cleanup
 
+> **Status: DONE.** Rewrote `README.md`'s Configuration section to Voyage-only
+> (single embedding model, contextual requirement, no augmentation/inference/
+> other providers/AWS fields); trimmed the CI-secrets line to `VOYAGE_API_KEY`
+> and the `pkb.toml` link description. Deleted `LOCAL.md`. `pkb.toml` dropped the
+> `[inference]` block and `contextualizeText`. `rg` for augment/inference/
+> contextualizeText/maxparallelism/bedrock/gemini/openai/anthropic/cohere in
+> docs+config is empty. Full `go build`/`go vet`/`go test ./...` pass.
+
 - Goal: `README.md` describes only Voyage embedding (no augmentation, inference,
   `contextualizeText`, `maxparallelism`, other providers, AWS fields); delete
   `LOCAL.md`; `pkb.toml` drops `[inference]` and `contextualizeText`.
