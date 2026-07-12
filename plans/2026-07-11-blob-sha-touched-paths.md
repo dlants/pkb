@@ -195,6 +195,8 @@ tracked, so `git add` of the pointer is fine.
     `TestModelChangeForcesFullReembedSameCommit` to the new model.
 - Before moving on: full `go test ./...`, `go vet ./...` pass.
 
+**Status: DONE.** Removed `State.Model` (field + its write in `Reindex`); the model-swap correctness now rides entirely on blob-diffing (empty `indexed` map for the swapped-in model). Deleted the now-dead git helpers `DiffNameStatus`, `IsAncestor`, `MergeBase`, `ObjectExists`, and the `Change` struct from `internal/git/git.go`, and updated the package doc comment. Rewrote `Healthcheck`'s stale check: dropped the `state.Commit != HEAD` equality warning (meaningless under amend/rebase/staged flows) and rely on the pre-existing blob-coverage checks (missing file / stale blob / orphaned file) plus the file/chunk count checks; `StateCommit` is still recorded for human-facing output. Updated the `index` package doc comment to describe blob-sha diffing. Retargeted `TestHealthcheckHealthyAndStale` to assert the stale-blob and missing-file issues (removed the obsolete "does not match HEAD" assertion). Full `go build`/`go vet`/`go test ./...` green.
+
 ## Stage 3 — Retire commit machinery & simplify State
 
 - Goal: remove `State.Model` + its check; remove now-dead `DiffNameStatus`,

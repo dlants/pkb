@@ -1,7 +1,7 @@
-// Package index implements the reindex flow: it diffs the marker commit
-// (pkb-state.toml) against HEAD (or does a full ls-tree on cold
-// start/recovery), then indexes/updates/deletes files. There is no watcher;
-// reindex runs to completion and exits.
+// Package index implements the reindex flow: it lists the target tree (HEAD by
+// default) and compares each file's git blob sha against the blob shas already
+// recorded in the store, then indexes/updates/deletes only the files that
+// differ. There is no watcher; reindex runs to completion and exits.
 package index
 
 import (
@@ -28,14 +28,9 @@ import (
 
 // State is the persisted marker recording how far indexing has progressed.
 type State struct {
-	Commit     string   `toml:"commit"`
-	FileCount  int      `toml:"fileCount"`
-	ChunkCount int      `toml:"chunkCount"`
-	// Model records the embedding model that produced this index. A same-commit
-	// swap of the embedding model leaves Commit unchanged, so it is compared
-	// against the active model to force a full re-embed when they differ (see
-	// touchedPaths).
-	Model string `toml:"model"`
+	Commit     string `toml:"commit"`
+	FileCount  int    `toml:"fileCount"`
+	ChunkCount int    `toml:"chunkCount"`
 }
 
 const statePath = "pkb-state.toml"
@@ -444,7 +439,6 @@ func Reindex(o *Options) (State, error) {
 		Commit:     targetSha,
 		FileCount:  stats.Files,
 		ChunkCount: stats.Chunks,
-		Model:      o.Model.ModelName(),
 	}
 	if err := writeState(repoRoot, st); err != nil {
 		return State{}, err
@@ -1045,7 +1039,9 @@ func (r *HealthReport) addf(path, format string, args ...any) {
 // tree at HEAD without mutating anything. It checks that every expected file
 // (an indexable, non-ignored path in the tree) is indexed with the matching
 // blob sha, that no stale files linger in the index, and that the state
-// marker's commit and file/chunk counts agree with the index.
+// marker's file/chunk counts agree with the index. Blob-sha coverage -- not the
+// recorded commit -- is the source of correctness, so a mismatched marker commit
+// (e.g. after an amend, rebase, or a staged/pre-commit index) is not flagged.
 func Healthcheck(o *Options) (HealthReport, error) {
 	repoRoot := string(o.Repo.Root)
 	var rep HealthReport
@@ -1066,9 +1062,6 @@ func Healthcheck(o *Options) (HealthReport, error) {
 		return rep, nil
 	}
 	rep.StateCommit = prev.Commit
-	if prev.Commit != targetSha {
-		rep.addf("", "state commit %s does not match HEAD %s", prev.Commit, targetSha)
-	}
 
 	treeFiles, err := o.Repo.LsTree("HEAD")
 	if err != nil {

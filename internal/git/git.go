@@ -1,6 +1,6 @@
 // Package git wraps the subset of git plumbing PKB needs to discover files and
-// detect changes: repo root resolution, ref/sha resolution, tree listing,
-// name-status diffs, object reachability, and merge-base queries.
+// detect changes: repo root resolution, ref/sha resolution, tree listing, and
+// materializing the staging area as a tree.
 package git
 
 import (
@@ -21,14 +21,6 @@ type Repo struct {
 type RepoFile struct {
 	Path    paths.GitRootRelativePath
 	BlobSha string
-}
-
-// Change is one entry of `git diff --name-status`.
-type Change struct {
-	// Status is the first letter of the status code (A, M, D, R, C, T).
-	Status  string
-	Path    paths.GitRootRelativePath
-	OldPath paths.GitRootRelativePath // set only for renames/copies
 }
 
 func (r *Repo) run(args ...string) (string, error) {
@@ -93,59 +85,6 @@ func (r *Repo) LsTree(ref string) ([]RepoFile, error) {
 // tree or index. The returned sha is a tree-ish consumable by LsTree.
 func (r *Repo) WriteTree() (string, error) {
 	out, err := r.run("write-tree")
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(out), nil
-}
-
-// DiffNameStatus returns the changes between two commits.
-func (r *Repo) DiffNameStatus(from, to string) ([]Change, error) {
-	out, err := r.run("diff", "--name-status", from, to)
-	if err != nil {
-		return nil, err
-	}
-	var changes []Change
-	for _, line := range strings.Split(out, "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Split(line, "\t")
-		if len(fields) < 2 {
-			continue
-		}
-		status := fields[0]
-		code := status[:1]
-		switch code {
-		case "R", "C":
-			if len(fields) < 3 {
-				continue
-			}
-			changes = append(changes, Change{Status: code, OldPath: paths.GitRootRelativePath(fields[1]), Path: paths.GitRootRelativePath(fields[2])})
-		default:
-			changes = append(changes, Change{Status: code, Path: paths.GitRootRelativePath(fields[1])})
-		}
-	}
-	return changes, nil
-}
-
-// ObjectExists reports whether the given object sha is present in the repo.
-func (r *Repo) ObjectExists(sha string) bool {
-	cmd := exec.Command("git", "cat-file", "-e", sha)
-	cmd.Dir = string(r.Root)
-	return cmd.Run() == nil
-}
-
-// IsAncestor reports whether commit a is an ancestor of commit b.
-func (r *Repo) IsAncestor(a, b string) bool {
-	cmd := exec.Command("git", "merge-base", "--is-ancestor", a, b)
-	cmd.Dir = string(r.Root)
-	return cmd.Run() == nil
-}
-
-// MergeBase returns the best common ancestor of a and b.
-func (r *Repo) MergeBase(a, b string) (string, error) {
-	out, err := r.run("merge-base", a, b)
 	if err != nil {
 		return "", err
 	}
