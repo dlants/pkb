@@ -14,7 +14,6 @@ import (
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/index"
-	"github.com/dlants/pkb/internal/infer"
 	"github.com/dlants/pkb/internal/store"
 	"github.com/stretchr/testify/require"
 )
@@ -76,7 +75,5 @@ func TestEndToEndWithMockProviders(t *testing.T) {
 // actionable errors for misconfigured providers.
 func TestBuildRejectsUnknownProviders(t *testing.T) {
 	_, err := embed.Build("nope", "m", 8, "", "", "", "")
-	require.Error(t, err)
-	_, err = infer.Build("nope", "m", "", "", "", "")
 	require.Error(t, err)
 }

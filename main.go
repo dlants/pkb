@@ -184,9 +184,9 @@ func formatTok(n int) string {
 }
 
 func printEstimate(label string, est index.CostEstimate) {
-	fmt.Printf("%s - %d files / %d chunks: $%s. (%s embedding, %s inference input, %s inference output)\n",
+	fmt.Printf("%s - %d files / %d chunks: $%s. (%s embedding)\n",
 		label, est.Files, est.Chunks, sig3(est.Dollars),
-		formatTok(est.EmbedTokens), formatTok(est.InferInputTokens), formatTok(est.InferOutputTokens))
+		formatTok(est.EmbedTokens))
 }
 
 func runEstimate(args []string) error {
