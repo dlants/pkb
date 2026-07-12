@@ -173,6 +173,8 @@ tracked, so `git add` of the pointer is fine.
 
 ## Stage 2 — Blob-sha `touchedPaths`
 
+**Status: DONE.** Rewrote `touchedPaths` in `internal/index/manager.go` to compute the work set purely from `treeMap` vs stored `indexed` blob shas: new/modified (absent or differing blob sha), deleted (indexed but not in tree), and auto-chunk mode flips folded into the same pass. Dropped the `prev *State` and `targetSha` inputs and the error return (no git calls left). Removed the commit-diff machinery inside the function (`full`/`ObjectExists`/`IsAncestor`/`MergeBase`/`DiffNameStatus` usage, `addModeFlips` closure) — note the git helpers themselves and `State.Model` removal are Stage 3. Rewired `Reindex` and `Estimate` to the new signature and dropped their now-unused `targetSha`/`repoRoot`/`readState` locals in the incremental path. Existing tests already exercise the new behavior and pass unchanged: `TestIncrementalAddModifyDelete`, `TestDivergenceViaMergeBase` (abandoned-branch file deletion via blob-diff), `TestTotalRecoveryWhenCommitGone` (bogus commit sha now simply ignored), and `TestModelChangeForcesFullReembedSameCommit` (empty `indexed` for the swapped-in model ⇒ full re-embed). Full `go build`/`go vet`/`go test ./...` green.
+
 - Goal: `touchedPaths` computes the work set purely from `treeMap` vs `indexed`,
   with no commit inputs; `Reindex` and `Estimate` use it.
 - Verification (unit, in `manager_test.go`, mock embed model):
