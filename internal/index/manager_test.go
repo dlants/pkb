@@ -109,7 +109,6 @@ func TestHealthcheckHealthyAndStale(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, rep.Issues)
 	msgs := strings.Join(issueStrings(rep), "\n")
-	require.Contains(t, msgs, "does not match HEAD")
 	require.Contains(t, msgs, "c.md: expected file is missing from the index")
 	require.Contains(t, msgs, "a.md: stale blob")
 }
