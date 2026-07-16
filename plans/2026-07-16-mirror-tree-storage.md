@@ -197,6 +197,34 @@ Decisions:
     - Expected: all embeddings recovered, no dependence on the metadata section.
 - Before moving on: confirm `go build ./...`, `go vet ./...`, `go test ./...` pass.
 
+**Status: DONE.** Implemented across `internal/mirror/tree.go` (new on-disk tree
+layer) and `internal/index/manager.go`.
+Decisions/deviations:
+- Added `mirror.Tree` (rooted at `.pkb/index/`) with `List` (enumerate artifacts
+  via `.meta` only, carrying blobSha/modelName/chunk-count), `TryRead` (full
+  artifact; missing or torn/corrupt reads as "absent" so the file is simply
+  reindexed), `Write` (atomic temp+rename per sibling), and `Delete`.
+- `manager.go` now sources the "indexed" set from `treeIndexed(models)`
+  (replacing `Store.IndexedFiles`) in reindex/estimate/healthcheck, resolves
+  per-chunk reuse from `reuseMap` (replacing `Store.ChunkEmbeddings`), and
+  `writeFile`/deletions go through the tree. The root `pkb.db` is never written.
+- Key subtlety: `treeIndexed` filters to *active* models, so a same-content
+  embedding-model swap reads the old artifact as absent and re-embeds (this
+  restored the model-swap behavior that previously fell out of the per-model
+  `Store.IndexedFiles` read).
+- The SQLite store is now a derived cache: after the tree is updated, reindex
+  calls `syncCache(models)` (the shared sync routine Stage 3 will also use from
+  the read path) to reconcile the cache — upsert changed/new artifacts by
+  blob-sha fingerprint, evict artifacts gone from the tree — so `Store.Stats`
+  and the state marker stay correct. `main.setup()` still opens the store at
+  `pkb.db` for now; pointing it at `.pkb/cache.db` and syncing on read commands
+  is Stage 3.
+- Tests added in `manager_test.go`: `TestReindexWritesMirrorTree` (artifacts
+  written, both siblings present + decodable, no root `pkb.db`),
+  `TestReindexReusesChunkKeepsArtifactBytes` (unchanged chunk keeps its vector,
+  only the edited chunk re-embeds), `TestReindexDeleteRemovesArtifact`. All
+  existing manager/e2e/store tests still pass against the derived cache.
+
 ## Stage 2: Reindex reads/writes the mirror tree
 
 - Goal: `pkb reindex` writes mirror artifacts as the source of truth and resolves
