@@ -1050,9 +1050,30 @@ func Healthcheck(o *Options) (HealthReport, error) {
 	return rep, nil
 }
 
+// SyncCache reconciles the derived SQLite cache with the mirror tree so read
+// commands observe up-to-date results. It ensures each active model's vec table
+// exists, then upserts artifacts whose fingerprint changed and evicts those no
+// longer in the tree. It is safe to call on a cold cache (a full build) and on a
+// warm one (an incremental diff); a missing/stale cache only affects latency,
+// never results, because the mirror tree is the source of truth.
+func SyncCache(o *Options) error {
+	models := o.activeModels()
+	for _, m := range models {
+		if err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {
+			return err
+		}
+	}
+	return o.syncCache(models)
+}
+
 // Search embeds the query with every active model, queries each model's vec
-// table, and merges results by descending score (truncated to topK).
+// table, and merges results by descending score (truncated to topK). It first
+// syncs the derived cache from the mirror tree so results reflect the committed
+// index even when the cache is stale or absent.
 func Search(o *Options, query string, topK int) ([]store.SearchResult, error) {
+	if err := SyncCache(o); err != nil {
+		return nil, err
+	}
 	var all []store.SearchResult
 	for _, m := range o.activeModels() {
 		qe, err := m.EmbedQuery(query)

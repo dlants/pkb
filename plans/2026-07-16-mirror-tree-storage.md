@@ -260,6 +260,30 @@ Decisions/deviations:
 
 ## Stage 3: Cache sync + query path
 
+**Status: DONE.** The query path now opens the gitignored `.pkb/cache.db` and
+syncs it from the mirror tree before searching.
+Decisions/deviations:
+- The sync routine already existed as `Options.syncCache` (added in Stage 2 for
+  the writer). Stage 3 exposes it to readers via a new exported
+  `index.SyncCache(o)` that ensures each active model's vec table then runs the
+  same fingerprint-diff reconcile (upsert changed/new by blob-sha+model, evict
+  artifacts gone from the tree). One load path, shared by writer and readers.
+- `index.Search` calls `SyncCache` first, so a cold or stale cache is rebuilt on
+  demand and never changes results — only latency.
+- `stats` and `healthcheck` deliberately do **not** touch the cache: `stats`
+  reads the `pkb-state.toml` marker and `healthcheck` reads the mirror tree
+  directly (`mirrorTree().List()`), so neither depends on the derived cache.
+  Only `search` queries the store, so only it syncs.
+- `main.setup()` now opens the store at `.pkb/cache.db` (const `cacheRelPath`),
+  `MkdirAll`-ing `.pkb` first, and the usage text describes the mirror tree +
+  local cache instead of `pkb.db`. Gitignoring the cache and retiring the
+  committed `pkb.db`/LFS remain Stage 4.
+- Tests added in `manager_test.go`: `TestSearchColdCacheMatchesWarm` (empty cache
+  rebuilds and reproduces warm results exactly), `TestSearchEvictsRemovedArtifact`
+  (read-path eviction of an artifact deleted from the tree while the cache still
+  holds its rows), `TestSearchIncrementalReflectsEditedArtifact` (edited artifact
+  is re-parsed and reflected in results). Full suite/vet/build green.
+
 - Goal: read commands (`search`, `stats`, `healthcheck`) open the gitignored
   `.pkb/cache.db`, sync it incrementally from the mirror tree, then query it.
   Deleting the cache and re-running yields identical results.

@@ -75,15 +75,17 @@ usage:
   pkb version          print the pkb version
 
 pkb runs from anywhere inside a git repository; it discovers the repo root,
-reads pkb.toml / .pkb/config.toml and .pkbignore, and stores the index at
-pkb.db at the repo root. Reindex is meant to run from a commit hook or CI step
-when code
-lands on the default branch (see README.md).
+reads pkb.toml / .pkb/config.toml and .pkbignore. The committed index is a
+mirror tree under .pkb/index; a gitignored SQLite cache at .pkb/cache.db is
+derived from it on demand to make queries fast. Reindex is meant to run from a
+commit hook or CI step when code lands on the default branch (see README.md).
 `)
 }
 
-// dbRelPath is the fixed repo-relative location of the index database.
-const dbRelPath = "pkb.db"
+// cacheRelPath is the fixed repo-relative location of the gitignored SQLite
+// cache. The committed source of truth is the mirror tree under .pkb/index; the
+// cache is derived from it and rebuilt on demand, so it is never committed.
+const cacheRelPath = ".pkb/cache.db"
 
 // setup discovers the repo root from cwd, loads config + .pkbignore, builds the
 // two embedding models, opens the database, and assembles index.Options.
@@ -111,9 +113,13 @@ func setup() (*index.Options, func(), error) {
 		return nil, nil, fmt.Errorf("embedding model %q does not support contextualized document embeddings; a contextual embedder (e.g. voyage-context-*) is required", model.ModelName())
 	}
 
-	st, err := store.Open(filepath.Join(string(repo.Root), dbRelPath))
+	cachePath := filepath.Join(string(repo.Root), cacheRelPath)
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		return nil, nil, fmt.Errorf("creating cache directory: %w", err)
+	}
+	st, err := store.Open(cachePath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("opening database: %w", err)
+		return nil, nil, fmt.Errorf("opening cache database: %w", err)
 	}
 
 	opts := &index.Options{
