@@ -1,0 +1,15 @@
+{
+  "blobSha": "000be3c87383938bc4c33feb8af5425bbe874771",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "maxReindexCost = 5.0\n\n[embedding]\nprovider = \"voyage\"\nmodel = \"voyage-context-4\"\ndimensions = 256\napikeyenv = \"VOYAGE_API_KEY\"\n",
+      "contextualizedText": "# pkb.toml\n\nmaxReindexCost = 5.0\n\n[embedding]\nprovider = \"voyage\"\nmodel = \"voyage-context-4\"\ndimensions = 256\napikeyenv = \"VOYAGE_API_KEY\"\n",
+      "headingContext": "pkb.toml",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 8,
+      "endCol": 1
+    }
+  ]
+}

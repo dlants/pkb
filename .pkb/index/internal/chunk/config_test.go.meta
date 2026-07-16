@@ -1,0 +1,69 @@
+{
+  "blobSha": "ba11674119d8462dc505d674b83b1d6da1d852c6",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
+      "contextualizedText": "// internal/chunk/config_test.go\n\npackage chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
+      "headingContext": "internal/chunk/config_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 8,
+      "endCol": 2
+    },
+    {
+      "text": "// pathAt parses src and returns the config path of the smallest window covering\n// the first occurrence of marker.\nfunc pathAt(t *testing.T, grammar, src, marker string) string {\n\tt.Helper()\n\tp := tree_sitter.NewParser()\n\tdefer p.Close()\n\tif err := p.SetLanguage(languageFor(grammar)); err != nil {\n\t\tt.Fatalf(\"set language: %v\", err)\n\t}\n\ttree := p.Parse([]byte(src), nil)\n\tdefer tree.Close()\n\tlo := strings.Index(src, marker)\n\tif lo \u003c 0 {\n\t\tt.Fatalf(\"marker %q not found\", marker)\n\t}\n\treturn configPath(tree.RootNode(), []byte(src), lo, lo+len(marker))\n}",
+      "contextualizedText": "// internal/chunk/config_test.go \u003e function pathAt\n\n// pathAt parses src and returns the config path of the smallest window covering\n// the first occurrence of marker.\nfunc pathAt(t *testing.T, grammar, src, marker string) string {\n\tt.Helper()\n\tp := tree_sitter.NewParser()\n\tdefer p.Close()\n\tif err := p.SetLanguage(languageFor(grammar)); err != nil {\n\t\tt.Fatalf(\"set language: %v\", err)\n\t}\n\ttree := p.Parse([]byte(src), nil)\n\tdefer tree.Close()\n\tlo := strings.Index(src, marker)\n\tif lo \u003c 0 {\n\t\tt.Fatalf(\"marker %q not found\", marker)\n\t}\n\treturn configPath(tree.RootNode(), []byte(src), lo, lo+len(marker))\n}",
+      "headingContext": "internal/chunk/config_test.go \u003e function pathAt",
+      "startLine": 10,
+      "startCol": 1,
+      "endLine": 26,
+      "endCol": 2
+    },
+    {
+      "text": "func TestConfigPathJSON(t *testing.T) {\n\tsrc := `{\"deps\":{\"nested\":{\"x\":{\"y\":1}}},\"list\":[10,20,30]}`\n\tcases := map[string]string{\n\t\t`\"nested\"`: \"deps.nested\",\n\t\t`\"y\":1`:    \"deps.nested.x.y\",\n\t\t`20`:       \"list[1]\",\n\t\t`30`:       \"list[2]\",\n\t}\n\tfor marker, want := range cases {\n\t\tif got := pathAt(t, \"json\", src, marker); got != want {\n\t\t\tt.Errorf(\"marker %q: got %q want %q\", marker, got, want)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/chunk/config_test.go \u003e function TestConfigPathJSON\n\nfunc TestConfigPathJSON(t *testing.T) {\n\tsrc := `{\"deps\":{\"nested\":{\"x\":{\"y\":1}}},\"list\":[10,20,30]}`\n\tcases := map[string]string{\n\t\t`\"nested\"`: \"deps.nested\",\n\t\t`\"y\":1`:    \"deps.nested.x.y\",\n\t\t`20`:       \"list[1]\",\n\t\t`30`:       \"list[2]\",\n\t}\n\tfor marker, want := range cases {\n\t\tif got := pathAt(t, \"json\", src, marker); got != want {\n\t\t\tt.Errorf(\"marker %q: got %q want %q\", marker, got, want)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/chunk/config_test.go \u003e function TestConfigPathJSON",
+      "startLine": 28,
+      "startCol": 1,
+      "endLine": 41,
+      "endCol": 2
+    },
+    {
+      "text": "func TestConfigPathYAML(t *testing.T) {\n\tsrc := \"services:\\n  web:\\n    ports:\\n      - 80\\n      - 443\\n\"\n\tcases := map[string]string{\n\t\t\"web:\": \"services.web\",\n\t\t\"80\":   \"services.web.ports[0]\",\n\t\t\"443\":  \"services.web.ports[1]\",\n\t}\n\tfor marker, want := range cases {\n\t\tif got := pathAt(t, \"yaml\", src, marker); got != want {\n\t\t\tt.Errorf(\"marker %q: got %q want %q\", marker, got, want)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/chunk/config_test.go \u003e function TestConfigPathYAML\n\nfunc TestConfigPathYAML(t *testing.T) {\n\tsrc := \"services:\\n  web:\\n    ports:\\n      - 80\\n      - 443\\n\"\n\tcases := map[string]string{\n\t\t\"web:\": \"services.web\",\n\t\t\"80\":   \"services.web.ports[0]\",\n\t\t\"443\":  \"services.web.ports[1]\",\n\t}\n\tfor marker, want := range cases {\n\t\tif got := pathAt(t, \"yaml\", src, marker); got != want {\n\t\t\tt.Errorf(\"marker %q: got %q want %q\", marker, got, want)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/chunk/config_test.go \u003e function TestConfigPathYAML",
+      "startLine": 43,
+      "startCol": 1,
+      "endLine": 55,
+      "endCol": 2
+    },
+    {
+      "text": "func TestConfigPathTOML(t *testing.T) {\n\tsrc := \"[servers.alpha]\\nip = \\\"1\\\"\\n\\n[[items]]\\nname = \\\"a\\\"\\n\\n[[items]]\\nname = \\\"b\\\"\\n\"\n\tcases := map[string]string{\n\t\t`ip = \"1\"`:   \"servers.alpha.ip\",\n\t\t`name = \"a\"`: \"items[0].name\",\n\t\t`name = \"b\"`: \"items[1].name\",\n\t}\n\tfor marker, want := range cases {\n\t\tif got := pathAt(t, \"toml\", src, marker); got != want {\n\t\t\tt.Errorf(\"marker %q: got %q want %q\", marker, got, want)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/chunk/config_test.go \u003e function TestConfigPathTOML\n\nfunc TestConfigPathTOML(t *testing.T) {\n\tsrc := \"[servers.alpha]\\nip = \\\"1\\\"\\n\\n[[items]]\\nname = \\\"a\\\"\\n\\n[[items]]\\nname = \\\"b\\\"\\n\"\n\tcases := map[string]string{\n\t\t`ip = \"1\"`:   \"servers.alpha.ip\",\n\t\t`name = \"a\"`: \"items[0].name\",\n\t\t`name = \"b\"`: \"items[1].name\",\n\t}\n\tfor marker, want := range cases {\n\t\tif got := pathAt(t, \"toml\", src, marker); got != want {\n\t\t\tt.Errorf(\"marker %q: got %q want %q\", marker, got, want)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/chunk/config_test.go \u003e function TestConfigPathTOML",
+      "startLine": 57,
+      "startCol": 1,
+      "endLine": 69,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkConfigSingleChunkRootBreadcrumb(t *testing.T) {\n\tchunks, err := ChunkConfig([]byte(`{\"a\":1,\"b\":2}`), \"json\", \"f.json\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 {\n\t\tt.Fatalf(\"got %d chunks want 1\", len(chunks))\n\t}\n\tif chunks[0].HeadingContext != \"f.json\" {\n\t\tt.Errorf(\"root breadcrumb: got %q want %q\", chunks[0].HeadingContext, \"f.json\")\n\t}\n}",
+      "contextualizedText": "// internal/chunk/config_test.go \u003e function TestChunkConfigSingleChunkRootBreadcrumb\n\nfunc TestChunkConfigSingleChunkRootBreadcrumb(t *testing.T) {\n\tchunks, err := ChunkConfig([]byte(`{\"a\":1,\"b\":2}`), \"json\", \"f.json\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 {\n\t\tt.Fatalf(\"got %d chunks want 1\", len(chunks))\n\t}\n\tif chunks[0].HeadingContext != \"f.json\" {\n\t\tt.Errorf(\"root breadcrumb: got %q want %q\", chunks[0].HeadingContext, \"f.json\")\n\t}\n}",
+      "headingContext": "internal/chunk/config_test.go \u003e function TestChunkConfigSingleChunkRootBreadcrumb",
+      "startLine": 71,
+      "startCol": 1,
+      "endLine": 82,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkConfigPathBreadcrumb(t *testing.T) {\n\t// A long leaf value forces an isolated chunk whose window is wholly inside\n\t// services.web.image, so the breadcrumb carries the full structural path.\n\tval := strings.Repeat(\"x\", 200)\n\tsrc := \"services:\\n  web:\\n    image: \" + val + \"\\n  db:\\n    image: y\\n\"\n\tchunks, err := ChunkConfig([]byte(src), \"yaml\", \"f.yaml\", 60)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar found bool\n\tfor _, c := range chunks {\n\t\tif strings.Contains(c.Text, \"xxxx\") {\n\t\t\tfound = true\n\t\t\tif !strings.HasPrefix(c.HeadingContext, \"f.yaml \u003e services.web.image\") {\n\t\t\t\tt.Errorf(\"breadcrumb: got %q want prefix %q\", c.HeadingContext, \"f.yaml \u003e services.web.image\")\n\t\t\t}\n\t\t}\n\t}\n\tif !found {\n\t\tt.Fatal(\"long-value chunk not found\")\n\t}\n}",
+      "contextualizedText": "// internal/chunk/config_test.go \u003e function TestChunkConfigPathBreadcrumb\n\nfunc TestChunkConfigPathBreadcrumb(t *testing.T) {\n\t// A long leaf value forces an isolated chunk whose window is wholly inside\n\t// services.web.image, so the breadcrumb carries the full structural path.\n\tval := strings.Repeat(\"x\", 200)\n\tsrc := \"services:\\n  web:\\n    image: \" + val + \"\\n  db:\\n    image: y\\n\"\n\tchunks, err := ChunkConfig([]byte(src), \"yaml\", \"f.yaml\", 60)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar found bool\n\tfor _, c := range chunks {\n\t\tif strings.Contains(c.Text, \"xxxx\") {\n\t\t\tfound = true\n\t\t\tif !strings.HasPrefix(c.HeadingContext, \"f.yaml \u003e services.web.image\") {\n\t\t\t\tt.Errorf(\"breadcrumb: got %q want prefix %q\", c.HeadingContext, \"f.yaml \u003e services.web.image\")\n\t\t\t}\n\t\t}\n\t}\n\tif !found {\n\t\tt.Fatal(\"long-value chunk not found\")\n\t}\n}",
+      "headingContext": "internal/chunk/config_test.go \u003e function TestChunkConfigPathBreadcrumb",
+      "startLine": 84,
+      "startCol": 1,
+      "endLine": 105,
+      "endCol": 2
+    }
+  ]
+}

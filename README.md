@@ -14,17 +14,18 @@ pkb chunk <file>       # display how this file would be chunked (for debugging)
 
 `pkb reindex` is meant to be run at a single well-defined moment — the recommended default is a **pre-commit hook**, so the refreshed index rides along in the same commit as your code. PKB keeps track of the last commit that was indexed (in `pkb-state.toml`), and uses git to identify changed files, then brings the index up to date with the current commit.
 
-This will create a pkb.db sql file at the root of your repo. Check that into your repo. Now, everyone in your repo has access to the full index, while you only pay the embedding cost once.
+This writes a **mirror tree** of small per-source-file index artifacts under
+`.pkb/index/` at the root of your repo. Each source file `src/foo.ts` maps to a
+sibling `.pkb/index/src/foo.ts.meta` (diffable text: chunk text + spans) and
+`.pkb/index/src/foo.ts.vec` (packed embeddings). Check the `.pkb/index` tree into
+your repo. Now everyone in your repo has access to the full index, while you only
+pay the embedding cost once.
 
-`pkb.db` is a binary that is rewritten in full on every reindex, so storing it directly in git bloats history fast. Track it with [Git LFS](https://git-lfs.com) instead — the repo keeps a small pointer while the blob lives in LFS storage, and clones still get the file transparently:
-
-```bash
-git lfs install            # one-time per machine
-git lfs track "pkb.db"     # writes the rule to .gitattributes
-git add .gitattributes pkb.db
-```
-
-Commit `.gitattributes` along with `pkb.db`. If `pkb.db` is already in your history as a regular blob, rewrite it with `git lfs migrate import --include="pkb.db"`.
+Because the index is split per source file, a commit touching a few files
+rewrites only those files' artifacts — git stores a small delta, not a
+multi-megabyte blob, so no Git LFS is needed. Queries read a gitignored SQLite
+cache at `.pkb/cache.db` that is rebuilt on demand from the mirror tree; never
+commit it (it is listed in `.gitignore`).
 
 `reindex` is idempotent: running it twice with no git changes performs zero embedding calls.
 
@@ -34,28 +35,26 @@ Commit `.gitattributes` along with `pkb.db`. If `pkb.db` is already in your hist
 
 The recommended default is a **pre-commit hook** that refreshes the index _in the same commit_ as your code. Reindexing is fast and driven purely by per-file git blob shas, so this adds negligible overhead. `pkb reindex --staged` indexes the staging area (`git write-tree`) instead of `HEAD`, so it sees exactly the content the commit will contain — with no separate index commit and no lag between the code and the index that represents it.
 
-This repo ships a working hook at [`hooks/pre-commit`](hooks/pre-commit): it runs `pkb reindex --staged` and then `git add pkb.db pkb-state.toml` so the refreshed index rides along in the same commit. Install it by pointing git at the `hooks/` directory (this repo already does so):
+This repo ships a working hook at [`hooks/pre-commit`](hooks/pre-commit): it runs `pkb reindex --staged` and then `git add .pkb/index pkb-state.toml` so the refreshed index rides along in the same commit. Install it by pointing git at the `hooks/` directory (this repo already does so):
 
 ```
 git config core.hooksPath hooks
 ```
 
-LFS caveat: `pkb.db` is LFS-tracked, so the `git add` in the hook stages the small LFS pointer (not the blob) — this is fine and does not fight the LFS `pre-push` hook. Make sure `git lfs install` has been run in your clone so the blob uploads on `git push`.
+The hook stages only the small per-file artifacts under `.pkb/index` that the commit changed (kilobytes), never the gitignored `.pkb/cache.db`.
 
 ### Alternative: manual reindex
 
-If you'd rather not run a hook, run `pkb reindex` by hand whenever code lands on the default branch and commit the refreshed `pkb.db` / `pkb-state.toml`. Because those files then need their own commit, the index is delivered one commit _behind_ the code it represents — the index commit on `main` reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer. Make sure `git lfs install` has been run in your clone (see the Git LFS setup above) so the blob uploads on `git push`.
-
-Avoid a `pre-push` hook for this: it can't add a commit to the push that's already in flight and would clobber the Git LFS pre-push hook.
+If you'd rather not run a hook, run `pkb reindex` by hand whenever code lands on the default branch and commit the refreshed `.pkb/index` tree / `pkb-state.toml`. Because those files then need their own commit, the index is delivered one commit _behind_ the code it represents — the index commit on `main` reflects its parent. This lag is harmless: agents orient on the last indexed commit and read files for anything newer.
 
 See these files in this repo for a complete working configuration:
 
 - [`hooks/pre-commit`](hooks/pre-commit) — the recommended pre-commit reindex hook.
 - [`pkb.toml`](pkb.toml) — embedding model configuration (Voyage).
-- [`.gitattributes`](.gitattributes) — the Git LFS tracking rule for `pkb.db`.
+- [`.gitignore`](.gitignore) — ignores the derived `.pkb/cache.db` cache.
 - [`pkb-state.toml`](pkb-state.toml) — the tracked index marker (indexed commit sha + file/chunk counts).
 
-Run the pkb binary from anywhere inside the git repository. PKB discovers the repo root based on cwd, and runs against `pkb.db` at the repo root.
+Run the pkb binary from anywhere inside the git repository. PKB discovers the repo root based on cwd, and runs against the `.pkb/index` mirror tree at the repo root (rebuilding the local `.pkb/cache.db` as needed).
 
 # Install
 

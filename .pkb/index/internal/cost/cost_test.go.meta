@@ -1,0 +1,24 @@
+{
+  "blobSha": "d68ddbddfde8c573ac45523ec2a3972b4a1b2c70",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package cost\n\nimport \"testing\"",
+      "contextualizedText": "// internal/cost/cost_test.go\n\npackage cost\n\nimport \"testing\"",
+      "headingContext": "internal/cost/cost_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 3,
+      "endCol": 17
+    },
+    {
+      "text": "func TestEmbeddingPricePerToken(t *testing.T) {\n\t// Voyage contextualized-chunk models resolve by substring (with @dims).\n\tif got := EmbeddingPricePerToken(\"voyage-context-4@256\"); got != perMillion(0.12) {\n\t\tt.Fatalf(\"voyage-context-4 price = %v, want %v\", got, perMillion(0.12))\n\t}\n\tif got := EmbeddingPricePerToken(\"voyage-context-3@256\"); got != perMillion(0.18) {\n\t\tt.Fatalf(\"voyage-context-3 price = %v, want %v\", got, perMillion(0.18))\n\t}\n\t// Unknown model falls back conservatively (compare via the same runtime\n\t// division to avoid constant-folding precision differences).\n\twantFallback := perMillion(fallbackEmbeddingPerM)\n\tif got := EmbeddingPricePerToken(\"mystery@128\"); got != wantFallback {\n\t\tt.Fatalf(\"unknown price = %v, want fallback %v\", got, wantFallback)\n\t}\n}",
+      "contextualizedText": "// internal/cost/cost_test.go \u003e function TestEmbeddingPricePerToken\n\nfunc TestEmbeddingPricePerToken(t *testing.T) {\n\t// Voyage contextualized-chunk models resolve by substring (with @dims).\n\tif got := EmbeddingPricePerToken(\"voyage-context-4@256\"); got != perMillion(0.12) {\n\t\tt.Fatalf(\"voyage-context-4 price = %v, want %v\", got, perMillion(0.12))\n\t}\n\tif got := EmbeddingPricePerToken(\"voyage-context-3@256\"); got != perMillion(0.18) {\n\t\tt.Fatalf(\"voyage-context-3 price = %v, want %v\", got, perMillion(0.18))\n\t}\n\t// Unknown model falls back conservatively (compare via the same runtime\n\t// division to avoid constant-folding precision differences).\n\twantFallback := perMillion(fallbackEmbeddingPerM)\n\tif got := EmbeddingPricePerToken(\"mystery@128\"); got != wantFallback {\n\t\tt.Fatalf(\"unknown price = %v, want fallback %v\", got, wantFallback)\n\t}\n}",
+      "headingContext": "internal/cost/cost_test.go \u003e function TestEmbeddingPricePerToken",
+      "startLine": 5,
+      "startCol": 1,
+      "endLine": 19,
+      "endCol": 2
+    }
+  ]
+}

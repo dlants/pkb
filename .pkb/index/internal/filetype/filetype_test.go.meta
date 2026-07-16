@@ -1,0 +1,33 @@
+{
+  "blobSha": "cf0efbff8bc0656c38d64fbc71cc8eb5ac3e305c",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package filetype\n\nimport \"testing\"",
+      "contextualizedText": "// internal/filetype/filetype_test.go\n\npackage filetype\n\nimport \"testing\"",
+      "headingContext": "internal/filetype/filetype_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 3,
+      "endCol": 17
+    },
+    {
+      "text": "func TestRouteExtHCL(t *testing.T) {\n\tfor _, ext := range []string{\".tf\", \".hcl\"} {\n\t\tr := RouteExt(ext)\n\t\tif r.Type != Code || r.Grammar != \"hcl\" {\n\t\t\tt.Fatalf(\"RouteExt(%q) = %+v, want {Code hcl}\", ext, r)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/filetype/filetype_test.go \u003e function TestRouteExtHCL\n\nfunc TestRouteExtHCL(t *testing.T) {\n\tfor _, ext := range []string{\".tf\", \".hcl\"} {\n\t\tr := RouteExt(ext)\n\t\tif r.Type != Code || r.Grammar != \"hcl\" {\n\t\t\tt.Fatalf(\"RouteExt(%q) = %+v, want {Code hcl}\", ext, r)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/filetype/filetype_test.go \u003e function TestRouteExtHCL",
+      "startLine": 5,
+      "startCol": 1,
+      "endLine": 12,
+      "endCol": 2
+    },
+    {
+      "text": "func TestRouteExtText(t *testing.T) {\n\tif r := RouteExt(\".md\"); r.Type != Text {\n\t\tt.Fatalf(\"RouteExt(.md) = %+v, want Text\", r)\n\t}\n}",
+      "contextualizedText": "// internal/filetype/filetype_test.go \u003e function TestRouteExtText\n\nfunc TestRouteExtText(t *testing.T) {\n\tif r := RouteExt(\".md\"); r.Type != Text {\n\t\tt.Fatalf(\"RouteExt(.md) = %+v, want Text\", r)\n\t}\n}",
+      "headingContext": "internal/filetype/filetype_test.go \u003e function TestRouteExtText",
+      "startLine": 14,
+      "startCol": 1,
+      "endLine": 18,
+      "endCol": 2
+    }
+  ]
+}

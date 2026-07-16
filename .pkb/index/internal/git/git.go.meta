@@ -1,0 +1,78 @@
+{
+  "blobSha": "ab0a9918acde94e93bfe257bfde8007ceb4f6ab6",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Package git wraps the subset of git plumbing PKB needs to discover files and\n// detect changes: repo root resolution, ref/sha resolution, tree listing, and\n// materializing the staging area as a tree.\npackage git\n\nimport (\n\t\"bytes\"\n\t\"fmt\"\n\t\"os/exec\"\n\t\"strings\"\n\n\t\"github.com/dlants/pkb/internal/paths\"\n)",
+      "contextualizedText": "// internal/git/git.go\n\n// Package git wraps the subset of git plumbing PKB needs to discover files and\n// detect changes: repo root resolution, ref/sha resolution, tree listing, and\n// materializing the staging area as a tree.\npackage git\n\nimport (\n\t\"bytes\"\n\t\"fmt\"\n\t\"os/exec\"\n\t\"strings\"\n\n\t\"github.com/dlants/pkb/internal/paths\"\n)",
+      "headingContext": "internal/git/git.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 13,
+      "endCol": 2
+    },
+    {
+      "text": "// Repo is a handle to a git working tree rooted at Root.\ntype Repo struct {\n\tRoot paths.AbsPath\n}",
+      "contextualizedText": "// internal/git/git.go \u003e type Repo\n\n// Repo is a handle to a git working tree rooted at Root.\ntype Repo struct {\n\tRoot paths.AbsPath\n}",
+      "headingContext": "internal/git/git.go \u003e type Repo",
+      "startLine": 15,
+      "startCol": 1,
+      "endLine": 18,
+      "endCol": 2
+    },
+    {
+      "text": "// RepoFile is a single tracked file: its repo-relative path and git blob sha.\ntype RepoFile struct {\n\tPath    paths.GitRootRelativePath\n\tBlobSha string\n}",
+      "contextualizedText": "// internal/git/git.go \u003e type RepoFile\n\n// RepoFile is a single tracked file: its repo-relative path and git blob sha.\ntype RepoFile struct {\n\tPath    paths.GitRootRelativePath\n\tBlobSha string\n}",
+      "headingContext": "internal/git/git.go \u003e type RepoFile",
+      "startLine": 20,
+      "startCol": 1,
+      "endLine": 24,
+      "endCol": 2
+    },
+    {
+      "text": "func (r *Repo) run(args ...string) (string, error) {\n\tcmd := exec.Command(\"git\", args...)\n\tcmd.Dir = string(r.Root)\n\tvar out, errBuf bytes.Buffer\n\tcmd.Stdout = \u0026out\n\tcmd.Stderr = \u0026errBuf\n\tif err := cmd.Run(); err != nil {\n\t\treturn \"\", fmt.Errorf(\"git %s: %v: %s\", strings.Join(args, \" \"), err, strings.TrimSpace(errBuf.String()))\n\t}\n\treturn out.String(), nil\n}",
+      "contextualizedText": "// internal/git/git.go \u003e method run\n\nfunc (r *Repo) run(args ...string) (string, error) {\n\tcmd := exec.Command(\"git\", args...)\n\tcmd.Dir = string(r.Root)\n\tvar out, errBuf bytes.Buffer\n\tcmd.Stdout = \u0026out\n\tcmd.Stderr = \u0026errBuf\n\tif err := cmd.Run(); err != nil {\n\t\treturn \"\", fmt.Errorf(\"git %s: %v: %s\", strings.Join(args, \" \"), err, strings.TrimSpace(errBuf.String()))\n\t}\n\treturn out.String(), nil\n}",
+      "headingContext": "internal/git/git.go \u003e method run",
+      "startLine": 26,
+      "startCol": 1,
+      "endLine": 36,
+      "endCol": 2
+    },
+    {
+      "text": "// Open finds the repo root containing dir and returns a Repo handle.\nfunc Open(dir string) (*Repo, error) {\n\tcmd := exec.Command(\"git\", \"rev-parse\", \"--show-toplevel\")\n\tcmd.Dir = dir\n\tout, err := cmd.Output()\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"not a git repository (or git not found): %w\", err)\n\t}\n\treturn \u0026Repo{Root: paths.AbsPath(strings.TrimSpace(string(out)))}, nil\n}",
+      "contextualizedText": "// internal/git/git.go \u003e function Open\n\n// Open finds the repo root containing dir and returns a Repo handle.\nfunc Open(dir string) (*Repo, error) {\n\tcmd := exec.Command(\"git\", \"rev-parse\", \"--show-toplevel\")\n\tcmd.Dir = dir\n\tout, err := cmd.Output()\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"not a git repository (or git not found): %w\", err)\n\t}\n\treturn \u0026Repo{Root: paths.AbsPath(strings.TrimSpace(string(out)))}, nil\n}",
+      "headingContext": "internal/git/git.go \u003e function Open",
+      "startLine": 38,
+      "startCol": 1,
+      "endLine": 47,
+      "endCol": 2
+    },
+    {
+      "text": "// ResolveRef resolves a ref (e.g. HEAD, a branch, a sha) to a full commit sha.\nfunc (r *Repo) ResolveRef(ref string) (string, error) {\n\tout, err := r.run(\"rev-parse\", ref)\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\treturn strings.TrimSpace(out), nil\n}",
+      "contextualizedText": "// internal/git/git.go \u003e method ResolveRef\n\n// ResolveRef resolves a ref (e.g. HEAD, a branch, a sha) to a full commit sha.\nfunc (r *Repo) ResolveRef(ref string) (string, error) {\n\tout, err := r.run(\"rev-parse\", ref)\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\treturn strings.TrimSpace(out), nil\n}",
+      "headingContext": "internal/git/git.go \u003e method ResolveRef",
+      "startLine": 49,
+      "startCol": 1,
+      "endLine": 56,
+      "endCol": 2
+    },
+    {
+      "text": "// LsTree lists all files tracked at ref with their blob shas.\nfunc (r *Repo) LsTree(ref string) ([]RepoFile, error) {\n\tout, err := r.run(\"ls-tree\", \"-r\", ref)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tvar files []RepoFile\n\tfor _, line := range strings.Split(out, \"\\n\") {\n\t\tif line == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\t// format: \"\u003cmode\u003e \u003ctype\u003e \u003csha\u003e\\t\u003cpath\u003e\"\n\t\ttab := strings.IndexByte(line, '\\t')\n\t\tif tab \u003c 0 {\n\t\t\tcontinue\n\t\t}\n\t\tmeta := strings.Fields(line[:tab])\n\t\tif len(meta) \u003c 3 || meta[1] != \"blob\" {\n\t\t\tcontinue\n\t\t}\n\t\tfiles = append(files, RepoFile{Path: paths.GitRootRelativePath(line[tab+1:]), BlobSha: meta[2]})\n\t}\n\treturn files, nil\n}",
+      "contextualizedText": "// internal/git/git.go \u003e method LsTree\n\n// LsTree lists all files tracked at ref with their blob shas.\nfunc (r *Repo) LsTree(ref string) ([]RepoFile, error) {\n\tout, err := r.run(\"ls-tree\", \"-r\", ref)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tvar files []RepoFile\n\tfor _, line := range strings.Split(out, \"\\n\") {\n\t\tif line == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\t// format: \"\u003cmode\u003e \u003ctype\u003e \u003csha\u003e\\t\u003cpath\u003e\"\n\t\ttab := strings.IndexByte(line, '\\t')\n\t\tif tab \u003c 0 {\n\t\t\tcontinue\n\t\t}\n\t\tmeta := strings.Fields(line[:tab])\n\t\tif len(meta) \u003c 3 || meta[1] != \"blob\" {\n\t\t\tcontinue\n\t\t}\n\t\tfiles = append(files, RepoFile{Path: paths.GitRootRelativePath(line[tab+1:]), BlobSha: meta[2]})\n\t}\n\treturn files, nil\n}",
+      "headingContext": "internal/git/git.go \u003e method LsTree",
+      "startLine": 58,
+      "startCol": 1,
+      "endLine": 81,
+      "endCol": 2
+    },
+    {
+      "text": "// WriteTree writes the current staging area (index) to the object database as a\n// tree and returns its sha. It does not create a commit or mutate the working\n// tree or index. The returned sha is a tree-ish consumable by LsTree.\nfunc (r *Repo) WriteTree() (string, error) {\n\tout, err := r.run(\"write-tree\")\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\treturn strings.TrimSpace(out), nil\n}",
+      "contextualizedText": "// internal/git/git.go \u003e method WriteTree\n\n// WriteTree writes the current staging area (index) to the object database as a\n// tree and returns its sha. It does not create a commit or mutate the working\n// tree or index. The returned sha is a tree-ish consumable by LsTree.\nfunc (r *Repo) WriteTree() (string, error) {\n\tout, err := r.run(\"write-tree\")\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\treturn strings.TrimSpace(out), nil\n}",
+      "headingContext": "internal/git/git.go \u003e method WriteTree",
+      "startLine": 83,
+      "startCol": 1,
+      "endLine": 92,
+      "endCol": 2
+    }
+  ]
+}

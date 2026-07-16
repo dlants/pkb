@@ -1,0 +1,204 @@
+{
+  "blobSha": "645e6312a5550dfcb0572cb3d4944fa393ec62d9",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Command pkb is the CLI for the git-repo-rooted code+docs search index.\n// It runs from a repo root and exposes the reindex, estimate, search, stats,\n// and chunk commands.\npackage main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"math\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"runtime/debug\"\n\t\"strings\"\n\n\t\"github.com/BurntSushi/toml\"\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/config\"\n\t\"github.com/dlants/pkb/internal/cost\"\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/index\"\n\t\"github.com/dlants/pkb/internal/paths\"\n\t\"github.com/dlants/pkb/internal/store\"\n)",
+      "contextualizedText": "// main.go\n\n// Command pkb is the CLI for the git-repo-rooted code+docs search index.\n// It runs from a repo root and exposes the reindex, estimate, search, stats,\n// and chunk commands.\npackage main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"math\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"runtime/debug\"\n\t\"strings\"\n\n\t\"github.com/BurntSushi/toml\"\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/config\"\n\t\"github.com/dlants/pkb/internal/cost\"\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/index\"\n\t\"github.com/dlants/pkb/internal/paths\"\n\t\"github.com/dlants/pkb/internal/store\"\n)",
+      "headingContext": "main.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 25,
+      "endCol": 2
+    },
+    {
+      "text": "func main() {\n\tflag.Usage = usage\n\tflag.Parse()\n\n\targs := flag.Args()\n\tif len(args) == 0 {\n\t\tusage()\n\t\tos.Exit(2)\n\t}\n\n\tcmd, rest := args[0], args[1:]\n\tvar err error\n\tswitch cmd {\n\tcase \"reindex\":\n\t\terr = runReindex(rest)\n\tcase \"estimate\":\n\t\terr = runEstimate(rest)\n\tcase \"search\":\n\t\terr = runSearch(rest)\n\tcase \"stats\":\n\t\terr = runStats(rest)\n\tcase \"chunk\":\n\t\terr = runChunk(rest)\n\tcase \"healthcheck\":\n\t\terr = runHealthcheck(rest)\n\tcase \"version\", \"--version\", \"-v\":\n\t\terr = runVersion(rest)\n\tdefault:\n\t\tfmt.Fprintf(os.Stderr, \"unknown command %q\\n\\n\", cmd)\n\t\tusage()\n\t\tos.Exit(2)\n\t}\n\tif err != nil {\n\t\tfmt.Fprintln(os.Stderr, \"error:\", err)\n\t\tos.Exit(1)\n\t}\n}",
+      "contextualizedText": "// main.go \u003e function main\n\nfunc main() {\n\tflag.Usage = usage\n\tflag.Parse()\n\n\targs := flag.Args()\n\tif len(args) == 0 {\n\t\tusage()\n\t\tos.Exit(2)\n\t}\n\n\tcmd, rest := args[0], args[1:]\n\tvar err error\n\tswitch cmd {\n\tcase \"reindex\":\n\t\terr = runReindex(rest)\n\tcase \"estimate\":\n\t\terr = runEstimate(rest)\n\tcase \"search\":\n\t\terr = runSearch(rest)\n\tcase \"stats\":\n\t\terr = runStats(rest)\n\tcase \"chunk\":\n\t\terr = runChunk(rest)\n\tcase \"healthcheck\":\n\t\terr = runHealthcheck(rest)\n\tcase \"version\", \"--version\", \"-v\":\n\t\terr = runVersion(rest)\n\tdefault:\n\t\tfmt.Fprintf(os.Stderr, \"unknown command %q\\n\\n\", cmd)\n\t\tusage()\n\t\tos.Exit(2)\n\t}\n\tif err != nil {\n\t\tfmt.Fprintln(os.Stderr, \"error:\", err)\n\t\tos.Exit(1)\n\t}\n}",
+      "headingContext": "main.go \u003e function main",
+      "startLine": 27,
+      "startCol": 1,
+      "endLine": 63,
+      "endCol": 2
+    },
+    {
+      "text": "func usage() {\n\tfmt.Fprintf(os.Stderr, `pkb - git-repo-rooted code+docs search index\n\nusage:\n  pkb reindex          reindex the repo against HEAD (--staged for the git index)\n  pkb estimate         estimate the cost of the next and a full reindex\n  pkb search \u003cquery\u003e   search the index\n  pkb stats            print index statistics\n  pkb chunk \u003cfile\u003e     chunk a file and pretty-print the chunks\n  pkb healthcheck      verify the index + state marker against the git tree\n  pkb version          print the pkb version\n\npkb runs from anywhere inside a git repository; it discovers the repo root,\nreads pkb.toml / .pkb/config.toml and .pkbignore. The committed index is a\nmirror tree under .pkb/index; a gitignored SQLite cache at .pkb/cache.db is\nderived from it on demand to make queries fast. Reindex is meant to run from a\ncommit hook or CI step when code lands on the default branch (see README.md).\n`)\n}",
+      "contextualizedText": "// main.go \u003e function usage\n\nfunc usage() {\n\tfmt.Fprintf(os.Stderr, `pkb - git-repo-rooted code+docs search index\n\nusage:\n  pkb reindex          reindex the repo against HEAD (--staged for the git index)\n  pkb estimate         estimate the cost of the next and a full reindex\n  pkb search \u003cquery\u003e   search the index\n  pkb stats            print index statistics\n  pkb chunk \u003cfile\u003e     chunk a file and pretty-print the chunks\n  pkb healthcheck      verify the index + state marker against the git tree\n  pkb version          print the pkb version\n\npkb runs from anywhere inside a git repository; it discovers the repo root,\nreads pkb.toml / .pkb/config.toml and .pkbignore. The committed index is a\nmirror tree under .pkb/index; a gitignored SQLite cache at .pkb/cache.db is\nderived from it on demand to make queries fast. Reindex is meant to run from a\ncommit hook or CI step when code lands on the default branch (see README.md).\n`)\n}",
+      "headingContext": "main.go \u003e function usage",
+      "startLine": 65,
+      "startCol": 1,
+      "endLine": 83,
+      "endCol": 2
+    },
+    {
+      "text": "// cacheRelPath is the fixed repo-relative location of the gitignored SQLite\n// cache. The committed source of truth is the mirror tree under .pkb/index; the\n// cache is derived from it and rebuilt on demand, so it is never committed.\nconst cacheRelPath = \".pkb/cache.db\"",
+      "contextualizedText": "// main.go\n\n// cacheRelPath is the fixed repo-relative location of the gitignored SQLite\n// cache. The committed source of truth is the mirror tree under .pkb/index; the\n// cache is derived from it and rebuilt on demand, so it is never committed.\nconst cacheRelPath = \".pkb/cache.db\"",
+      "headingContext": "main.go",
+      "startLine": 85,
+      "startCol": 1,
+      "endLine": 88,
+      "endCol": 37
+    },
+    {
+      "text": "// setup discovers the repo root from cwd, loads config + .pkbignore, builds the\n// two embedding models, opens the database, and assembles index.Options.\nfunc setup() (*index.Options, func(), error) {\n\tcwd, err := os.Getwd()\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\trepo, err := git.Open(cwd)\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"not inside a git repository: %w\", err)\n\t}\n\n\tcfg, err := config.Load(string(repo.Root))\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"loading config: %w\", err)\n\t}\n\tignore := index.NewIgnore(cfg.Exclude)\n\n\tmodel, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.BaseURL, cfg.Embedding.APIKeyEnv)\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"building embedding model: %w\", err)\n\t}\n\tif _, ok := model.(embed.ContextualEmbeddingModel); !ok {\n\t\treturn nil, nil, fmt.Errorf(\"embedding model %q does not support contextualized document embeddings; a contextual embedder (e.g. voyage-context-*) is required\", model.ModelName())\n\t}\n\n\tcachePath := filepath.Join(string(repo.Root), cacheRelPath)\n\tif err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"creating cache directory: %w\", err)\n\t}\n\tst, err := store.Open(cachePath)\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"opening cache database: %w\", err)\n\t}\n\n\topts := \u0026index.Options{\n\t\tRepo:           repo,\n\t\tStore:          st,\n\t\tModel:          model,\n\t\tIgnore:         ignore,\n\t\tExtOverrides:   cfg.ExtOverrides,\n\t\tMaxReindexCost: cfg.MaxReindexCost,\n\t}\n\tcleanup := func() { st.Close() }\n\treturn opts, cleanup, nil\n}",
+      "contextualizedText": "// main.go \u003e function setup\n\n// setup discovers the repo root from cwd, loads config + .pkbignore, builds the\n// two embedding models, opens the database, and assembles index.Options.\nfunc setup() (*index.Options, func(), error) {\n\tcwd, err := os.Getwd()\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\trepo, err := git.Open(cwd)\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"not inside a git repository: %w\", err)\n\t}\n\n\tcfg, err := config.Load(string(repo.Root))\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"loading config: %w\", err)\n\t}\n\tignore := index.NewIgnore(cfg.Exclude)\n\n\tmodel, err := embed.Build(cfg.Embedding.Provider, cfg.Embedding.Model, cfg.Embedding.Dimensions, cfg.Embedding.BaseURL, cfg.Embedding.APIKeyEnv)\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"building embedding model: %w\", err)\n\t}\n\tif _, ok := model.(embed.ContextualEmbeddingModel); !ok {\n\t\treturn nil, nil, fmt.Errorf(\"embedding model %q does not support contextualized document embeddings; a contextual embedder (e.g. voyage-context-*) is required\", model.ModelName())\n\t}\n\n\tcachePath := filepath.Join(string(repo.Root), cacheRelPath)\n\tif err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"creating cache directory: %w\", err)\n\t}\n\tst, err := store.Open(cachePath)\n\tif err != nil {\n\t\treturn nil, nil, fmt.Errorf(\"opening cache database: %w\", err)\n\t}\n\n\topts := \u0026index.Options{\n\t\tRepo:           repo,\n\t\tStore:          st,\n\t\tModel:          model,\n\t\tIgnore:         ignore,\n\t\tExtOverrides:   cfg.ExtOverrides,\n\t\tMaxReindexCost: cfg.MaxReindexCost,\n\t}\n\tcleanup := func() { st.Close() }\n\treturn opts, cleanup, nil\n}",
+      "headingContext": "main.go \u003e function setup",
+      "startLine": 90,
+      "startCol": 1,
+      "endLine": 135,
+      "endCol": 2
+    },
+    {
+      "text": "func runReindex(args []string) error {\n\tfs := flag.NewFlagSet(\"reindex\", flag.ExitOnError)\n\tmaxCost := fs.Float64(\"max-reindex-cost\", -1, \"override the configured per-run max reindex cost in dollars (\u003c=0 disables the gate)\")\n\tstaged := fs.Bool(\"staged\", false, \"index the staging area (git write-tree) instead of HEAD, for use in a pre-commit hook\")\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\tif isFlagSet(fs, \"max-reindex-cost\") {\n\t\topts.MaxReindexCost = *maxCost\n\t}\n\topts.Staged = *staged\n\n\tst, err := index.Reindex(opts)\n\tif err != nil {\n\t\treturn err\n\t}\n\tfmt.Printf(\"indexed commit %s: %d files, %d chunks\\n\", st.Commit, st.FileCount, st.ChunkCount)\n\treturn nil\n}",
+      "contextualizedText": "// main.go \u003e function runReindex\n\nfunc runReindex(args []string) error {\n\tfs := flag.NewFlagSet(\"reindex\", flag.ExitOnError)\n\tmaxCost := fs.Float64(\"max-reindex-cost\", -1, \"override the configured per-run max reindex cost in dollars (\u003c=0 disables the gate)\")\n\tstaged := fs.Bool(\"staged\", false, \"index the staging area (git write-tree) instead of HEAD, for use in a pre-commit hook\")\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\tif isFlagSet(fs, \"max-reindex-cost\") {\n\t\topts.MaxReindexCost = *maxCost\n\t}\n\topts.Staged = *staged\n\n\tst, err := index.Reindex(opts)\n\tif err != nil {\n\t\treturn err\n\t}\n\tfmt.Printf(\"indexed commit %s: %d files, %d chunks\\n\", st.Commit, st.FileCount, st.ChunkCount)\n\treturn nil\n}",
+      "headingContext": "main.go \u003e function runReindex",
+      "startLine": 137,
+      "startCol": 1,
+      "endLine": 160,
+      "endCol": 2
+    },
+    {
+      "text": "// isFlagSet reports whether the named flag was explicitly provided on the\n// command line (as opposed to left at its default).\nfunc isFlagSet(fs *flag.FlagSet, name string) bool {\n\tset := false\n\tfs.Visit(func(f *flag.Flag) {\n\t\tif f.Name == name {\n\t\t\tset = true\n\t\t}\n\t})\n\treturn set\n}",
+      "contextualizedText": "// main.go \u003e function isFlagSet\n\n// isFlagSet reports whether the named flag was explicitly provided on the\n// command line (as opposed to left at its default).\nfunc isFlagSet(fs *flag.FlagSet, name string) bool {\n\tset := false\n\tfs.Visit(func(f *flag.Flag) {\n\t\tif f.Name == name {\n\t\t\tset = true\n\t\t}\n\t})\n\treturn set\n}",
+      "headingContext": "main.go \u003e function isFlagSet",
+      "startLine": 162,
+      "startCol": 1,
+      "endLine": 172,
+      "endCol": 2
+    },
+    {
+      "text": "// round3 rounds x to 3 significant figures.\nfunc round3(x float64) float64 {\n\tif x == 0 {\n\t\treturn 0\n\t}\n\tmag := math.Pow(10, 2-math.Floor(math.Log10(math.Abs(x))))\n\treturn math.Round(x*mag) / mag\n}",
+      "contextualizedText": "// main.go \u003e function round3\n\n// round3 rounds x to 3 significant figures.\nfunc round3(x float64) float64 {\n\tif x == 0 {\n\t\treturn 0\n\t}\n\tmag := math.Pow(10, 2-math.Floor(math.Log10(math.Abs(x))))\n\treturn math.Round(x*mag) / mag\n}",
+      "headingContext": "main.go \u003e function round3",
+      "startLine": 174,
+      "startCol": 1,
+      "endLine": 181,
+      "endCol": 2
+    },
+    {
+      "text": "// sig3 formats a number to 3 significant figures.\nfunc sig3(x float64) string { return fmt.Sprintf(\"%g\", round3(x)) }",
+      "contextualizedText": "// main.go \u003e function sig3\n\n// sig3 formats a number to 3 significant figures.\nfunc sig3(x float64) string { return fmt.Sprintf(\"%g\", round3(x)) }",
+      "headingContext": "main.go \u003e function sig3",
+      "startLine": 183,
+      "startCol": 1,
+      "endLine": 184,
+      "endCol": 68
+    },
+    {
+      "text": "// formatTok renders a token count to 3 significant figures, switching to kTok\n// once the count reaches 1000.\nfunc formatTok(n int) string {\n\tif n \u003c 1000 {\n\t\treturn fmt.Sprintf(\"%dtok\", n)\n\t}\n\treturn fmt.Sprintf(\"%gkTok\", round3(float64(n)/1000))\n}",
+      "contextualizedText": "// main.go \u003e function formatTok\n\n// formatTok renders a token count to 3 significant figures, switching to kTok\n// once the count reaches 1000.\nfunc formatTok(n int) string {\n\tif n \u003c 1000 {\n\t\treturn fmt.Sprintf(\"%dtok\", n)\n\t}\n\treturn fmt.Sprintf(\"%gkTok\", round3(float64(n)/1000))\n}",
+      "headingContext": "main.go \u003e function formatTok",
+      "startLine": 186,
+      "startCol": 1,
+      "endLine": 193,
+      "endCol": 2
+    },
+    {
+      "text": "func printEstimate(label string, est index.CostEstimate) {\n\tfmt.Printf(\"%s - %d files / %d chunks: $%s. (%s embedding)\\n\",\n\t\tlabel, est.Files, est.Chunks, sig3(est.Dollars),\n\t\tformatTok(est.EmbedTokens))\n}",
+      "contextualizedText": "// main.go \u003e function printEstimate\n\nfunc printEstimate(label string, est index.CostEstimate) {\n\tfmt.Printf(\"%s - %d files / %d chunks: $%s. (%s embedding)\\n\",\n\t\tlabel, est.Files, est.Chunks, sig3(est.Dollars),\n\t\tformatTok(est.EmbedTokens))\n}",
+      "headingContext": "main.go \u003e function printEstimate",
+      "startLine": 195,
+      "startCol": 1,
+      "endLine": 199,
+      "endCol": 2
+    },
+    {
+      "text": "func runEstimate(args []string) error {\n\tfs := flag.NewFlagSet(\"estimate\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\tfmt.Println(\"Estimated costs:\")\n\tfmt.Printf(\"- embedding: $%s/1M tok\\n\", sig3(cost.EmbeddingPricePerToken(opts.Model.ModelName())*1e6))\n\n\tnext, err := index.Estimate(opts, false)\n\tif err != nil {\n\t\treturn err\n\t}\n\tprintEstimate(\"next reindex\", next)\n\n\tfull, err := index.Estimate(opts, true)\n\tif err != nil {\n\t\treturn err\n\t}\n\tprintEstimate(\"full reindex\", full)\n\treturn nil\n}",
+      "contextualizedText": "// main.go \u003e function runEstimate\n\nfunc runEstimate(args []string) error {\n\tfs := flag.NewFlagSet(\"estimate\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\tfmt.Println(\"Estimated costs:\")\n\tfmt.Printf(\"- embedding: $%s/1M tok\\n\", sig3(cost.EmbeddingPricePerToken(opts.Model.ModelName())*1e6))\n\n\tnext, err := index.Estimate(opts, false)\n\tif err != nil {\n\t\treturn err\n\t}\n\tprintEstimate(\"next reindex\", next)\n\n\tfull, err := index.Estimate(opts, true)\n\tif err != nil {\n\t\treturn err\n\t}\n\tprintEstimate(\"full reindex\", full)\n\treturn nil\n}",
+      "headingContext": "main.go \u003e function runEstimate",
+      "startLine": 201,
+      "startCol": 1,
+      "endLine": 227,
+      "endCol": 2
+    },
+    {
+      "text": "func runSearch(args []string) error {\n\tfs := flag.NewFlagSet(\"search\", flag.ExitOnError)\n\ttopK := fs.Int(\"k\", 5, \"number of results to return\")\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\tquery := strings.TrimSpace(strings.Join(fs.Args(), \" \"))\n\tif query == \"\" {\n\t\treturn fmt.Errorf(\"search: missing query\")\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\tresults, err := index.Search(opts, query, *topK)\n\tif err != nil {\n\t\treturn err\n\t}\n\tfmt.Print(formatResults(opts.Repo.Root, results))\n\treturn nil\n}",
+      "contextualizedText": "// main.go \u003e function runSearch\n\nfunc runSearch(args []string) error {\n\tfs := flag.NewFlagSet(\"search\", flag.ExitOnError)\n\ttopK := fs.Int(\"k\", 5, \"number of results to return\")\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\tquery := strings.TrimSpace(strings.Join(fs.Args(), \" \"))\n\tif query == \"\" {\n\t\treturn fmt.Errorf(\"search: missing query\")\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\tresults, err := index.Search(opts, query, *topK)\n\tif err != nil {\n\t\treturn err\n\t}\n\tfmt.Print(formatResults(opts.Repo.Root, results))\n\treturn nil\n}",
+      "headingContext": "main.go \u003e function runSearch",
+      "startLine": 229,
+      "startCol": 1,
+      "endLine": 251,
+      "endCol": 2
+    },
+    {
+      "text": "func runStats(args []string) error {\n\tfs := flag.NewFlagSet(\"stats\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\tst, err := readState(string(opts.Repo.Root))\n\tif err != nil {\n\t\treturn err\n\t}\n\tif st == nil {\n\t\tfmt.Println(\"no index yet; run `pkb reindex`\")\n\t\treturn nil\n\t}\n\tfmt.Printf(\"commit:    %s\\n\", st.Commit)\n\tfmt.Printf(\"files:     %d\\n\", st.FileCount)\n\tfmt.Printf(\"chunks:    %d\\n\", st.ChunkCount)\n\treturn nil\n}",
+      "contextualizedText": "// main.go \u003e function runStats\n\nfunc runStats(args []string) error {\n\tfs := flag.NewFlagSet(\"stats\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\tst, err := readState(string(opts.Repo.Root))\n\tif err != nil {\n\t\treturn err\n\t}\n\tif st == nil {\n\t\tfmt.Println(\"no index yet; run `pkb reindex`\")\n\t\treturn nil\n\t}\n\tfmt.Printf(\"commit:    %s\\n\", st.Commit)\n\tfmt.Printf(\"files:     %d\\n\", st.FileCount)\n\tfmt.Printf(\"chunks:    %d\\n\", st.ChunkCount)\n\treturn nil\n}",
+      "headingContext": "main.go \u003e function runStats",
+      "startLine": 253,
+      "startCol": 1,
+      "endLine": 276,
+      "endCol": 2
+    },
+    {
+      "text": "// runChunk reads a file, chunks it the same way the indexer would (tree-sitter\n// for recognized code, markdown chunker otherwise), and pretty-prints the\n// resulting chunks. It does not touch the index, config, or any provider.\n// runVersion prints the module version. When pkb is built with `go install`,\n// the version is embedded in the build info; for local/dev builds it falls back\n// to \"(devel)\".\nfunc runVersion(args []string) error {\n\tfs := flag.NewFlagSet(\"version\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\tfmt.Printf(\"pkb %s\\n\", pkbVersion())\n\treturn nil\n}",
+      "contextualizedText": "// main.go \u003e function runVersion\n\n// runChunk reads a file, chunks it the same way the indexer would (tree-sitter\n// for recognized code, markdown chunker otherwise), and pretty-prints the\n// resulting chunks. It does not touch the index, config, or any provider.\n// runVersion prints the module version. When pkb is built with `go install`,\n// the version is embedded in the build info; for local/dev builds it falls back\n// to \"(devel)\".\nfunc runVersion(args []string) error {\n\tfs := flag.NewFlagSet(\"version\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\tfmt.Printf(\"pkb %s\\n\", pkbVersion())\n\treturn nil\n}",
+      "headingContext": "main.go \u003e function runVersion",
+      "startLine": 278,
+      "startCol": 1,
+      "endLine": 291,
+      "endCol": 2
+    },
+    {
+      "text": "// pkbVersion returns the module version: a clean vX.Y.Z for builds installed\n// off a tag, or \"(devel)\" for local builds.\nfunc pkbVersion() string {\n\tif info, ok := debug.ReadBuildInfo(); ok \u0026\u0026 info.Main.Version != \"\" {\n\t\treturn info.Main.Version\n\t}\n\treturn \"(devel)\"\n}",
+      "contextualizedText": "// main.go \u003e function pkbVersion\n\n// pkbVersion returns the module version: a clean vX.Y.Z for builds installed\n// off a tag, or \"(devel)\" for local builds.\nfunc pkbVersion() string {\n\tif info, ok := debug.ReadBuildInfo(); ok \u0026\u0026 info.Main.Version != \"\" {\n\t\treturn info.Main.Version\n\t}\n\treturn \"(devel)\"\n}",
+      "headingContext": "main.go \u003e function pkbVersion",
+      "startLine": 293,
+      "startCol": 1,
+      "endLine": 300,
+      "endCol": 2
+    },
+    {
+      "text": "func runHealthcheck(args []string) error {\n\tfs := flag.NewFlagSet(\"healthcheck\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\trep, err := index.Healthcheck(opts)\n\tif err != nil {\n\t\treturn err\n\t}\n\n\tfmt.Printf(\"HEAD:          %s\\n\", rep.HeadCommit)\n\tif rep.StateMissing {\n\t\tfmt.Println(\"state:         missing\")\n\t} else {\n\t\tfmt.Printf(\"state commit:  %s\\n\", rep.StateCommit)\n\t}\n\tfmt.Printf(\"expected files: %d\\n\", rep.ExpectedFiles)\n\tfmt.Printf(\"indexed files:  %d\\n\", rep.IndexedFiles)\n\tfmt.Printf(\"indexed chunks: %d\\n\", rep.IndexedChunks)\n\n\tif len(rep.Issues) == 0 {\n\t\tfmt.Println(\"\\nhealthy: index and state marker match the git tree\")\n\t\treturn nil\n\t}\n\n\tfmt.Printf(\"\\n%d issue(s):\\n\", len(rep.Issues))\n\tfor _, iss := range rep.Issues {\n\t\tif iss.Path == \"\" {\n\t\t\tfmt.Printf(\"  - %s\\n\", iss.Msg)\n\t\t} else {\n\t\t\tfmt.Printf(\"  - %s: %s\\n\", iss.Path, iss.Msg)\n\t\t}\n\t}\n\treturn fmt.Errorf(\"healthcheck found %d issue(s)\", len(rep.Issues))\n}",
+      "contextualizedText": "// main.go \u003e function runHealthcheck\n\nfunc runHealthcheck(args []string) error {\n\tfs := flag.NewFlagSet(\"healthcheck\", flag.ExitOnError)\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\topts, cleanup, err := setup()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\trep, err := index.Healthcheck(opts)\n\tif err != nil {\n\t\treturn err\n\t}\n\n\tfmt.Printf(\"HEAD:          %s\\n\", rep.HeadCommit)\n\tif rep.StateMissing {\n\t\tfmt.Println(\"state:         missing\")\n\t} else {\n\t\tfmt.Printf(\"state commit:  %s\\n\", rep.StateCommit)\n\t}\n\tfmt.Printf(\"expected files: %d\\n\", rep.ExpectedFiles)\n\tfmt.Printf(\"indexed files:  %d\\n\", rep.IndexedFiles)\n\tfmt.Printf(\"indexed chunks: %d\\n\", rep.IndexedChunks)\n\n\tif len(rep.Issues) == 0 {\n\t\tfmt.Println(\"\\nhealthy: index and state marker match the git tree\")\n\t\treturn nil\n\t}\n\n\tfmt.Printf(\"\\n%d issue(s):\\n\", len(rep.Issues))\n\tfor _, iss := range rep.Issues {\n\t\tif iss.Path == \"\" {\n\t\t\tfmt.Printf(\"  - %s\\n\", iss.Msg)\n\t\t} else {\n\t\t\tfmt.Printf(\"  - %s: %s\\n\", iss.Path, iss.Msg)\n\t\t}\n\t}\n\treturn fmt.Errorf(\"healthcheck found %d issue(s)\", len(rep.Issues))\n}",
+      "headingContext": "main.go \u003e function runHealthcheck",
+      "startLine": 302,
+      "startCol": 1,
+      "endLine": 342,
+      "endCol": 2
+    },
+    {
+      "text": "func runChunk(args []string) error {\n\tfs := flag.NewFlagSet(\"chunk\", flag.ExitOnError)\n\tmaxSize := fs.Int(\"max\", chunk.TargetChunkSize, \"max chunk size in characters\")\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\tpath := strings.TrimSpace(strings.Join(fs.Args(), \" \"))\n\tif path == \"\" {\n\t\treturn fmt.Errorf(\"chunk: missing file path\")\n\t}\n\tcontent, err := os.ReadFile(path)\n\tif err != nil {\n\t\treturn err\n\t}\n\n\troute := filetype.RoutePath(path)\n\tvar chunks []chunk.ChunkInfo\n\tif route.Type == filetype.Code {\n\t\tif chunk.IsConfigGrammar(route.Grammar) {\n\t\t\tchunks, err = chunk.ChunkConfig(content, route.Grammar, path, *maxSize)\n\t\t} else {\n\t\t\tchunks, err = chunk.ChunkCode(content, route.Grammar, path, *maxSize)\n\t\t}\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t} else {\n\t\tchunks = chunk.ChunkMarkdown(string(content), path, *maxSize)\n\t}\n\n\tkind := route.Type.String()\n\tif route.Grammar != \"\" {\n\t\tkind = route.Grammar\n\t}\n\tfmt.Printf(\"%s (%s): %d chunks\\n\", path, kind, len(chunks))\n\t// Show each chunk exactly as it is embedded: the heading breadcrumb rendered\n\t// as comments/context blocks ahead of the raw chunk text.\n\tcomment := filetype.LineComment(path)\n\tfor _, c := range chunks {\n\t\tembedded := index.Contextualize(comment, c.HeadingContext, c.Text)\n\t\tfmt.Printf(\"\\n%s\\n\\n%s\\n\", chunkHeading(c.HeadingContext, c.Start.Line), embedded)\n\t}\n\treturn nil\n}",
+      "contextualizedText": "// main.go \u003e function runChunk\n\nfunc runChunk(args []string) error {\n\tfs := flag.NewFlagSet(\"chunk\", flag.ExitOnError)\n\tmaxSize := fs.Int(\"max\", chunk.TargetChunkSize, \"max chunk size in characters\")\n\tif err := fs.Parse(args); err != nil {\n\t\treturn err\n\t}\n\tpath := strings.TrimSpace(strings.Join(fs.Args(), \" \"))\n\tif path == \"\" {\n\t\treturn fmt.Errorf(\"chunk: missing file path\")\n\t}\n\tcontent, err := os.ReadFile(path)\n\tif err != nil {\n\t\treturn err\n\t}\n\n\troute := filetype.RoutePath(path)\n\tvar chunks []chunk.ChunkInfo\n\tif route.Type == filetype.Code {\n\t\tif chunk.IsConfigGrammar(route.Grammar) {\n\t\t\tchunks, err = chunk.ChunkConfig(content, route.Grammar, path, *maxSize)\n\t\t} else {\n\t\t\tchunks, err = chunk.ChunkCode(content, route.Grammar, path, *maxSize)\n\t\t}\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t} else {\n\t\tchunks = chunk.ChunkMarkdown(string(content), path, *maxSize)\n\t}\n\n\tkind := route.Type.String()\n\tif route.Grammar != \"\" {\n\t\tkind = route.Grammar\n\t}\n\tfmt.Printf(\"%s (%s): %d chunks\\n\", path, kind, len(chunks))\n\t// Show each chunk exactly as it is embedded: the heading breadcrumb rendered\n\t// as comments/context blocks ahead of the raw chunk text.\n\tcomment := filetype.LineComment(path)\n\tfor _, c := range chunks {\n\t\tembedded := index.Contextualize(comment, c.HeadingContext, c.Text)\n\t\tfmt.Printf(\"\\n%s\\n\\n%s\\n\", chunkHeading(c.HeadingContext, c.Start.Line), embedded)\n\t}\n\treturn nil\n}",
+      "headingContext": "main.go \u003e function runChunk",
+      "startLine": 344,
+      "startCol": 1,
+      "endLine": 387,
+      "endCol": 2
+    },
+    {
+      "text": "// chunkHeading renders the shared header used by both search results and the\n// chunk preview. The breadcrumb is prefixed with the file path for both code and\n// markdown; we attach the chunk's starting line to that leading path in\n// editor-friendly file:Ln form, e.g. \"## path/to/file.go:L28 \u003e type State\" or\n// \"## docs/readme.md:L2 \u003e # Title\".\nfunc chunkHeading(breadcrumb string, startLine int) string {\n\tfile, rest, found := strings.Cut(breadcrumb, \" \u003e \")\n\tloc := fmt.Sprintf(\"## %s:L%d\", file, startLine)\n\tif found {\n\t\tloc += \" \u003e \" + rest\n\t}\n\treturn loc\n}",
+      "contextualizedText": "// main.go \u003e function chunkHeading\n\n// chunkHeading renders the shared header used by both search results and the\n// chunk preview. The breadcrumb is prefixed with the file path for both code and\n// markdown; we attach the chunk's starting line to that leading path in\n// editor-friendly file:Ln form, e.g. \"## path/to/file.go:L28 \u003e type State\" or\n// \"## docs/readme.md:L2 \u003e # Title\".\nfunc chunkHeading(breadcrumb string, startLine int) string {\n\tfile, rest, found := strings.Cut(breadcrumb, \" \u003e \")\n\tloc := fmt.Sprintf(\"## %s:L%d\", file, startLine)\n\tif found {\n\t\tloc += \" \u003e \" + rest\n\t}\n\treturn loc\n}",
+      "headingContext": "main.go \u003e function chunkHeading",
+      "startLine": 389,
+      "startCol": 1,
+      "endLine": 401,
+      "endCol": 2
+    },
+    {
+      "text": "// formatResults renders search results as score-ordered markdown sections.\nfunc formatResults(_ paths.AbsPath, results []store.SearchResult) string {\n\tif len(results) == 0 {\n\t\treturn \"No results found.\\n\"\n\t}\n\tvar b strings.Builder\n\tfor i, r := range results {\n\t\tif i \u003e 0 {\n\t\t\tb.WriteString(\"\\n---\\n\\n\")\n\t\t}\n\t\tfmt.Fprintf(\u0026b, \"%s\\n\\n%s\\n\", chunkHeading(r.HeadingContext, r.StartLine), r.Text)\n\t}\n\treturn b.String()\n}",
+      "contextualizedText": "// main.go \u003e function formatResults\n\n// formatResults renders search results as score-ordered markdown sections.\nfunc formatResults(_ paths.AbsPath, results []store.SearchResult) string {\n\tif len(results) == 0 {\n\t\treturn \"No results found.\\n\"\n\t}\n\tvar b strings.Builder\n\tfor i, r := range results {\n\t\tif i \u003e 0 {\n\t\t\tb.WriteString(\"\\n---\\n\\n\")\n\t\t}\n\t\tfmt.Fprintf(\u0026b, \"%s\\n\\n%s\\n\", chunkHeading(r.HeadingContext, r.StartLine), r.Text)\n\t}\n\treturn b.String()\n}",
+      "headingContext": "main.go \u003e function formatResults",
+      "startLine": 403,
+      "startCol": 1,
+      "endLine": 416,
+      "endCol": 2
+    },
+    {
+      "text": "// state mirrors index.State for reading the marker file in `stats`.\ntype state struct {\n\tCommit     string `toml:\"commit\"`\n\tFileCount  int    `toml:\"fileCount\"`\n\tChunkCount int    `toml:\"chunkCount\"`\n}",
+      "contextualizedText": "// main.go \u003e type state\n\n// state mirrors index.State for reading the marker file in `stats`.\ntype state struct {\n\tCommit     string `toml:\"commit\"`\n\tFileCount  int    `toml:\"fileCount\"`\n\tChunkCount int    `toml:\"chunkCount\"`\n}",
+      "headingContext": "main.go \u003e type state",
+      "startLine": 418,
+      "startCol": 1,
+      "endLine": 423,
+      "endCol": 2
+    },
+    {
+      "text": "func readState(repoRoot string) (*state, error) {\n\tdata, err := os.ReadFile(filepath.Join(repoRoot, \"pkb-state.toml\"))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn nil, nil\n\t\t}\n\t\treturn nil, err\n\t}\n\tvar s state\n\tif err := toml.Unmarshal(data, \u0026s); err != nil {\n\t\treturn nil, err\n\t}\n\treturn \u0026s, nil\n}",
+      "contextualizedText": "// main.go \u003e function readState\n\nfunc readState(repoRoot string) (*state, error) {\n\tdata, err := os.ReadFile(filepath.Join(repoRoot, \"pkb-state.toml\"))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn nil, nil\n\t\t}\n\t\treturn nil, err\n\t}\n\tvar s state\n\tif err := toml.Unmarshal(data, \u0026s); err != nil {\n\t\treturn nil, err\n\t}\n\treturn \u0026s, nil\n}",
+      "headingContext": "main.go \u003e function readState",
+      "startLine": 425,
+      "startCol": 1,
+      "endLine": 438,
+      "endCol": 2
+    }
+  ]
+}

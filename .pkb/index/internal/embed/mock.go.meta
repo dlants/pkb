@@ -1,0 +1,150 @@
+{
+  "blobSha": "2d593f3b46e6996574835a3ca831b7a91ef70618",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package embed\n\nimport (\n\t\"fmt\"\n\t\"strings\"\n\t\"sync\"\n)",
+      "contextualizedText": "// internal/embed/mock.go\n\npackage embed\n\nimport (\n\t\"fmt\"\n\t\"strings\"\n\t\"sync\"\n)",
+      "headingContext": "internal/embed/mock.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 7,
+      "endCol": 2
+    },
+    {
+      "text": "// MockModel is a deterministic embedding model for tests. It records how many\n// embedding calls it has received so tests can assert that reindex skipped work.\ntype MockModel struct {\n\tName string\n\tDims int\n\n\tmu            sync.Mutex\n\tchunkCalls    int\n\tqueryCalls    int\n\tchunkCount    int\n\tdocumentCalls int\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e type MockModel\n\n// MockModel is a deterministic embedding model for tests. It records how many\n// embedding calls it has received so tests can assert that reindex skipped work.\ntype MockModel struct {\n\tName string\n\tDims int\n\n\tmu            sync.Mutex\n\tchunkCalls    int\n\tqueryCalls    int\n\tchunkCount    int\n\tdocumentCalls int\n}",
+      "headingContext": "internal/embed/mock.go \u003e type MockModel",
+      "startLine": 9,
+      "startCol": 1,
+      "endLine": 20,
+      "endCol": 2
+    },
+    {
+      "text": "// NewMockModel returns a mock model with the given name and dimensions.\nfunc NewMockModel(name string, dims int) *MockModel {\n\treturn \u0026MockModel{Name: name, Dims: dims}\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e function NewMockModel\n\n// NewMockModel returns a mock model with the given name and dimensions.\nfunc NewMockModel(name string, dims int) *MockModel {\n\treturn \u0026MockModel{Name: name, Dims: dims}\n}",
+      "headingContext": "internal/embed/mock.go \u003e function NewMockModel",
+      "startLine": 22,
+      "startCol": 1,
+      "endLine": 25,
+      "endCol": 2
+    },
+    {
+      "text": "func (m *MockModel) ModelName() string { return m.Name }",
+      "contextualizedText": "// internal/embed/mock.go \u003e method ModelName\n\nfunc (m *MockModel) ModelName() string { return m.Name }",
+      "headingContext": "internal/embed/mock.go \u003e method ModelName",
+      "startLine": 27,
+      "startCol": 1,
+      "endLine": 27,
+      "endCol": 57
+    },
+    {
+      "text": "func (m *MockModel) Dimensions() int   { return m.Dims }",
+      "contextualizedText": "// internal/embed/mock.go \u003e method Dimensions\n\nfunc (m *MockModel) Dimensions() int   { return m.Dims }",
+      "headingContext": "internal/embed/mock.go \u003e method Dimensions",
+      "startLine": 28,
+      "startCol": 1,
+      "endLine": 28,
+      "endCol": 57
+    },
+    {
+      "text": "// deterministicVector derives a stable vector from the input text so the same\n// chunk always embeds to the same point.\nfunc (m *MockModel) deterministicVector(s string) Embedding {\n\tvec := make(Embedding, m.Dims)\n\tfor i := 0; i \u003c len(s); i++ {\n\t\tvec[i%m.Dims] += float32(s[i])\n\t}\n\treturn vec\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method deterministicVector\n\n// deterministicVector derives a stable vector from the input text so the same\n// chunk always embeds to the same point.\nfunc (m *MockModel) deterministicVector(s string) Embedding {\n\tvec := make(Embedding, m.Dims)\n\tfor i := 0; i \u003c len(s); i++ {\n\t\tvec[i%m.Dims] += float32(s[i])\n\t}\n\treturn vec\n}",
+      "headingContext": "internal/embed/mock.go \u003e method deterministicVector",
+      "startLine": 30,
+      "startCol": 1,
+      "endLine": 38,
+      "endCol": 2
+    },
+    {
+      "text": "func (m *MockModel) EmbedChunk(chunk string) (Embedding, error) {\n\tm.mu.Lock()\n\tm.chunkCalls++\n\tm.chunkCount++\n\tm.mu.Unlock()\n\treturn m.deterministicVector(chunk), nil\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method EmbedChunk\n\nfunc (m *MockModel) EmbedChunk(chunk string) (Embedding, error) {\n\tm.mu.Lock()\n\tm.chunkCalls++\n\tm.chunkCount++\n\tm.mu.Unlock()\n\treturn m.deterministicVector(chunk), nil\n}",
+      "headingContext": "internal/embed/mock.go \u003e method EmbedChunk",
+      "startLine": 40,
+      "startCol": 1,
+      "endLine": 46,
+      "endCol": 2
+    },
+    {
+      "text": "func (m *MockModel) EmbedQuery(query string) (Embedding, error) {\n\tm.mu.Lock()\n\tm.queryCalls++\n\tm.mu.Unlock()\n\treturn m.deterministicVector(query), nil\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method EmbedQuery\n\nfunc (m *MockModel) EmbedQuery(query string) (Embedding, error) {\n\tm.mu.Lock()\n\tm.queryCalls++\n\tm.mu.Unlock()\n\treturn m.deterministicVector(query), nil\n}",
+      "headingContext": "internal/embed/mock.go \u003e method EmbedQuery",
+      "startLine": 48,
+      "startCol": 1,
+      "endLine": 53,
+      "endCol": 2
+    },
+    {
+      "text": "func (m *MockModel) EmbedChunks(chunks []string) ([]Embedding, error) {\n\tm.mu.Lock()\n\tm.chunkCalls++\n\tm.chunkCount += len(chunks)\n\tm.mu.Unlock()\n\tout := make([]Embedding, len(chunks))\n\tfor i, c := range chunks {\n\t\tout[i] = m.deterministicVector(c)\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method EmbedChunks\n\nfunc (m *MockModel) EmbedChunks(chunks []string) ([]Embedding, error) {\n\tm.mu.Lock()\n\tm.chunkCalls++\n\tm.chunkCount += len(chunks)\n\tm.mu.Unlock()\n\tout := make([]Embedding, len(chunks))\n\tfor i, c := range chunks {\n\t\tout[i] = m.deterministicVector(c)\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/embed/mock.go \u003e method EmbedChunks",
+      "startLine": 55,
+      "startCol": 1,
+      "endLine": 65,
+      "endCol": 2
+    },
+    {
+      "text": "// EmbedDocument deterministically auto-chunks a document (splitting on blank\n// lines) and returns each chunk paired with a contextualized vector. The\n// contextual vector is sibling-dependent — it folds in the whole document — so\n// it is distinct from the isolated vector for the same chunk text.\nfunc (m *MockModel) EmbedDocument(document string) ([]ContextualChunk, error) {\n\tm.mu.Lock()\n\tm.documentCalls++\n\tm.mu.Unlock()\n\tvar out []ContextualChunk\n\tfor _, part := range strings.Split(document, \"\\n\\n\") {\n\t\ttext := strings.TrimSpace(part)\n\t\tif text == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\tout = append(out, ContextualChunk{\n\t\t\tText:      text,\n\t\t\tEmbedding: m.contextualVector(text, document),\n\t\t})\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method EmbedDocument\n\n// EmbedDocument deterministically auto-chunks a document (splitting on blank\n// lines) and returns each chunk paired with a contextualized vector. The\n// contextual vector is sibling-dependent — it folds in the whole document — so\n// it is distinct from the isolated vector for the same chunk text.\nfunc (m *MockModel) EmbedDocument(document string) ([]ContextualChunk, error) {\n\tm.mu.Lock()\n\tm.documentCalls++\n\tm.mu.Unlock()\n\tvar out []ContextualChunk\n\tfor _, part := range strings.Split(document, \"\\n\\n\") {\n\t\ttext := strings.TrimSpace(part)\n\t\tif text == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\tout = append(out, ContextualChunk{\n\t\t\tText:      text,\n\t\t\tEmbedding: m.contextualVector(text, document),\n\t\t})\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/embed/mock.go \u003e method EmbedDocument",
+      "startLine": 67,
+      "startCol": 1,
+      "endLine": 87,
+      "endCol": 2
+    },
+    {
+      "text": "// contextualVector derives a vector from the chunk text and the surrounding\n// document, so contextualized output differs from isolated embedding.\nfunc (m *MockModel) contextualVector(chunk, document string) Embedding {\n\tvec := m.deterministicVector(chunk)\n\tctx := m.deterministicVector(document)\n\tfor i := range vec {\n\t\tvec[i] += ctx[i]\n\t}\n\treturn vec\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method contextualVector\n\n// contextualVector derives a vector from the chunk text and the surrounding\n// document, so contextualized output differs from isolated embedding.\nfunc (m *MockModel) contextualVector(chunk, document string) Embedding {\n\tvec := m.deterministicVector(chunk)\n\tctx := m.deterministicVector(document)\n\tfor i := range vec {\n\t\tvec[i] += ctx[i]\n\t}\n\treturn vec\n}",
+      "headingContext": "internal/embed/mock.go \u003e method contextualVector",
+      "startLine": 89,
+      "startCol": 1,
+      "endLine": 98,
+      "endCol": 2
+    },
+    {
+      "text": "// DocumentCalls returns the number of EmbedDocument invocations.\nfunc (m *MockModel) DocumentCalls() int {\n\tm.mu.Lock()\n\tdefer m.mu.Unlock()\n\treturn m.documentCalls\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method DocumentCalls\n\n// DocumentCalls returns the number of EmbedDocument invocations.\nfunc (m *MockModel) DocumentCalls() int {\n\tm.mu.Lock()\n\tdefer m.mu.Unlock()\n\treturn m.documentCalls\n}",
+      "headingContext": "internal/embed/mock.go \u003e method DocumentCalls",
+      "startLine": 100,
+      "startCol": 1,
+      "endLine": 105,
+      "endCol": 2
+    },
+    {
+      "text": "// ChunkCalls returns the number of EmbedChunk+EmbedChunks invocations.\nfunc (m *MockModel) ChunkCalls() int {\n\tm.mu.Lock()\n\tdefer m.mu.Unlock()\n\treturn m.chunkCalls\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method ChunkCalls\n\n// ChunkCalls returns the number of EmbedChunk+EmbedChunks invocations.\nfunc (m *MockModel) ChunkCalls() int {\n\tm.mu.Lock()\n\tdefer m.mu.Unlock()\n\treturn m.chunkCalls\n}",
+      "headingContext": "internal/embed/mock.go \u003e method ChunkCalls",
+      "startLine": 107,
+      "startCol": 1,
+      "endLine": 112,
+      "endCol": 2
+    },
+    {
+      "text": "// ChunkCount returns the total number of chunks embedded.\nfunc (m *MockModel) ChunkCount() int {\n\tm.mu.Lock()\n\tdefer m.mu.Unlock()\n\treturn m.chunkCount\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method ChunkCount\n\n// ChunkCount returns the total number of chunks embedded.\nfunc (m *MockModel) ChunkCount() int {\n\tm.mu.Lock()\n\tdefer m.mu.Unlock()\n\treturn m.chunkCount\n}",
+      "headingContext": "internal/embed/mock.go \u003e method ChunkCount",
+      "startLine": 114,
+      "startCol": 1,
+      "endLine": 119,
+      "endCol": 2
+    },
+    {
+      "text": "// FailingModel wraps a model and fails after FailAfter chunk-batches, used to\n// test partial-run marker safety.\ntype FailingModel struct {\n\t*MockModel\n\tFailAfter int\n\tbatches   int\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e type FailingModel\n\n// FailingModel wraps a model and fails after FailAfter chunk-batches, used to\n// test partial-run marker safety.\ntype FailingModel struct {\n\t*MockModel\n\tFailAfter int\n\tbatches   int\n}",
+      "headingContext": "internal/embed/mock.go \u003e type FailingModel",
+      "startLine": 121,
+      "startCol": 1,
+      "endLine": 127,
+      "endCol": 2
+    },
+    {
+      "text": "func (f *FailingModel) EmbedChunks(chunks []string) ([]Embedding, error) {\n\tf.batches++\n\tif f.batches \u003e f.FailAfter {\n\t\treturn nil, fmt.Errorf(\"simulated embed failure\")\n\t}\n\treturn f.MockModel.EmbedChunks(chunks)\n}",
+      "contextualizedText": "// internal/embed/mock.go \u003e method EmbedChunks\n\nfunc (f *FailingModel) EmbedChunks(chunks []string) ([]Embedding, error) {\n\tf.batches++\n\tif f.batches \u003e f.FailAfter {\n\t\treturn nil, fmt.Errorf(\"simulated embed failure\")\n\t}\n\treturn f.MockModel.EmbedChunks(chunks)\n}",
+      "headingContext": "internal/embed/mock.go \u003e method EmbedChunks",
+      "startLine": 129,
+      "startCol": 1,
+      "endLine": 135,
+      "endCol": 2
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "blobSha": "bd44276ce9ec1ddf6646a7538047d3d13ddab561",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package embed\n\nimport \"testing\"",
+      "contextualizedText": "// internal/embed/factory_test.go\n\npackage embed\n\nimport \"testing\"",
+      "headingContext": "internal/embed/factory_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 3,
+      "endCol": 17
+    },
+    {
+      "text": "// TestBuildProvidersAreContextual ensures every supported provider yields a\n// model that implements ContextualEmbeddingModel, since text files always route\n// through the contextual document-embedding path.\nfunc TestBuildProvidersAreContextual(t *testing.T) {\n\tfor _, provider := range []string{\"\", \"voyage\", \"mock\"} {\n\t\tm, err := Build(provider, \"test-model\", 8, \"\", \"\")\n\t\tif err != nil {\n\t\t\tt.Fatalf(\"Build(%q) error: %v\", provider, err)\n\t\t}\n\t\tif _, ok := m.(ContextualEmbeddingModel); !ok {\n\t\t\tt.Fatalf(\"provider %q does not implement ContextualEmbeddingModel\", provider)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/embed/factory_test.go \u003e function TestBuildProvidersAreContextual\n\n// TestBuildProvidersAreContextual ensures every supported provider yields a\n// model that implements ContextualEmbeddingModel, since text files always route\n// through the contextual document-embedding path.\nfunc TestBuildProvidersAreContextual(t *testing.T) {\n\tfor _, provider := range []string{\"\", \"voyage\", \"mock\"} {\n\t\tm, err := Build(provider, \"test-model\", 8, \"\", \"\")\n\t\tif err != nil {\n\t\t\tt.Fatalf(\"Build(%q) error: %v\", provider, err)\n\t\t}\n\t\tif _, ok := m.(ContextualEmbeddingModel); !ok {\n\t\t\tt.Fatalf(\"provider %q does not implement ContextualEmbeddingModel\", provider)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/embed/factory_test.go \u003e function TestBuildProvidersAreContextual",
+      "startLine": 5,
+      "startCol": 1,
+      "endLine": 18,
+      "endCol": 2
+    },
+    {
+      "text": "func TestBuildRejectsUnknownProvider(t *testing.T) {\n\tif _, err := Build(\"nope\", \"m\", 8, \"\", \"\"); err == nil {\n\t\tt.Fatal(\"expected error for unknown provider\")\n\t}\n}",
+      "contextualizedText": "// internal/embed/factory_test.go \u003e function TestBuildRejectsUnknownProvider\n\nfunc TestBuildRejectsUnknownProvider(t *testing.T) {\n\tif _, err := Build(\"nope\", \"m\", 8, \"\", \"\"); err == nil {\n\t\tt.Fatal(\"expected error for unknown provider\")\n\t}\n}",
+      "headingContext": "internal/embed/factory_test.go \u003e function TestBuildRejectsUnknownProvider",
+      "startLine": 20,
+      "startCol": 1,
+      "endLine": 24,
+      "endCol": 2
+    }
+  ]
+}

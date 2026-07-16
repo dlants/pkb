@@ -12,9 +12,9 @@ PKB uses a pluggable **embedding** model (all files) and an optional **inference
 
 Optional **contextualized text** path: setting `contextualizeText = true` in `[embedding]` (Voyage `voyage-context-4` only) makes text files skip PKB chunking + LLM augmentation and go whole to Voyage's `/v1/contextualizedembeddings` auto-chunk endpoint (large files split into ~120K-token windows with 10K overlap, chunks deduped by text). Code stays on the isolated AST+breadcrumb path; both regimes share one vec table under the same model id + dimension (no `ModelName` suffix, no `MajorVersion` bump). Mode is recorded per file as the `autochunk` minor_spec marker so flipping the option re-embeds only the affected text files (via `touchedPaths` mode-flip detection). Cost estimation (`internal/cost`) prices `voyage-context-4` (0.12) / `voyage-context-3` (0.18) and drops inference tokens for auto-chunk text files.
 
-## Storage (SQLite)
+## Storage (mirror tree + SQLite cache)
 
-The index is a single SQLite file (`pkb.db`) with the `sqlite-vec` extension statically linked. Two app tables plus one `vec0` virtual table per embedding model:
+The committed source of truth is a **mirror tree** of small per-source-file artifacts under `.pkb/index/` (for `src/foo.ts`: a diffable `src/foo.ts.meta` with chunk text + spans + `blob_sha`/`model_name`, and a packed-embeddings `src/foo.ts.vec`). Chunk identity is positional (vector row N ↔ meta record N); encoding is deterministic so re-embedding unchanged chunks yields byte-identical artifacts (no spurious git diff, no LFS). Queries read a **gitignored, locally-rebuilt SQLite cache** at `.pkb/cache.db` (the `sqlite-vec` schema below), synced from the mirror tree on demand — a stale/missing cache only affects latency, never results. Cache schema: two app tables plus one `vec0` virtual table per embedding model:
 
 - **`files`** — `id`, `path`, `model_name`, `embedding_version` (the global `MajorVersion`), `blob_sha`, `minor_spec`; `UNIQUE(path, model_name, embedding_version)`.
 - **`chunks`** — `id`, `file_id` (FK → `files`, cascade delete), `text`, `contextualized_text`, `heading_context`, `start_line`, `start_col`, `end_line`, `end_col`, `augmentation`, `aug_spec`.
@@ -22,13 +22,13 @@ The index is a single SQLite file (`pkb.db`) with the `sqlite-vec` extension sta
 
 **Major vs minor versioning.** The vec table is keyed by `model_name` + `MajorVersion`, so bumping the major version (chunking algorithm, breadcrumbs, tree-sitter/scm, embedding model, or dimensions) re-keys the index and forces a full re-embed. `minor_spec`/`aug_spec` (augmentation on/off, inference model, prompt version) are recorded but **never** invalidate a vector.
 
-**Per-file crash safety.** A full reindex is "wipe `pkb.db`, then run reindex." Each file is (re)indexed by `PutFile` in a single transaction: it deletes the path's old rows, inserts the file row recording the new `blob_sha` + `minor_spec`, and inserts every chunk + vector. The expensive embedding/inference work happens in memory first, so the write is quick; a crash before commit leaves the previously committed file rows intact. On resume, a file whose recorded `blob_sha` already matches the tree (same embedding model) is skipped, so completed files are not redone — recovery is at file granularity (an interrupted file is simply reindexed). Per-chunk reuse (keyed by `ChunkKey(heading_context, text)` via `ChunkEmbeddings`, read before the rewrite) lets unchanged chunks of a changed file skip both the embedding and inference calls.
+**Per-file crash safety.** Reindex writes each source file's `.vec`/`.meta` siblings atomically (temp + rename), so a crash leaves previously written artifacts intact and an interrupted file is simply reindexed; a torn pair is detected via the `.meta` `blob_sha` and reindexed. On resume, a file whose mirror-recorded `blob_sha` already matches the tree (same embedding model) is skipped. Per-chunk reuse (keyed by `ChunkKey(heading_context, text)`, read from the file's existing mirror artifact) lets unchanged chunks of a changed file skip the embedding/inference calls. After the tree is updated, `syncCache` reconciles the derived SQLite cache; read commands call `SyncCache` before querying (`search` only — `stats` reads `pkb-state.toml`, `healthcheck` reads the mirror tree directly).
 
 ## Commands
 
 ## Versioning
 
-`pkb version` (also `--version`/`-v`) prints the module version via `runtime/debug.ReadBuildInfo()`: a clean `vX.Y.Z` for `go install ...@latest` builds off a tag, or `(devel)` for local builds. Releases are auto-tagged by `.github/workflows/tag-release.yml`: on every push to main (ignoring the `pkb.db`/`pkb-state.toml` reindex commits) it bumps the highest `vX.Y.Z` tag's patch and pushes the new tag (seeding `v0.1.0` if none exist), so `@latest` always tracks main. Push a tag manually for minor/major bumps; the next auto-bump continues from there.
+`pkb version` (also `--version`/`-v`) prints the module version via `runtime/debug.ReadBuildInfo()`: a clean `vX.Y.Z` for `go install ...@latest` builds off a tag, or `(devel)` for local builds. Releases are auto-tagged by `.github/workflows/tag-release.yml`: on every push to main (ignoring the `.pkb/index/**`/`pkb-state.toml` reindex commits) it bumps the highest `vX.Y.Z` tag's patch and pushes the new tag (seeding `v0.1.0` if none exist), so `@latest` always tracks main. Push a tag manually for minor/major bumps; the next auto-bump continues from there.
 
 ### Build
 
@@ -46,8 +46,7 @@ go test ./...
 
 ## Searching this repo
 
-This repo dogfoods its own pkb setup. The `pkb` binary lives at the repo root (`./pkb`, built with `go build -o pkb .`), and the index `pkb.db` is checked into git, so search works out of the box. Reindexing is wired up via a git hook — see `setup-hooks.sh` (installs hooks) and `hooks/pre-push` (reindexes on push to the default branch and reminds you to commit `pkb.db`).
-
+This repo dogfoods its own pkb setup. The `pkb` binary lives at the repo root (`./pkb`, built with `go build -o pkb .`), and the `.pkb/index` mirror tree is checked into git (the `.pkb/cache.db` cache is gitignored and rebuilt on demand), so search works out of the box. Reindexing is wired up via `hooks/pre-commit` (`git config core.hooksPath hooks`): it runs `pkb reindex --staged` and stages the changed `.pkb/index` artifacts + `pkb-state.toml` in the same commit.
 ```bash
 ./pkb search "<natural language query>"   # -k N sets result count (default 5)
 ./pkb stats                               # index commit, indexedAt, file/chunk counts
@@ -55,7 +54,7 @@ This repo dogfoods its own pkb setup. The `pkb` binary lives at the repo root (`
 ./pkb chunk <file>                        # show each chunk exactly as it is embedded (heading breadcrumb rendered as comments/context blocks ahead of the chunk text; augmentation omitted since it needs inference). For debugging.
 ```
 
-Each result is a scored snippet with its file path — treat it as a pointer and open the file to read the real code. The index reflects the last indexed commit, not your working tree; don't worry about reindexing local changes, the pre-push hook handles it.
+Each result is a scored snippet with its file path — treat it as a pointer and open the file to read the real code. The index reflects the last indexed commit, not your working tree; don't worry about reindexing local changes, the pre-commit hook handles it.
 
 <system_reminder>
 For exploratory / orientation questions about this codebase ("where is X handled?", "how does Y work?"), use `./pkb search` rather than grepping with `rg`. Reserve `rg` for exact symbol/string lookups.

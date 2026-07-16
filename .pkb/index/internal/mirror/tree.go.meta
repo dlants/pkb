@@ -1,0 +1,123 @@
+{
+  "blobSha": "cfd697b3ea202f876bb70cef67952bf4cecab1b1",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// This file adds the on-disk mirror tree: filesystem read/write/enumerate of\n// per-source-file artifacts rooted at `.pkb/index/` under the repo root. The\n// tree is the committed source of truth for the index; the SQLite store is a\n// derived cache synced from it.\npackage mirror\n\nimport (\n\t\"os\"\n\t\"path/filepath\"\n\t\"strings\"\n\n\t\"github.com/dlants/pkb/internal/paths\"\n)\n\n// IndexDir is the repo-root-relative directory holding the mirror tree.\nconst IndexDir = \".pkb/index\"",
+      "contextualizedText": "// internal/mirror/tree.go\n\n// This file adds the on-disk mirror tree: filesystem read/write/enumerate of\n// per-source-file artifacts rooted at `.pkb/index/` under the repo root. The\n// tree is the committed source of truth for the index; the SQLite store is a\n// derived cache synced from it.\npackage mirror\n\nimport (\n\t\"os\"\n\t\"path/filepath\"\n\t\"strings\"\n\n\t\"github.com/dlants/pkb/internal/paths\"\n)\n\n// IndexDir is the repo-root-relative directory holding the mirror tree.\nconst IndexDir = \".pkb/index\"",
+      "headingContext": "internal/mirror/tree.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 16,
+      "endCol": 30
+    },
+    {
+      "text": "// Tree provides filesystem access to the mirror artifacts under a repo root.\ntype Tree struct {\n\troot paths.AbsPath\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e type Tree\n\n// Tree provides filesystem access to the mirror artifacts under a repo root.\ntype Tree struct {\n\troot paths.AbsPath\n}",
+      "headingContext": "internal/mirror/tree.go \u003e type Tree",
+      "startLine": 18,
+      "startCol": 1,
+      "endLine": 21,
+      "endCol": 2
+    },
+    {
+      "text": "// NewTree returns a Tree rooted at the given absolute repo root.\nfunc NewTree(repoRoot paths.AbsPath) *Tree { return \u0026Tree{root: repoRoot} }",
+      "contextualizedText": "// internal/mirror/tree.go \u003e function NewTree\n\n// NewTree returns a Tree rooted at the given absolute repo root.\nfunc NewTree(repoRoot paths.AbsPath) *Tree { return \u0026Tree{root: repoRoot} }",
+      "headingContext": "internal/mirror/tree.go \u003e function NewTree",
+      "startLine": 23,
+      "startCol": 1,
+      "endLine": 24,
+      "endCol": 76
+    },
+    {
+      "text": "// dir is the absolute path of the mirror tree root.\nfunc (t *Tree) dir() string {\n\treturn filepath.Join(string(t.root), filepath.FromSlash(IndexDir))\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method dir\n\n// dir is the absolute path of the mirror tree root.\nfunc (t *Tree) dir() string {\n\treturn filepath.Join(string(t.root), filepath.FromSlash(IndexDir))\n}",
+      "headingContext": "internal/mirror/tree.go \u003e method dir",
+      "startLine": 26,
+      "startCol": 1,
+      "endLine": 29,
+      "endCol": 2
+    },
+    {
+      "text": "// base is the absolute path prefix (without extension) for a source path's\n// artifacts.\nfunc (t *Tree) base(rel paths.GitRootRelativePath) string {\n\treturn filepath.Join(t.dir(), filepath.FromSlash(string(rel)))\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method base\n\n// base is the absolute path prefix (without extension) for a source path's\n// artifacts.\nfunc (t *Tree) base(rel paths.GitRootRelativePath) string {\n\treturn filepath.Join(t.dir(), filepath.FromSlash(string(rel)))\n}",
+      "headingContext": "internal/mirror/tree.go \u003e method base",
+      "startLine": 31,
+      "startCol": 1,
+      "endLine": 35,
+      "endCol": 2
+    },
+    {
+      "text": "func (t *Tree) metaPath(rel paths.GitRootRelativePath) string { return t.base(rel) + MetaExt }",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method metaPath\n\nfunc (t *Tree) metaPath(rel paths.GitRootRelativePath) string { return t.base(rel) + MetaExt }",
+      "headingContext": "internal/mirror/tree.go \u003e method metaPath",
+      "startLine": 37,
+      "startCol": 1,
+      "endLine": 37,
+      "endCol": 95
+    },
+    {
+      "text": "func (t *Tree) vecPath(rel paths.GitRootRelativePath) string  { return t.base(rel) + VecExt }",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method vecPath\n\nfunc (t *Tree) vecPath(rel paths.GitRootRelativePath) string  { return t.base(rel) + VecExt }",
+      "headingContext": "internal/mirror/tree.go \u003e method vecPath",
+      "startLine": 38,
+      "startCol": 1,
+      "endLine": 38,
+      "endCol": 94
+    },
+    {
+      "text": "// Entry is the lightweight per-artifact record produced by List: enough to\n// decide staleness and report counts without loading vectors.\ntype Entry struct {\n\tBlobSha   string\n\tModelName string\n\tChunks    int\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e type Entry\n\n// Entry is the lightweight per-artifact record produced by List: enough to\n// decide staleness and report counts without loading vectors.\ntype Entry struct {\n\tBlobSha   string\n\tModelName string\n\tChunks    int\n}",
+      "headingContext": "internal/mirror/tree.go \u003e type Entry",
+      "startLine": 40,
+      "startCol": 1,
+      "endLine": 46,
+      "endCol": 2
+    },
+    {
+      "text": "// List enumerates every artifact in the tree by its source path, reading only\n// the `.meta` sibling. A missing tree yields an empty map.\nfunc (t *Tree) List() (map[paths.GitRootRelativePath]Entry, error) {\n\tdir := t.dir()\n\tout := map[paths.GitRootRelativePath]Entry{}\n\terr := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {\n\t\tif err != nil {\n\t\t\tif os.IsNotExist(err) {\n\t\t\t\treturn nil\n\t\t\t}\n\t\t\treturn err\n\t\t}\n\t\tif d.IsDir() || !strings.HasSuffix(p, MetaExt) {\n\t\t\treturn nil\n\t\t}\n\t\tb, rerr := os.ReadFile(p)\n\t\tif rerr != nil {\n\t\t\treturn rerr\n\t\t}\n\t\ta, derr := DecodeMeta(b)\n\t\tif derr != nil {\n\t\t\treturn derr\n\t\t}\n\t\trelOS := strings.TrimSuffix(strings.TrimPrefix(p, dir+string(filepath.Separator)), MetaExt)\n\t\trel := paths.GitRootRelativePath(filepath.ToSlash(relOS))\n\t\tout[rel] = Entry{BlobSha: a.BlobSha, ModelName: a.ModelName, Chunks: len(a.Chunks)}\n\t\treturn nil\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method List\n\n// List enumerates every artifact in the tree by its source path, reading only\n// the `.meta` sibling. A missing tree yields an empty map.\nfunc (t *Tree) List() (map[paths.GitRootRelativePath]Entry, error) {\n\tdir := t.dir()\n\tout := map[paths.GitRootRelativePath]Entry{}\n\terr := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {\n\t\tif err != nil {\n\t\t\tif os.IsNotExist(err) {\n\t\t\t\treturn nil\n\t\t\t}\n\t\t\treturn err\n\t\t}\n\t\tif d.IsDir() || !strings.HasSuffix(p, MetaExt) {\n\t\t\treturn nil\n\t\t}\n\t\tb, rerr := os.ReadFile(p)\n\t\tif rerr != nil {\n\t\t\treturn rerr\n\t\t}\n\t\ta, derr := DecodeMeta(b)\n\t\tif derr != nil {\n\t\t\treturn derr\n\t\t}\n\t\trelOS := strings.TrimSuffix(strings.TrimPrefix(p, dir+string(filepath.Separator)), MetaExt)\n\t\trel := paths.GitRootRelativePath(filepath.ToSlash(relOS))\n\t\tout[rel] = Entry{BlobSha: a.BlobSha, ModelName: a.ModelName, Chunks: len(a.Chunks)}\n\t\treturn nil\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/mirror/tree.go \u003e method List",
+      "startLine": 48,
+      "startCol": 1,
+      "endLine": 80,
+      "endCol": 2
+    },
+    {
+      "text": "// TryRead loads a full artifact (metadata + vectors) for a source path. The\n// second result is false when the artifact is absent or torn/corrupt (a torn\n// pair or decode failure is reported as \"not present\" so the caller simply\n// reindexes the file); only unexpected IO errors are returned.\nfunc (t *Tree) TryRead(rel paths.GitRootRelativePath) (Artifact, bool, error) {\n\tmeta, err := os.ReadFile(t.metaPath(rel))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn Artifact{}, false, nil\n\t\t}\n\t\treturn Artifact{}, false, err\n\t}\n\tvec, err := os.ReadFile(t.vecPath(rel))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn Artifact{}, false, nil\n\t\t}\n\t\treturn Artifact{}, false, err\n\t}\n\ta, derr := Decode(meta, vec)\n\tif derr != nil {\n\t\treturn Artifact{}, false, nil\n\t}\n\treturn a, true, nil\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method TryRead\n\n// TryRead loads a full artifact (metadata + vectors) for a source path. The\n// second result is false when the artifact is absent or torn/corrupt (a torn\n// pair or decode failure is reported as \"not present\" so the caller simply\n// reindexes the file); only unexpected IO errors are returned.\nfunc (t *Tree) TryRead(rel paths.GitRootRelativePath) (Artifact, bool, error) {\n\tmeta, err := os.ReadFile(t.metaPath(rel))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn Artifact{}, false, nil\n\t\t}\n\t\treturn Artifact{}, false, err\n\t}\n\tvec, err := os.ReadFile(t.vecPath(rel))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn Artifact{}, false, nil\n\t\t}\n\t\treturn Artifact{}, false, err\n\t}\n\ta, derr := Decode(meta, vec)\n\tif derr != nil {\n\t\treturn Artifact{}, false, nil\n\t}\n\treturn a, true, nil\n}",
+      "headingContext": "internal/mirror/tree.go \u003e method TryRead",
+      "startLine": 82,
+      "startCol": 1,
+      "endLine": 106,
+      "endCol": 2
+    },
+    {
+      "text": "// Write persists an artifact's two sibling files atomically (temp file +\n// rename each), creating parent directories as needed. Each file is written\n// atomically so a crash leaves previously written artifacts intact.\nfunc (t *Tree) Write(rel paths.GitRootRelativePath, a Artifact) error {\n\tmeta, vec, err := Encode(a)\n\tif err != nil {\n\t\treturn err\n\t}\n\tif err := writeAtomic(t.metaPath(rel), meta); err != nil {\n\t\treturn err\n\t}\n\treturn writeAtomic(t.vecPath(rel), vec)\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method Write\n\n// Write persists an artifact's two sibling files atomically (temp file +\n// rename each), creating parent directories as needed. Each file is written\n// atomically so a crash leaves previously written artifacts intact.\nfunc (t *Tree) Write(rel paths.GitRootRelativePath, a Artifact) error {\n\tmeta, vec, err := Encode(a)\n\tif err != nil {\n\t\treturn err\n\t}\n\tif err := writeAtomic(t.metaPath(rel), meta); err != nil {\n\t\treturn err\n\t}\n\treturn writeAtomic(t.vecPath(rel), vec)\n}",
+      "headingContext": "internal/mirror/tree.go \u003e method Write",
+      "startLine": 108,
+      "startCol": 1,
+      "endLine": 120,
+      "endCol": 2
+    },
+    {
+      "text": "// Delete removes both sibling files for a source path, ignoring absent files.\nfunc (t *Tree) Delete(rel paths.GitRootRelativePath) error {\n\tif err := os.Remove(t.metaPath(rel)); err != nil \u0026\u0026 !os.IsNotExist(err) {\n\t\treturn err\n\t}\n\tif err := os.Remove(t.vecPath(rel)); err != nil \u0026\u0026 !os.IsNotExist(err) {\n\t\treturn err\n\t}\n\treturn nil\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e method Delete\n\n// Delete removes both sibling files for a source path, ignoring absent files.\nfunc (t *Tree) Delete(rel paths.GitRootRelativePath) error {\n\tif err := os.Remove(t.metaPath(rel)); err != nil \u0026\u0026 !os.IsNotExist(err) {\n\t\treturn err\n\t}\n\tif err := os.Remove(t.vecPath(rel)); err != nil \u0026\u0026 !os.IsNotExist(err) {\n\t\treturn err\n\t}\n\treturn nil\n}",
+      "headingContext": "internal/mirror/tree.go \u003e method Delete",
+      "startLine": 122,
+      "startCol": 1,
+      "endLine": 131,
+      "endCol": 2
+    },
+    {
+      "text": "func writeAtomic(path string, data []byte) error {\n\tdir := filepath.Dir(path)\n\tif err := os.MkdirAll(dir, 0o755); err != nil {\n\t\treturn err\n\t}\n\ttmp, err := os.CreateTemp(dir, \".tmp-*\")\n\tif err != nil {\n\t\treturn err\n\t}\n\ttmpName := tmp.Name()\n\tif _, err := tmp.Write(data); err != nil {\n\t\ttmp.Close()\n\t\tos.Remove(tmpName)\n\t\treturn err\n\t}\n\tif err := tmp.Close(); err != nil {\n\t\tos.Remove(tmpName)\n\t\treturn err\n\t}\n\tif err := os.Rename(tmpName, path); err != nil {\n\t\tos.Remove(tmpName)\n\t\treturn err\n\t}\n\treturn nil\n}",
+      "contextualizedText": "// internal/mirror/tree.go \u003e function writeAtomic\n\nfunc writeAtomic(path string, data []byte) error {\n\tdir := filepath.Dir(path)\n\tif err := os.MkdirAll(dir, 0o755); err != nil {\n\t\treturn err\n\t}\n\ttmp, err := os.CreateTemp(dir, \".tmp-*\")\n\tif err != nil {\n\t\treturn err\n\t}\n\ttmpName := tmp.Name()\n\tif _, err := tmp.Write(data); err != nil {\n\t\ttmp.Close()\n\t\tos.Remove(tmpName)\n\t\treturn err\n\t}\n\tif err := tmp.Close(); err != nil {\n\t\tos.Remove(tmpName)\n\t\treturn err\n\t}\n\tif err := os.Rename(tmpName, path); err != nil {\n\t\tos.Remove(tmpName)\n\t\treturn err\n\t}\n\treturn nil\n}",
+      "headingContext": "internal/mirror/tree.go \u003e function writeAtomic",
+      "startLine": 133,
+      "startCol": 1,
+      "endLine": 157,
+      "endCol": 2
+    }
+  ]
+}
