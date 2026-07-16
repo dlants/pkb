@@ -1,3 +1,4 @@
 node_modules
 /pkb
 internal/index/augment_bench_report.md
+/.pkb/cache.db

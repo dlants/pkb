@@ -1,0 +1,24 @@
+{
+  "blobSha": "5961a08e2dbb324321e0635b3e1a73f091769dc0",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package embed\n\nimport \"fmt\"",
+      "contextualizedText": "// internal/embed/factory.go\n\npackage embed\n\nimport \"fmt\"",
+      "headingContext": "internal/embed/factory.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 3,
+      "endCol": 13
+    },
+    {
+      "text": "// Build constructs an embedding model from a provider/model/dimensions\n// selection (as recorded in the repo config). The \"voyage\" provider returns a\n// Voyage AI contextualized model; \"mock\" returns a deterministic test model.\n// Only providers that support contextualized whole-document embeddings are\n// supported, so text files can always be embedded via the contextual path.\nfunc Build(provider, model string, dims int, baseURL, apiKeyEnv string) (EmbeddingModel, error) {\n\tswitch provider {\n\tcase \"voyage\", \"\":\n\t\treturn NewVoyage(baseURL, apiKeyEnv, model, dims)\n\tcase \"mock\":\n\t\treturn NewMockModel(model, dims), nil\n\tdefault:\n\t\treturn nil, fmt.Errorf(\"unknown embedding provider %q\", provider)\n\t}\n}",
+      "contextualizedText": "// internal/embed/factory.go \u003e function Build\n\n// Build constructs an embedding model from a provider/model/dimensions\n// selection (as recorded in the repo config). The \"voyage\" provider returns a\n// Voyage AI contextualized model; \"mock\" returns a deterministic test model.\n// Only providers that support contextualized whole-document embeddings are\n// supported, so text files can always be embedded via the contextual path.\nfunc Build(provider, model string, dims int, baseURL, apiKeyEnv string) (EmbeddingModel, error) {\n\tswitch provider {\n\tcase \"voyage\", \"\":\n\t\treturn NewVoyage(baseURL, apiKeyEnv, model, dims)\n\tcase \"mock\":\n\t\treturn NewMockModel(model, dims), nil\n\tdefault:\n\t\treturn nil, fmt.Errorf(\"unknown embedding provider %q\", provider)\n\t}\n}",
+      "headingContext": "internal/embed/factory.go \u003e function Build",
+      "startLine": 5,
+      "startCol": 1,
+      "endLine": 19,
+      "endCol": 2
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "blobSha": "15726b7d9563c21c04a044fd10190bda46668a9e",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "---\nname: pkb-search\ndescription: Semantic code+docs search over this repo using the pkb CLI. Use when you need broad orientation in the codebase (\"where is X handled?\", \"how does Y work?\") rather than an exact symbol or string you'd grep for.\n---\n\n# pkb — semantic search over this repo\n\n`pkb` is a prebuilt binary at the repo root (`./pkb`) backed by a semantic\nindex of this repo's code and docs. Use it for orientation questions where you\ndon't already know the file or exact string. For exact symbols/strings, use `rg`.\n\n```bash\n./pkb search \"\u003cnatural language query\u003e\"   # -k N sets result count (default 5)\n./pkb stats                               # index commit, indexedAt, file/chunk counts\n./pkb reindex                             # sync the index against HEAD\n```\n\nEach result is a scored snippet with its file path — treat it as a pointer and\nopen the file with `get_file` to read the real code. The index reflects the last\nindexed commit, not your working tree; the pre-push hook reindexes\nautomatically, so you don't need to reindex local changes.\n\nSee the \"Searching this repo\" section of `context.md` for the full setup\n(binary, checked-in `pkb.db`, git hooks).",
+      "contextualizedText": "---\nname: pkb-search\ndescription: Semantic code+docs search over this repo using the pkb CLI. Use when you need broad orientation in the codebase (\"where is X handled?\", \"how does Y work?\") rather than an exact symbol or string you'd grep for.\n---\n\n# pkb — semantic search over this repo\n\n`pkb` is a prebuilt binary at the repo root (`./pkb`) backed by a semantic\nindex of this repo's code and docs. Use it for orientation questions where you\ndon't already know the file or exact string. For exact symbols/strings, use `rg`.\n\n```bash\n./pkb search \"\u003cnatural language query\u003e\"   # -k N sets result count (default 5)\n./pkb stats                               # index commit, indexedAt, file/chunk counts\n./pkb reindex                             # sync the index against HEAD\n```\n\nEach result is a scored snippet with its file path — treat it as a pointer and\nopen the file with `get_file` to read the real code. The index reflects the last\nindexed commit, not your working tree; the pre-push hook reindexes\nautomatically, so you don't need to reindex local changes.\n\nSee the \"Searching this repo\" section of `context.md` for the full setup\n(binary, checked-in `pkb.db`, git hooks).",
+      "headingContext": "",
+      "startLine": 0,
+      "startCol": 0,
+      "endLine": 0,
+      "endCol": 0
+    }
+  ]
+}

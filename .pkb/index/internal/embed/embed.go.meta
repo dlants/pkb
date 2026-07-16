@@ -1,0 +1,51 @@
+{
+  "blobSha": "6f4e6c83d0772a0088261836d42d030d845f631e",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Package embed defines the embedding-model interface used to embed all files\n// (code and text) via a single model.\npackage embed",
+      "contextualizedText": "// internal/embed/embed.go\n\n// Package embed defines the embedding-model interface used to embed all files\n// (code and text) via a single model.\npackage embed",
+      "headingContext": "internal/embed/embed.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 3,
+      "endCol": 14
+    },
+    {
+      "text": "// Embedding is a dense vector representation of a chunk or query.\ntype Embedding []float32",
+      "contextualizedText": "// internal/embed/embed.go \u003e type Embedding\n\n// Embedding is a dense vector representation of a chunk or query.\ntype Embedding []float32",
+      "headingContext": "internal/embed/embed.go \u003e type Embedding",
+      "startLine": 5,
+      "startCol": 1,
+      "endLine": 6,
+      "endCol": 25
+    },
+    {
+      "text": "// EmbeddingModel produces embeddings via some backend (Voyage, mock, etc.).\ntype EmbeddingModel interface {\n\t// ModelName uniquely identifies the model; vec tables are keyed by it.\n\tModelName() string\n\t// Dimensions is the length of every embedding the model returns.\n\tDimensions() int\n\tEmbedChunk(chunk string) (Embedding, error)\n\tEmbedQuery(query string) (Embedding, error)\n\tEmbedChunks(chunks []string) ([]Embedding, error)\n}",
+      "contextualizedText": "// internal/embed/embed.go \u003e type EmbeddingModel\n\n// EmbeddingModel produces embeddings via some backend (Voyage, mock, etc.).\ntype EmbeddingModel interface {\n\t// ModelName uniquely identifies the model; vec tables are keyed by it.\n\tModelName() string\n\t// Dimensions is the length of every embedding the model returns.\n\tDimensions() int\n\tEmbedChunk(chunk string) (Embedding, error)\n\tEmbedQuery(query string) (Embedding, error)\n\tEmbedChunks(chunks []string) ([]Embedding, error)\n}",
+      "headingContext": "internal/embed/embed.go \u003e type EmbeddingModel",
+      "startLine": 8,
+      "startCol": 1,
+      "endLine": 17,
+      "endCol": 2
+    },
+    {
+      "text": "// ContextualChunk is a single model-chosen chunk returned by an auto-chunking\n// contextual embedding call: the chunk's text paired with its vector.\ntype ContextualChunk struct {\n\tText      string\n\tEmbedding Embedding\n}",
+      "contextualizedText": "// internal/embed/embed.go \u003e type ContextualChunk\n\n// ContextualChunk is a single model-chosen chunk returned by an auto-chunking\n// contextual embedding call: the chunk's text paired with its vector.\ntype ContextualChunk struct {\n\tText      string\n\tEmbedding Embedding\n}",
+      "headingContext": "internal/embed/embed.go \u003e type ContextualChunk",
+      "startLine": 19,
+      "startCol": 1,
+      "endLine": 24,
+      "endCol": 2
+    },
+    {
+      "text": "// ContextualEmbeddingModel is implemented by providers that can auto-chunk and\n// embed a whole document in one call, returning the model-chosen chunks with\n// their contextualized vectors. It is an optional capability on top of\n// EmbeddingModel; callers should type-assert to detect support.\ntype ContextualEmbeddingModel interface {\n\tEmbeddingModel\n\t// EmbedDocument sends the whole document to the provider's auto-chunking\n\t// endpoint and returns the model-chosen chunks in order, each paired with\n\t// its vector at Dimensions().\n\tEmbedDocument(document string) ([]ContextualChunk, error)\n}",
+      "contextualizedText": "// internal/embed/embed.go \u003e type ContextualEmbeddingModel\n\n// ContextualEmbeddingModel is implemented by providers that can auto-chunk and\n// embed a whole document in one call, returning the model-chosen chunks with\n// their contextualized vectors. It is an optional capability on top of\n// EmbeddingModel; callers should type-assert to detect support.\ntype ContextualEmbeddingModel interface {\n\tEmbeddingModel\n\t// EmbedDocument sends the whole document to the provider's auto-chunking\n\t// endpoint and returns the model-chosen chunks in order, each paired with\n\t// its vector at Dimensions().\n\tEmbedDocument(document string) ([]ContextualChunk, error)\n}",
+      "headingContext": "internal/embed/embed.go \u003e type ContextualEmbeddingModel",
+      "startLine": 26,
+      "startCol": 1,
+      "endLine": 36,
+      "endCol": 2
+    }
+  ]
+}

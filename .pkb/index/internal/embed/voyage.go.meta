@@ -1,0 +1,159 @@
+{
+  "blobSha": "65e4d15718d0f5699b995e716e8b01c780fd39c7",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package embed\n\nimport (\n\t\"bytes\"\n\t\"context\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"net/http\"\n\t\"os\"\n\t\"strings\"\n\t\"time\"\n)",
+      "contextualizedText": "// internal/embed/voyage.go\n\npackage embed\n\nimport (\n\t\"bytes\"\n\t\"context\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"net/http\"\n\t\"os\"\n\t\"strings\"\n\t\"time\"\n)",
+      "headingContext": "internal/embed/voyage.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 12,
+      "endCol": 2
+    },
+    {
+      "text": "// Voyage embeds text via Voyage AI's `/v1/embeddings` endpoint. The API key is\n// read from the env var named by apiKeyEnv (default VOYAGE_API_KEY) and passed\n// as a Bearer token. Chunks and queries are tagged with the appropriate\n// input_type (\"document\"/\"query\") to use Voyage's asymmetric retrieval prompts.\ntype Voyage struct {\n\tclient  *http.Client\n\tbaseURL string\n\tapiKey  string\n\tmodelID string\n\tname    string\n\tdims    int\n\t// contextual is true when modelID names a Voyage contextualized chunk\n\t// model (voyage-context-*). Those models are served only by the\n\t// /v1/contextualizedembeddings endpoint, so every operation routes there\n\t// (pre-supplying our own chunks with auto-chunking disabled) instead of the\n\t// standard /v1/embeddings endpoint.\n\tcontextual bool\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e type Voyage\n\n// Voyage embeds text via Voyage AI's `/v1/embeddings` endpoint. The API key is\n// read from the env var named by apiKeyEnv (default VOYAGE_API_KEY) and passed\n// as a Bearer token. Chunks and queries are tagged with the appropriate\n// input_type (\"document\"/\"query\") to use Voyage's asymmetric retrieval prompts.\ntype Voyage struct {\n\tclient  *http.Client\n\tbaseURL string\n\tapiKey  string\n\tmodelID string\n\tname    string\n\tdims    int\n\t// contextual is true when modelID names a Voyage contextualized chunk\n\t// model (voyage-context-*). Those models are served only by the\n\t// /v1/contextualizedembeddings endpoint, so every operation routes there\n\t// (pre-supplying our own chunks with auto-chunking disabled) instead of the\n\t// standard /v1/embeddings endpoint.\n\tcontextual bool\n}",
+      "headingContext": "internal/embed/voyage.go \u003e type Voyage",
+      "startLine": 14,
+      "startCol": 1,
+      "endLine": 31,
+      "endCol": 2
+    },
+    {
+      "text": "type voyageEmbeddingRequest struct {\n\tModel           string   `json:\"model\"`\n\tInput           []string `json:\"input\"`\n\tInputType       string   `json:\"input_type,omitempty\"`\n\tOutputDimension int      `json:\"output_dimension,omitempty\"`\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e type voyageEmbeddingRequest\n\ntype voyageEmbeddingRequest struct {\n\tModel           string   `json:\"model\"`\n\tInput           []string `json:\"input\"`\n\tInputType       string   `json:\"input_type,omitempty\"`\n\tOutputDimension int      `json:\"output_dimension,omitempty\"`\n}",
+      "headingContext": "internal/embed/voyage.go \u003e type voyageEmbeddingRequest",
+      "startLine": 33,
+      "startCol": 1,
+      "endLine": 38,
+      "endCol": 2
+    },
+    {
+      "text": "// voyageContextMaxBatchChars bounds the total characters in a single\n// contextualized-endpoint request when auto-chunking is disabled. The endpoint\n// caps such requests at 32K tokens across all inputs; at a conservative ~3\n// chars/token that is ~96K chars, so we keep a margin.\nconst voyageContextMaxBatchChars = 90000",
+      "contextualizedText": "// internal/embed/voyage.go\n\n// voyageContextMaxBatchChars bounds the total characters in a single\n// contextualized-endpoint request when auto-chunking is disabled. The endpoint\n// caps such requests at 32K tokens across all inputs; at a conservative ~3\n// chars/token that is ~96K chars, so we keep a margin.\nconst voyageContextMaxBatchChars = 90000",
+      "headingContext": "internal/embed/voyage.go",
+      "startLine": 40,
+      "startCol": 1,
+      "endLine": 44,
+      "endCol": 41
+    },
+    {
+      "text": "type voyageContextRequest struct {\n\tModel              string     `json:\"model\"`\n\tInputs             [][]string `json:\"inputs\"`\n\tInputType          string     `json:\"input_type,omitempty\"`\n\tOutputDimension    int        `json:\"output_dimension,omitempty\"`\n\tEnableAutoChunking bool       `json:\"enable_auto_chunking\"`\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e type voyageContextRequest\n\ntype voyageContextRequest struct {\n\tModel              string     `json:\"model\"`\n\tInputs             [][]string `json:\"inputs\"`\n\tInputType          string     `json:\"input_type,omitempty\"`\n\tOutputDimension    int        `json:\"output_dimension,omitempty\"`\n\tEnableAutoChunking bool       `json:\"enable_auto_chunking\"`\n}",
+      "headingContext": "internal/embed/voyage.go \u003e type voyageContextRequest",
+      "startLine": 46,
+      "startCol": 1,
+      "endLine": 52,
+      "endCol": 2
+    },
+    {
+      "text": "type voyageContextResponse struct {\n\tData []struct {\n\t\tData []struct {\n\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\tIndex     int       `json:\"index\"`\n\t\t\tText      string    `json:\"text\"`\n\t\t} `json:\"data\"`\n\t} `json:\"data\"`\n\tError *struct {\n\t\tMessage string `json:\"message\"`\n\t} `json:\"error\"`\n\tDetail string `json:\"detail\"`\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e type voyageContextResponse\n\ntype voyageContextResponse struct {\n\tData []struct {\n\t\tData []struct {\n\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\tIndex     int       `json:\"index\"`\n\t\t\tText      string    `json:\"text\"`\n\t\t} `json:\"data\"`\n\t} `json:\"data\"`\n\tError *struct {\n\t\tMessage string `json:\"message\"`\n\t} `json:\"error\"`\n\tDetail string `json:\"detail\"`\n}",
+      "headingContext": "internal/embed/voyage.go \u003e type voyageContextResponse",
+      "startLine": 54,
+      "startCol": 1,
+      "endLine": 66,
+      "endCol": 2
+    },
+    {
+      "text": "type voyageEmbeddingResponse struct {\n\tData []struct {\n\t\tEmbedding []float32 `json:\"embedding\"`\n\t} `json:\"data\"`\n\tError *struct {\n\t\tMessage string `json:\"message\"`\n\t} `json:\"error\"`\n\tDetail string `json:\"detail\"`\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e type voyageEmbeddingResponse\n\ntype voyageEmbeddingResponse struct {\n\tData []struct {\n\t\tEmbedding []float32 `json:\"embedding\"`\n\t} `json:\"data\"`\n\tError *struct {\n\t\tMessage string `json:\"message\"`\n\t} `json:\"error\"`\n\tDetail string `json:\"detail\"`\n}",
+      "headingContext": "internal/embed/voyage.go \u003e type voyageEmbeddingResponse",
+      "startLine": 68,
+      "startCol": 1,
+      "endLine": 76,
+      "endCol": 2
+    },
+    {
+      "text": "// NewVoyage builds a Voyage AI embedding model. baseURL defaults to\n// https://api.voyageai.com; apiKeyEnv names the env var holding the key\n// (default VOYAGE_API_KEY).\nfunc NewVoyage(baseURL, apiKeyEnv, modelID string, dims int) (*Voyage, error) {\n\tif baseURL == \"\" {\n\t\tbaseURL = \"https://api.voyageai.com\"\n\t}\n\tbaseURL = strings.TrimRight(baseURL, \"/\")\n\tif apiKeyEnv == \"\" {\n\t\tapiKeyEnv = \"VOYAGE_API_KEY\"\n\t}\n\treturn \u0026Voyage{\n\t\tclient:     \u0026http.Client{Timeout: 60 * time.Second},\n\t\tbaseURL:    baseURL,\n\t\tapiKey:     os.Getenv(apiKeyEnv),\n\t\tmodelID:    modelID,\n\t\tname:       fmt.Sprintf(\"%s@%d\", modelID, dims),\n\t\tdims:       dims,\n\t\tcontextual: strings.HasPrefix(modelID, \"voyage-context\"),\n\t}, nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e function NewVoyage\n\n// NewVoyage builds a Voyage AI embedding model. baseURL defaults to\n// https://api.voyageai.com; apiKeyEnv names the env var holding the key\n// (default VOYAGE_API_KEY).\nfunc NewVoyage(baseURL, apiKeyEnv, modelID string, dims int) (*Voyage, error) {\n\tif baseURL == \"\" {\n\t\tbaseURL = \"https://api.voyageai.com\"\n\t}\n\tbaseURL = strings.TrimRight(baseURL, \"/\")\n\tif apiKeyEnv == \"\" {\n\t\tapiKeyEnv = \"VOYAGE_API_KEY\"\n\t}\n\treturn \u0026Voyage{\n\t\tclient:     \u0026http.Client{Timeout: 60 * time.Second},\n\t\tbaseURL:    baseURL,\n\t\tapiKey:     os.Getenv(apiKeyEnv),\n\t\tmodelID:    modelID,\n\t\tname:       fmt.Sprintf(\"%s@%d\", modelID, dims),\n\t\tdims:       dims,\n\t\tcontextual: strings.HasPrefix(modelID, \"voyage-context\"),\n\t}, nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e function NewVoyage",
+      "startLine": 78,
+      "startCol": 1,
+      "endLine": 98,
+      "endCol": 2
+    },
+    {
+      "text": "// ModelName returns the model identifier used to key vec tables.\nfunc (v *Voyage) ModelName() string { return v.name }",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method ModelName\n\n// ModelName returns the model identifier used to key vec tables.\nfunc (v *Voyage) ModelName() string { return v.name }",
+      "headingContext": "internal/embed/voyage.go \u003e method ModelName",
+      "startLine": 100,
+      "startCol": 1,
+      "endLine": 101,
+      "endCol": 54
+    },
+    {
+      "text": "// Dimensions returns the embedding dimensionality.\nfunc (v *Voyage) Dimensions() int { return v.dims }",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method Dimensions\n\n// Dimensions returns the embedding dimensionality.\nfunc (v *Voyage) Dimensions() int { return v.dims }",
+      "headingContext": "internal/embed/voyage.go \u003e method Dimensions",
+      "startLine": 103,
+      "startCol": 1,
+      "endLine": 104,
+      "endCol": 52
+    },
+    {
+      "text": "// EmbedChunk embeds a single document chunk.\nfunc (v *Voyage) EmbedChunk(chunk string) (Embedding, error) {\n\tout, err := v.EmbedChunks([]string{chunk})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn out[0], nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method EmbedChunk\n\n// EmbedChunk embeds a single document chunk.\nfunc (v *Voyage) EmbedChunk(chunk string) (Embedding, error) {\n\tout, err := v.EmbedChunks([]string{chunk})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn out[0], nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e method EmbedChunk",
+      "startLine": 106,
+      "startCol": 1,
+      "endLine": 113,
+      "endCol": 2
+    },
+    {
+      "text": "// EmbedQuery embeds a single search query.\nfunc (v *Voyage) EmbedQuery(query string) (Embedding, error) {\n\tif v.contextual {\n\t\t// Context models are served only by the contextualized endpoint. A\n\t\t// query is sent as a single-chunk document group tagged input_type\n\t\t// \"query\"; the response carries its one vector.\n\t\tgroups, err := v.contextEmbed([][]string{{query}}, \"query\")\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\treturn groups[0][0], nil\n\t}\n\tout, err := v.embed([]string{query}, \"query\")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn out[0], nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method EmbedQuery\n\n// EmbedQuery embeds a single search query.\nfunc (v *Voyage) EmbedQuery(query string) (Embedding, error) {\n\tif v.contextual {\n\t\t// Context models are served only by the contextualized endpoint. A\n\t\t// query is sent as a single-chunk document group tagged input_type\n\t\t// \"query\"; the response carries its one vector.\n\t\tgroups, err := v.contextEmbed([][]string{{query}}, \"query\")\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\treturn groups[0][0], nil\n\t}\n\tout, err := v.embed([]string{query}, \"query\")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn out[0], nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e method EmbedQuery",
+      "startLine": 115,
+      "startCol": 1,
+      "endLine": 132,
+      "endCol": 2
+    },
+    {
+      "text": "// EmbedChunks embeds a batch of document chunks. For context models, chunks are\n// pre-supplied to the contextualized endpoint with auto-chunking disabled, each\n// chunk as its own single-chunk document group so it is embedded in isolation\n// (matching the code path's isolated-chunk contract) while sharing the same\n// vector space as auto-chunked text. Requests are split to respect the\n// endpoint's per-request token limit.\nfunc (v *Voyage) EmbedChunks(chunks []string) ([]Embedding, error) {\n\tif !v.contextual {\n\t\treturn v.embed(chunks, \"document\")\n\t}\n\tout := make([]Embedding, 0, len(chunks))\n\tfor start := 0; start \u003c len(chunks); {\n\t\tend, batchChars := start, 0\n\t\tfor end \u003c len(chunks) {\n\t\t\tc := len(chunks[end])\n\t\t\tif end \u003e start \u0026\u0026 batchChars+c \u003e voyageContextMaxBatchChars {\n\t\t\t\tbreak\n\t\t\t}\n\t\t\tbatchChars += c\n\t\t\tend++\n\t\t}\n\t\tgroups := make([][]string, end-start)\n\t\tfor i, c := range chunks[start:end] {\n\t\t\tgroups[i] = []string{c}\n\t\t}\n\t\tembedded, err := v.contextEmbed(groups, \"document\")\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, g := range embedded {\n\t\t\tout = append(out, g[0])\n\t\t}\n\t\tstart = end\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method EmbedChunks\n\n// EmbedChunks embeds a batch of document chunks. For context models, chunks are\n// pre-supplied to the contextualized endpoint with auto-chunking disabled, each\n// chunk as its own single-chunk document group so it is embedded in isolation\n// (matching the code path's isolated-chunk contract) while sharing the same\n// vector space as auto-chunked text. Requests are split to respect the\n// endpoint's per-request token limit.\nfunc (v *Voyage) EmbedChunks(chunks []string) ([]Embedding, error) {\n\tif !v.contextual {\n\t\treturn v.embed(chunks, \"document\")\n\t}\n\tout := make([]Embedding, 0, len(chunks))\n\tfor start := 0; start \u003c len(chunks); {\n\t\tend, batchChars := start, 0\n\t\tfor end \u003c len(chunks) {\n\t\t\tc := len(chunks[end])\n\t\t\tif end \u003e start \u0026\u0026 batchChars+c \u003e voyageContextMaxBatchChars {\n\t\t\t\tbreak\n\t\t\t}\n\t\t\tbatchChars += c\n\t\t\tend++\n\t\t}\n\t\tgroups := make([][]string, end-start)\n\t\tfor i, c := range chunks[start:end] {\n\t\t\tgroups[i] = []string{c}\n\t\t}\n\t\tembedded, err := v.contextEmbed(groups, \"document\")\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, g := range embedded {\n\t\t\tout = append(out, g[0])\n\t\t}\n\t\tstart = end\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e method EmbedChunks",
+      "startLine": 134,
+      "startCol": 1,
+      "endLine": 169,
+      "endCol": 2
+    },
+    {
+      "text": "// EmbedDocument sends the whole document to Voyage's contextualized chunk\n// endpoint with auto-chunking enabled and returns the model-chosen chunks in\n// order, each paired with its contextualized vector.\nfunc (v *Voyage) EmbedDocument(document string) ([]ContextualChunk, error) {\n\tparsed, err := v.postContext(voyageContextRequest{\n\t\tModel:              v.modelID,\n\t\tInputs:             [][]string{{document}},\n\t\tInputType:          \"document\",\n\t\tOutputDimension:    v.dims,\n\t\tEnableAutoChunking: true,\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif len(parsed.Data) != 1 {\n\t\treturn nil, fmt.Errorf(\"expected 1 document group, got %d\", len(parsed.Data))\n\t}\n\titems := parsed.Data[0].Data\n\tout := make([]ContextualChunk, len(items))\n\tfor i, d := range items {\n\t\tif len(d.Embedding) != v.dims {\n\t\t\treturn nil, fmt.Errorf(\"chunk %d: expected %d dims, got %d\", i, v.dims, len(d.Embedding))\n\t\t}\n\t\tout[i] = ContextualChunk{Text: d.Text, Embedding: Embedding(d.Embedding)}\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method EmbedDocument\n\n// EmbedDocument sends the whole document to Voyage's contextualized chunk\n// endpoint with auto-chunking enabled and returns the model-chosen chunks in\n// order, each paired with its contextualized vector.\nfunc (v *Voyage) EmbedDocument(document string) ([]ContextualChunk, error) {\n\tparsed, err := v.postContext(voyageContextRequest{\n\t\tModel:              v.modelID,\n\t\tInputs:             [][]string{{document}},\n\t\tInputType:          \"document\",\n\t\tOutputDimension:    v.dims,\n\t\tEnableAutoChunking: true,\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif len(parsed.Data) != 1 {\n\t\treturn nil, fmt.Errorf(\"expected 1 document group, got %d\", len(parsed.Data))\n\t}\n\titems := parsed.Data[0].Data\n\tout := make([]ContextualChunk, len(items))\n\tfor i, d := range items {\n\t\tif len(d.Embedding) != v.dims {\n\t\t\treturn nil, fmt.Errorf(\"chunk %d: expected %d dims, got %d\", i, v.dims, len(d.Embedding))\n\t\t}\n\t\tout[i] = ContextualChunk{Text: d.Text, Embedding: Embedding(d.Embedding)}\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e method EmbedDocument",
+      "startLine": 171,
+      "startCol": 1,
+      "endLine": 197,
+      "endCol": 2
+    },
+    {
+      "text": "// contextEmbed sends pre-supplied chunk groups to the contextualized endpoint\n// with auto-chunking disabled and returns per-group, per-chunk vectors in\n// order. Each inner slice is one document's chunks; single-chunk groups yield\n// isolated embeddings. Callers must keep the batch within the endpoint's\n// per-request token limit (see voyageContextMaxBatchChars).\nfunc (v *Voyage) contextEmbed(groups [][]string, inputType string) ([][]Embedding, error) {\n\tparsed, err := v.postContext(voyageContextRequest{\n\t\tModel:           v.modelID,\n\t\tInputs:          groups,\n\t\tInputType:       inputType,\n\t\tOutputDimension: v.dims,\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif len(parsed.Data) != len(groups) {\n\t\treturn nil, fmt.Errorf(\"expected %d document groups, got %d\", len(groups), len(parsed.Data))\n\t}\n\tout := make([][]Embedding, len(parsed.Data))\n\tfor gi, g := range parsed.Data {\n\t\tif len(g.Data) != len(groups[gi]) {\n\t\t\treturn nil, fmt.Errorf(\"group %d: expected %d chunks, got %d\", gi, len(groups[gi]), len(g.Data))\n\t\t}\n\t\tvecs := make([]Embedding, len(g.Data))\n\t\tfor i, d := range g.Data {\n\t\t\tif len(d.Embedding) != v.dims {\n\t\t\t\treturn nil, fmt.Errorf(\"group %d chunk %d: expected %d dims, got %d\", gi, i, v.dims, len(d.Embedding))\n\t\t\t}\n\t\t\tvecs[i] = Embedding(d.Embedding)\n\t\t}\n\t\tout[gi] = vecs\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method contextEmbed\n\n// contextEmbed sends pre-supplied chunk groups to the contextualized endpoint\n// with auto-chunking disabled and returns per-group, per-chunk vectors in\n// order. Each inner slice is one document's chunks; single-chunk groups yield\n// isolated embeddings. Callers must keep the batch within the endpoint's\n// per-request token limit (see voyageContextMaxBatchChars).\nfunc (v *Voyage) contextEmbed(groups [][]string, inputType string) ([][]Embedding, error) {\n\tparsed, err := v.postContext(voyageContextRequest{\n\t\tModel:           v.modelID,\n\t\tInputs:          groups,\n\t\tInputType:       inputType,\n\t\tOutputDimension: v.dims,\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif len(parsed.Data) != len(groups) {\n\t\treturn nil, fmt.Errorf(\"expected %d document groups, got %d\", len(groups), len(parsed.Data))\n\t}\n\tout := make([][]Embedding, len(parsed.Data))\n\tfor gi, g := range parsed.Data {\n\t\tif len(g.Data) != len(groups[gi]) {\n\t\t\treturn nil, fmt.Errorf(\"group %d: expected %d chunks, got %d\", gi, len(groups[gi]), len(g.Data))\n\t\t}\n\t\tvecs := make([]Embedding, len(g.Data))\n\t\tfor i, d := range g.Data {\n\t\t\tif len(d.Embedding) != v.dims {\n\t\t\t\treturn nil, fmt.Errorf(\"group %d chunk %d: expected %d dims, got %d\", gi, i, v.dims, len(d.Embedding))\n\t\t\t}\n\t\t\tvecs[i] = Embedding(d.Embedding)\n\t\t}\n\t\tout[gi] = vecs\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e method contextEmbed",
+      "startLine": 199,
+      "startCol": 1,
+      "endLine": 232,
+      "endCol": 2
+    },
+    {
+      "text": "// postContext issues one request to the /v1/contextualizedembeddings endpoint\n// and returns the decoded response, mapping non-2xx statuses to errors.\nfunc (v *Voyage) postContext(reqBody voyageContextRequest) (*voyageContextResponse, error) {\n\tbody, err := json.Marshal(reqBody)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, v.baseURL+\"/v1/contextualizedembeddings\", bytes.NewReader(body))\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq.Header.Set(\"Content-Type\", \"application/json\")\n\tif v.apiKey != \"\" {\n\t\treq.Header.Set(\"Authorization\", \"Bearer \"+v.apiKey)\n\t}\n\tresp, err := v.client.Do(req)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings request: %w\", err)\n\t}\n\tdefer func() { _ = resp.Body.Close() }()\n\tvar parsed voyageContextResponse\n\tif err := json.NewDecoder(resp.Body).Decode(\u0026parsed); err != nil {\n\t\treturn nil, fmt.Errorf(\"decoding voyage response (status %d): %w\", resp.StatusCode, err)\n\t}\n\tif resp.StatusCode \u003c 200 || resp.StatusCode \u003e= 300 {\n\t\tswitch {\n\t\tcase parsed.Error != nil \u0026\u0026 parsed.Error.Message != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings status %d: %s\", resp.StatusCode, parsed.Error.Message)\n\t\tcase parsed.Detail != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings status %d: %s\", resp.StatusCode, parsed.Detail)\n\t\tdefault:\n\t\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings status %d\", resp.StatusCode)\n\t\t}\n\t}\n\treturn \u0026parsed, nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method postContext\n\n// postContext issues one request to the /v1/contextualizedembeddings endpoint\n// and returns the decoded response, mapping non-2xx statuses to errors.\nfunc (v *Voyage) postContext(reqBody voyageContextRequest) (*voyageContextResponse, error) {\n\tbody, err := json.Marshal(reqBody)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, v.baseURL+\"/v1/contextualizedembeddings\", bytes.NewReader(body))\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq.Header.Set(\"Content-Type\", \"application/json\")\n\tif v.apiKey != \"\" {\n\t\treq.Header.Set(\"Authorization\", \"Bearer \"+v.apiKey)\n\t}\n\tresp, err := v.client.Do(req)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings request: %w\", err)\n\t}\n\tdefer func() { _ = resp.Body.Close() }()\n\tvar parsed voyageContextResponse\n\tif err := json.NewDecoder(resp.Body).Decode(\u0026parsed); err != nil {\n\t\treturn nil, fmt.Errorf(\"decoding voyage response (status %d): %w\", resp.StatusCode, err)\n\t}\n\tif resp.StatusCode \u003c 200 || resp.StatusCode \u003e= 300 {\n\t\tswitch {\n\t\tcase parsed.Error != nil \u0026\u0026 parsed.Error.Message != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings status %d: %s\", resp.StatusCode, parsed.Error.Message)\n\t\tcase parsed.Detail != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings status %d: %s\", resp.StatusCode, parsed.Detail)\n\t\tdefault:\n\t\t\treturn nil, fmt.Errorf(\"voyage contextualizedembeddings status %d\", resp.StatusCode)\n\t\t}\n\t}\n\treturn \u0026parsed, nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e method postContext",
+      "startLine": 234,
+      "startCol": 1,
+      "endLine": 269,
+      "endCol": 2
+    },
+    {
+      "text": "func (v *Voyage) embed(texts []string, inputType string) ([]Embedding, error) {\n\tbody, err := json.Marshal(voyageEmbeddingRequest{\n\t\tModel:           v.modelID,\n\t\tInput:           texts,\n\t\tInputType:       inputType,\n\t\tOutputDimension: v.dims,\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, v.baseURL+\"/v1/embeddings\", bytes.NewReader(body))\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq.Header.Set(\"Content-Type\", \"application/json\")\n\tif v.apiKey != \"\" {\n\t\treq.Header.Set(\"Authorization\", \"Bearer \"+v.apiKey)\n\t}\n\tresp, err := v.client.Do(req)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"voyage embeddings request: %w\", err)\n\t}\n\tdefer func() { _ = resp.Body.Close() }()\n\tvar parsed voyageEmbeddingResponse\n\tif err := json.NewDecoder(resp.Body).Decode(\u0026parsed); err != nil {\n\t\treturn nil, fmt.Errorf(\"decoding voyage response (status %d): %w\", resp.StatusCode, err)\n\t}\n\tif resp.StatusCode \u003c 200 || resp.StatusCode \u003e= 300 {\n\t\tswitch {\n\t\tcase parsed.Error != nil \u0026\u0026 parsed.Error.Message != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage embeddings status %d: %s\", resp.StatusCode, parsed.Error.Message)\n\t\tcase parsed.Detail != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage embeddings status %d: %s\", resp.StatusCode, parsed.Detail)\n\t\tdefault:\n\t\t\treturn nil, fmt.Errorf(\"voyage embeddings status %d\", resp.StatusCode)\n\t\t}\n\t}\n\tif len(parsed.Data) != len(texts) {\n\t\treturn nil, fmt.Errorf(\"expected %d embeddings, got %d\", len(texts), len(parsed.Data))\n\t}\n\tout := make([]Embedding, len(parsed.Data))\n\tfor i, d := range parsed.Data {\n\t\tif len(d.Embedding) != v.dims {\n\t\t\treturn nil, fmt.Errorf(\"embedding %d: expected %d dims, got %d\", i, v.dims, len(d.Embedding))\n\t\t}\n\t\tout[i] = Embedding(d.Embedding)\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/embed/voyage.go \u003e method embed\n\nfunc (v *Voyage) embed(texts []string, inputType string) ([]Embedding, error) {\n\tbody, err := json.Marshal(voyageEmbeddingRequest{\n\t\tModel:           v.modelID,\n\t\tInput:           texts,\n\t\tInputType:       inputType,\n\t\tOutputDimension: v.dims,\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, v.baseURL+\"/v1/embeddings\", bytes.NewReader(body))\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treq.Header.Set(\"Content-Type\", \"application/json\")\n\tif v.apiKey != \"\" {\n\t\treq.Header.Set(\"Authorization\", \"Bearer \"+v.apiKey)\n\t}\n\tresp, err := v.client.Do(req)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"voyage embeddings request: %w\", err)\n\t}\n\tdefer func() { _ = resp.Body.Close() }()\n\tvar parsed voyageEmbeddingResponse\n\tif err := json.NewDecoder(resp.Body).Decode(\u0026parsed); err != nil {\n\t\treturn nil, fmt.Errorf(\"decoding voyage response (status %d): %w\", resp.StatusCode, err)\n\t}\n\tif resp.StatusCode \u003c 200 || resp.StatusCode \u003e= 300 {\n\t\tswitch {\n\t\tcase parsed.Error != nil \u0026\u0026 parsed.Error.Message != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage embeddings status %d: %s\", resp.StatusCode, parsed.Error.Message)\n\t\tcase parsed.Detail != \"\":\n\t\t\treturn nil, fmt.Errorf(\"voyage embeddings status %d: %s\", resp.StatusCode, parsed.Detail)\n\t\tdefault:\n\t\t\treturn nil, fmt.Errorf(\"voyage embeddings status %d\", resp.StatusCode)\n\t\t}\n\t}\n\tif len(parsed.Data) != len(texts) {\n\t\treturn nil, fmt.Errorf(\"expected %d embeddings, got %d\", len(texts), len(parsed.Data))\n\t}\n\tout := make([]Embedding, len(parsed.Data))\n\tfor i, d := range parsed.Data {\n\t\tif len(d.Embedding) != v.dims {\n\t\t\treturn nil, fmt.Errorf(\"embedding %d: expected %d dims, got %d\", i, v.dims, len(d.Embedding))\n\t\t}\n\t\tout[i] = Embedding(d.Embedding)\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/embed/voyage.go \u003e method embed",
+      "startLine": 271,
+      "startCol": 1,
+      "endLine": 319,
+      "endCol": 2
+    }
+  ]
+}

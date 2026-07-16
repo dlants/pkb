@@ -1,0 +1,33 @@
+{
+  "blobSha": "f3f7bc0d6aed4b35fa18455b60a1dbba3f9f0220",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Package chunk defines the common chunk shape produced by every chunker\n// (markdown and tree-sitter) so the downstream embedding/storage path is\n// uniform regardless of source language.\npackage chunk",
+      "contextualizedText": "// internal/chunk/chunk.go\n\n// Package chunk defines the common chunk shape produced by every chunker\n// (markdown and tree-sitter) so the downstream embedding/storage path is\n// uniform regardless of source language.\npackage chunk",
+      "headingContext": "internal/chunk/chunk.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 4,
+      "endCol": 14
+    },
+    {
+      "text": "// Position is a zero-based line/column location within a file.\ntype Position struct {\n\tLine int\n\tCol  int\n}",
+      "contextualizedText": "// internal/chunk/chunk.go \u003e type Position\n\n// Position is a zero-based line/column location within a file.\ntype Position struct {\n\tLine int\n\tCol  int\n}",
+      "headingContext": "internal/chunk/chunk.go \u003e type Position",
+      "startLine": 6,
+      "startCol": 1,
+      "endLine": 10,
+      "endCol": 2
+    },
+    {
+      "text": "// ChunkInfo is the uniform output of every chunker. HeadingContext carries\n// structural breadcrumbs (markdown heading hierarchy or code symbol path).\ntype ChunkInfo struct {\n\tText           string\n\tHeadingContext string\n\tStart          Position\n\tEnd            Position\n}",
+      "contextualizedText": "// internal/chunk/chunk.go \u003e type ChunkInfo\n\n// ChunkInfo is the uniform output of every chunker. HeadingContext carries\n// structural breadcrumbs (markdown heading hierarchy or code symbol path).\ntype ChunkInfo struct {\n\tText           string\n\tHeadingContext string\n\tStart          Position\n\tEnd            Position\n}",
+      "headingContext": "internal/chunk/chunk.go \u003e type ChunkInfo",
+      "startLine": 12,
+      "startCol": 1,
+      "endLine": 19,
+      "endCol": 2
+    }
+  ]
+}

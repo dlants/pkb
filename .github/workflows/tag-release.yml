@@ -9,7 +9,7 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - pkb.db
+      - '.pkb/index/**'
       - pkb-state.toml
 
 concurrency:

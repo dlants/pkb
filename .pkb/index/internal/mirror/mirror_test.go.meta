@@ -1,0 +1,69 @@
+{
+  "blobSha": "a7ef6ba28ce1cefcf85bc45d5811eca322151725",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package mirror\n\nimport (\n\t\"bytes\"\n\t\"reflect\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)",
+      "contextualizedText": "// internal/mirror/mirror_test.go\n\npackage mirror\n\nimport (\n\t\"bytes\"\n\t\"reflect\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)",
+      "headingContext": "internal/mirror/mirror_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 10,
+      "endCol": 2
+    },
+    {
+      "text": "func fixture() Artifact {\n\treturn Artifact{\n\t\tBlobSha:   \"deadbeef\",\n\t\tModelName: \"mock@8\",\n\t\tChunks: []Chunk{\n\t\t\t{\n\t\t\t\tInfo: chunk.ChunkInfo{\n\t\t\t\t\tText:           \"line one\\nline two\\n\",\n\t\t\t\t\tHeadingContext: \"pkg \u003e Foo\",\n\t\t\t\t\tStart:          chunk.Position{Line: 1, Col: 0},\n\t\t\t\t\tEnd:            chunk.Position{Line: 2, Col: 8},\n\t\t\t\t},\n\t\t\t\tContextualizedText: \"ctx: line one\\nline two\\n\",\n\t\t\t\tEmbedding:          embed.Embedding{0.1, -0.2, 3.5, 0},\n\t\t\t},\n\t\t\t{\n\t\t\t\tInfo: chunk.ChunkInfo{\n\t\t\t\t\tText:           \"solo\",\n\t\t\t\t\tHeadingContext: \"\",\n\t\t\t\t\tStart:          chunk.Position{Line: 10, Col: 4},\n\t\t\t\t\tEnd:            chunk.Position{Line: 10, Col: 8},\n\t\t\t\t},\n\t\t\t\tContextualizedText: \"solo\",\n\t\t\t\tEmbedding:          embed.Embedding{-1, 2, -3, 4},\n\t\t\t},\n\t\t},\n\t}\n}",
+      "contextualizedText": "// internal/mirror/mirror_test.go \u003e function fixture\n\nfunc fixture() Artifact {\n\treturn Artifact{\n\t\tBlobSha:   \"deadbeef\",\n\t\tModelName: \"mock@8\",\n\t\tChunks: []Chunk{\n\t\t\t{\n\t\t\t\tInfo: chunk.ChunkInfo{\n\t\t\t\t\tText:           \"line one\\nline two\\n\",\n\t\t\t\t\tHeadingContext: \"pkg \u003e Foo\",\n\t\t\t\t\tStart:          chunk.Position{Line: 1, Col: 0},\n\t\t\t\t\tEnd:            chunk.Position{Line: 2, Col: 8},\n\t\t\t\t},\n\t\t\t\tContextualizedText: \"ctx: line one\\nline two\\n\",\n\t\t\t\tEmbedding:          embed.Embedding{0.1, -0.2, 3.5, 0},\n\t\t\t},\n\t\t\t{\n\t\t\t\tInfo: chunk.ChunkInfo{\n\t\t\t\t\tText:           \"solo\",\n\t\t\t\t\tHeadingContext: \"\",\n\t\t\t\t\tStart:          chunk.Position{Line: 10, Col: 4},\n\t\t\t\t\tEnd:            chunk.Position{Line: 10, Col: 8},\n\t\t\t\t},\n\t\t\t\tContextualizedText: \"solo\",\n\t\t\t\tEmbedding:          embed.Embedding{-1, 2, -3, 4},\n\t\t\t},\n\t\t},\n\t}\n}",
+      "headingContext": "internal/mirror/mirror_test.go \u003e function fixture",
+      "startLine": 12,
+      "startCol": 1,
+      "endLine": 39,
+      "endCol": 2
+    },
+    {
+      "text": "func TestRoundTrip(t *testing.T) {\n\tin := fixture()\n\tmeta, vec, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot, err := Decode(meta, vec)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif !reflect.DeepEqual(got, in) {\n\t\tt.Fatalf(\"round-trip mismatch:\\n got %+v\\nwant %+v\", got, in)\n\t}\n}",
+      "contextualizedText": "// internal/mirror/mirror_test.go \u003e function TestRoundTrip\n\nfunc TestRoundTrip(t *testing.T) {\n\tin := fixture()\n\tmeta, vec, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot, err := Decode(meta, vec)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif !reflect.DeepEqual(got, in) {\n\t\tt.Fatalf(\"round-trip mismatch:\\n got %+v\\nwant %+v\", got, in)\n\t}\n}",
+      "headingContext": "internal/mirror/mirror_test.go \u003e function TestRoundTrip",
+      "startLine": 41,
+      "startCol": 1,
+      "endLine": 54,
+      "endCol": 2
+    },
+    {
+      "text": "func TestDeterministic(t *testing.T) {\n\tin := fixture()\n\tm1, v1, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tm2, v2, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif !bytes.Equal(m1, m2) {\n\t\tt.Error(\"meta bytes not deterministic\")\n\t}\n\tif !bytes.Equal(v1, v2) {\n\t\tt.Error(\"vec bytes not deterministic\")\n\t}\n}",
+      "contextualizedText": "// internal/mirror/mirror_test.go \u003e function TestDeterministic\n\nfunc TestDeterministic(t *testing.T) {\n\tin := fixture()\n\tm1, v1, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tm2, v2, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif !bytes.Equal(m1, m2) {\n\t\tt.Error(\"meta bytes not deterministic\")\n\t}\n\tif !bytes.Equal(v1, v2) {\n\t\tt.Error(\"vec bytes not deterministic\")\n\t}\n}",
+      "headingContext": "internal/mirror/mirror_test.go \u003e function TestDeterministic",
+      "startLine": 56,
+      "startCol": 1,
+      "endLine": 72,
+      "endCol": 2
+    },
+    {
+      "text": "func TestVecStandalone(t *testing.T) {\n\tin := fixture()\n\t_, vec, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot, err := DecodeVec(vec)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(got) != len(in.Chunks) {\n\t\tt.Fatalf(\"got %d vectors, want %d\", len(got), len(in.Chunks))\n\t}\n\tfor i, c := range in.Chunks {\n\t\tif !reflect.DeepEqual(got[i], c.Embedding) {\n\t\t\tt.Errorf(\"vector %d mismatch: got %v want %v\", i, got[i], c.Embedding)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/mirror/mirror_test.go \u003e function TestVecStandalone\n\nfunc TestVecStandalone(t *testing.T) {\n\tin := fixture()\n\t_, vec, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot, err := DecodeVec(vec)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(got) != len(in.Chunks) {\n\t\tt.Fatalf(\"got %d vectors, want %d\", len(got), len(in.Chunks))\n\t}\n\tfor i, c := range in.Chunks {\n\t\tif !reflect.DeepEqual(got[i], c.Embedding) {\n\t\t\tt.Errorf(\"vector %d mismatch: got %v want %v\", i, got[i], c.Embedding)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/mirror/mirror_test.go \u003e function TestVecStandalone",
+      "startLine": 74,
+      "startCol": 1,
+      "endLine": 92,
+      "endCol": 2
+    },
+    {
+      "text": "func TestEmptyArtifact(t *testing.T) {\n\tin := Artifact{BlobSha: \"abc\", ModelName: \"mock@8\"}\n\tmeta, vec, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot, err := Decode(meta, vec)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif got.BlobSha != in.BlobSha || got.ModelName != in.ModelName || len(got.Chunks) != 0 {\n\t\tt.Fatalf(\"empty round-trip mismatch: %+v\", got)\n\t}\n}",
+      "contextualizedText": "// internal/mirror/mirror_test.go \u003e function TestEmptyArtifact\n\nfunc TestEmptyArtifact(t *testing.T) {\n\tin := Artifact{BlobSha: \"abc\", ModelName: \"mock@8\"}\n\tmeta, vec, err := Encode(in)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot, err := Decode(meta, vec)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif got.BlobSha != in.BlobSha || got.ModelName != in.ModelName || len(got.Chunks) != 0 {\n\t\tt.Fatalf(\"empty round-trip mismatch: %+v\", got)\n\t}\n}",
+      "headingContext": "internal/mirror/mirror_test.go \u003e function TestEmptyArtifact",
+      "startLine": 94,
+      "startCol": 1,
+      "endLine": 107,
+      "endCol": 2
+    },
+    {
+      "text": "func TestTornPairDetected(t *testing.T) {\n\tmeta, _, err := Encode(fixture())\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\t_, vec, err := Encode(Artifact{BlobSha: \"x\", ModelName: \"m\", Chunks: fixture().Chunks[:1]})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := Decode(meta, vec); err == nil {\n\t\tt.Fatal(\"expected mismatch error for torn pair\")\n\t}\n}",
+      "contextualizedText": "// internal/mirror/mirror_test.go \u003e function TestTornPairDetected\n\nfunc TestTornPairDetected(t *testing.T) {\n\tmeta, _, err := Encode(fixture())\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\t_, vec, err := Encode(Artifact{BlobSha: \"x\", ModelName: \"m\", Chunks: fixture().Chunks[:1]})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := Decode(meta, vec); err == nil {\n\t\tt.Fatal(\"expected mismatch error for torn pair\")\n\t}\n}",
+      "headingContext": "internal/mirror/mirror_test.go \u003e function TestTornPairDetected",
+      "startLine": 109,
+      "startCol": 1,
+      "endLine": 121,
+      "endCol": 2
+    }
+  ]
+}

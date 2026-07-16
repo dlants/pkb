@@ -309,6 +309,28 @@ Decisions/deviations:
 
 ## Stage 4: Retire pkb.db / LFS and update config + docs
 
+**Status: DONE.** The repo no longer tracks a binary DB; the mirror tree is the
+committed source of truth and the SQLite cache is gitignored.
+Decisions/deviations:
+- `.gitattributes` (the sole LFS rule) was deleted entirely, and the four Git
+  LFS hooks (`hooks/post-checkout`, `post-commit`, `post-merge`, `pre-push`)
+  were removed since LFS is gone — only `hooks/pre-commit` remains.
+- `hooks/pre-commit` now `git add`s `.pkb/index pkb-state.toml` (was
+  `pkb.db pkb-state.toml`); comment updated to describe per-file artifacts and
+  the gitignored cache.
+- `.gitignore` ignores `/.pkb/cache.db`; `pkb.db` was `git rm`'d and the tracked
+  `.pkb/index` mirror tree (118 files: 59 `.meta` + 59 `.vec`) materialized via a
+  full reindex of this repo at commit b3a2412.
+- `.github/workflows/tag-release.yml` `paths-ignore` now skips `.pkb/index/**`
+  (was `pkb.db`) so reindex commits still don't trigger auto-tagging.
+- `README.md` and `context.md` rewritten to describe the mirror tree + local
+  cache model (dropped the Git LFS setup section, `setup-hooks.sh`/`pre-push`
+  references, and the "pre-push hook handles it" line). `main.go` usage text was
+  already updated in Stage 3.
+- Verified: `go build/vet/test ./...` all green; a cold-cache `pkb search`
+  (cache.db deleted) rebuilds the cache and returns results; `git status` shows
+  only small `.pkb/index` artifacts staged, never the gitignored `.pkb/cache.db`.
+
 - Goal: the repo no longer tracks a binary DB; hooks, gitignore, gitattributes,
   and docs reflect the mirror-tree model.
 - Work:

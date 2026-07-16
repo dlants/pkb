@@ -1,0 +1,87 @@
+{
+  "blobSha": "da87adbd65a2723587daeb94cc1e95b5db1db716",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package chunk\n\nimport (\n\t\"sort\"\n\t\"strings\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
+      "contextualizedText": "// internal/chunk/defindex.go\n\npackage chunk\n\nimport (\n\t\"sort\"\n\t\"strings\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
+      "headingContext": "internal/chunk/defindex.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 8,
+      "endCol": 2
+    },
+    {
+      "text": "// defEntry holds the per-declaration metadata derived from a tags.scm match:\n// the symbol name (@name) and the human label (the @definition.\u003clabel\u003e suffix).\ntype defEntry struct {\n\tname  string\n\tlabel string\n}",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e type defEntry\n\n// defEntry holds the per-declaration metadata derived from a tags.scm match:\n// the symbol name (@name) and the human label (the @definition.\u003clabel\u003e suffix).\ntype defEntry struct {\n\tname  string\n\tlabel string\n}",
+      "headingContext": "internal/chunk/defindex.go \u003e type defEntry",
+      "startLine": 10,
+      "startCol": 1,
+      "endLine": 15,
+      "endCol": 2
+    },
+    {
+      "text": "// defSpan is a @definition.* capture as a byte interval plus its metadata. It is\n// the bottom-up unit that drives chunk boundaries and breadcrumbs: start/end are\n// the captured node's byte range, and the embedded defEntry carries name and\n// label.\ntype defSpan struct {\n\tdefEntry\n\tstart int\n\tend   int\n\t// extStart is the span start extended back to the line start and over any\n\t// doc-comment run; it is the byte offset chunk text begins at. It is only\n\t// populated by the sweeper (zero in the raw buildDefIndex output).\n\textStart int\n}",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e type defSpan\n\n// defSpan is a @definition.* capture as a byte interval plus its metadata. It is\n// the bottom-up unit that drives chunk boundaries and breadcrumbs: start/end are\n// the captured node's byte range, and the embedded defEntry carries name and\n// label.\ntype defSpan struct {\n\tdefEntry\n\tstart int\n\tend   int\n\t// extStart is the span start extended back to the line start and over any\n\t// doc-comment run; it is the byte offset chunk text begins at. It is only\n\t// populated by the sweeper (zero in the raw buildDefIndex output).\n\textStart int\n}",
+      "headingContext": "internal/chunk/defindex.go \u003e type defSpan",
+      "startLine": 17,
+      "startCol": 1,
+      "endLine": 29,
+      "endCol": 2
+    },
+    {
+      "text": "// defIndex is the result of running a grammar's tags.scm over a parsed tree:\n// info maps each @definition.* node ID to its defEntry (Node.Id() is stable\n// within a parsed tree, so the sweep can consult it when it re-encounters a\n// node), and spans is the same captures as ordered byte intervals.\ntype defIndex struct {\n\tinfo  map[uintptr]defEntry\n\tspans []defSpan\n}",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e type defIndex\n\n// defIndex is the result of running a grammar's tags.scm over a parsed tree:\n// info maps each @definition.* node ID to its defEntry (Node.Id() is stable\n// within a parsed tree, so the sweep can consult it when it re-encounters a\n// node), and spans is the same captures as ordered byte intervals.\ntype defIndex struct {\n\tinfo  map[uintptr]defEntry\n\tspans []defSpan\n}",
+      "headingContext": "internal/chunk/defindex.go \u003e type defIndex",
+      "startLine": 31,
+      "startCol": 1,
+      "endLine": 38,
+      "endCol": 2
+    },
+    {
+      "text": "// buildDefIndex runs the grammar's vendored tags.scm query over the tree rooted\n// at root, returning a defIndex of @definition.* captures. It returns (nil, nil)\n// when no query is vendored for the grammar (callers should fall back to the\n// heuristic path), or a non-nil error when the query fails to compile.\nfunc buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defIndex, error)",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e function buildDefIndex\n\n// buildDefIndex runs the grammar's vendored tags.scm query over the tree rooted\n// at root, returning a defIndex of @definition.* captures. It returns (nil, nil)\n// when no query is vendored for the grammar (callers should fall back to the\n// heuristic path), or a non-nil error when the query fails to compile.\nfunc buildDefIndex(root *tree_sitter.Node, source []byte, grammar string) (*defIndex, error)",
+      "headingContext": "internal/chunk/defindex.go \u003e function buildDefIndex",
+      "startLine": 40,
+      "startCol": 1,
+      "endLine": 44,
+      "endCol": 93
+    },
+    {
+      "text": "{\n\tsrc := queryFor(grammar)\n\tif src == \"\" {\n\t\treturn nil, nil\n\t}\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn nil, nil\n\t}\n\n\tq, qErr := tree_sitter.NewQuery(lang, src)\n\tif qErr != nil {\n\t\treturn nil, qErr\n\t}\n\tdefer q.Close()\n\n\tcursor := tree_sitter.NewQueryCursor()\n\tdefer cursor.Close()\n\n\tnames := q.CaptureNames()\n\tidx := \u0026defIndex{\n\t\tinfo: map[uintptr]defEntry{},\n\t}\n\n\tmatches := cursor.Matches(q, root, source)\n\tfor m := matches.Next(); m != nil; m = matches.Next() {\n\t\tvar defNode *tree_sitter.Node\n\t\tvar suffixLabel, labelText string\n\t\tvar nameParts []nameCapture\n\n\t\tfor _, capture := range m.Captures {\n\t\t\tcname := names[capture.Index]\n\t\t\tnode := capture.Node\n\t\t\tswitch {\n\t\t\tcase strings.HasPrefix(cname, \"definition.\"):\n\t\t\t\tn := node\n\t\t\t\tdefNode = \u0026n\n\t\t\t\tsuffixLabel = strings.TrimPrefix(cname, \"definition.\")\n\t\t\tcase cname == \"name\":\n\t\t\t\tnameParts = append(nameParts, nameCapture{\n\t\t\t\t\tstart: int(node.StartByte()),\n\t\t\t\t\ttext:  node.Utf8Text(source),\n\t\t\t\t})\n\t\t\tcase cname == \"label\":\n\t\t\t\tlabelText = node.Utf8Text(source)\n\t\t\t}\n\t\t}\n\n\t\t// A @label capture (e.g. HCL's block-type identifier) overrides the\n\t\t// static @definition.\u003csuffix\u003e label so the breadcrumb reads naturally.\n\t\tlabel := suffixLabel\n\t\tif labelText != \"\" {\n\t\t\tlabel = labelText\n\t\t}\n\t\t// @name may appear multiple times (e.g. an HCL block's labels); join the\n\t\t// captures in source order to form the display name.\n\t\tname := joinNames(nameParts)\n\n\t\tif defNode == nil {\n\t\t\tcontinue\n\t\t}\n\t\tid := defNode.Id()\n\t\tentry := defEntry{name: name, label: label}\n\t\tidx.info[id] = entry\n\t\tidx.spans = append(idx.spans, defSpan{\n\t\t\tdefEntry: entry,\n\t\t\tstart:    int(defNode.StartByte()),\n\t\t\tend:      int(defNode.EndByte()),\n\t\t})\n\t}\n\n\tsort.SliceStable(idx.spans, func(i, j int) bool {\n\t\tif idx.spans[i].start != idx.spans[j].start {\n\t\t\treturn idx.spans[i].start \u003c idx.spans[j].start\n\t\t}\n\t\treturn idx.spans[i].end \u003c idx.spans[j].end\n\t})\n\n\treturn idx, nil\n}",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e function buildDefIndex\n\n{\n\tsrc := queryFor(grammar)\n\tif src == \"\" {\n\t\treturn nil, nil\n\t}\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn nil, nil\n\t}\n\n\tq, qErr := tree_sitter.NewQuery(lang, src)\n\tif qErr != nil {\n\t\treturn nil, qErr\n\t}\n\tdefer q.Close()\n\n\tcursor := tree_sitter.NewQueryCursor()\n\tdefer cursor.Close()\n\n\tnames := q.CaptureNames()\n\tidx := \u0026defIndex{\n\t\tinfo: map[uintptr]defEntry{},\n\t}\n\n\tmatches := cursor.Matches(q, root, source)\n\tfor m := matches.Next(); m != nil; m = matches.Next() {\n\t\tvar defNode *tree_sitter.Node\n\t\tvar suffixLabel, labelText string\n\t\tvar nameParts []nameCapture\n\n\t\tfor _, capture := range m.Captures {\n\t\t\tcname := names[capture.Index]\n\t\t\tnode := capture.Node\n\t\t\tswitch {\n\t\t\tcase strings.HasPrefix(cname, \"definition.\"):\n\t\t\t\tn := node\n\t\t\t\tdefNode = \u0026n\n\t\t\t\tsuffixLabel = strings.TrimPrefix(cname, \"definition.\")\n\t\t\tcase cname == \"name\":\n\t\t\t\tnameParts = append(nameParts, nameCapture{\n\t\t\t\t\tstart: int(node.StartByte()),\n\t\t\t\t\ttext:  node.Utf8Text(source),\n\t\t\t\t})\n\t\t\tcase cname == \"label\":\n\t\t\t\tlabelText = node.Utf8Text(source)\n\t\t\t}\n\t\t}\n\n\t\t// A @label capture (e.g. HCL's block-type identifier) overrides the\n\t\t// static @definition.\u003csuffix\u003e label so the breadcrumb reads naturally.\n\t\tlabel := suffixLabel\n\t\tif labelText != \"\" {\n\t\t\tlabel = labelText\n\t\t}\n\t\t// @name may appear multiple times (e.g. an HCL block's labels); join the\n\t\t// captures in source order to form the display name.\n\t\tname := joinNames(nameParts)\n\n\t\tif defNode == nil {\n\t\t\tcontinue\n\t\t}\n\t\tid := defNode.Id()\n\t\tentry := defEntry{name: name, label: label}\n\t\tidx.info[id] = entry\n\t\tidx.spans = append(idx.spans, defSpan{\n\t\t\tdefEntry: entry,\n\t\t\tstart:    int(defNode.StartByte()),\n\t\t\tend:      int(defNode.EndByte()),\n\t\t})\n\t}\n\n\tsort.SliceStable(idx.spans, func(i, j int) bool {\n\t\tif idx.spans[i].start != idx.spans[j].start {\n\t\t\treturn idx.spans[i].start \u003c idx.spans[j].start\n\t\t}\n\t\treturn idx.spans[i].end \u003c idx.spans[j].end\n\t})\n\n\treturn idx, nil\n}",
+      "headingContext": "internal/chunk/defindex.go \u003e function buildDefIndex",
+      "startLine": 44,
+      "startCol": 94,
+      "endLine": 123,
+      "endCol": 2
+    },
+    {
+      "text": "// nameCapture is one @name capture: its start byte (for source-order joining)\n// and text.\ntype nameCapture struct {\n\tstart int\n\ttext  string\n}",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e type nameCapture\n\n// nameCapture is one @name capture: its start byte (for source-order joining)\n// and text.\ntype nameCapture struct {\n\tstart int\n\ttext  string\n}",
+      "headingContext": "internal/chunk/defindex.go \u003e type nameCapture",
+      "startLine": 125,
+      "startCol": 1,
+      "endLine": 130,
+      "endCol": 2
+    },
+    {
+      "text": "// joinNames orders @name captures by source position and joins them with a\n// single space, producing the display name (e.g. an HCL block's labels).\nfunc joinNames(parts []nameCapture) string {\n\tsort.SliceStable(parts, func(i, j int) bool {\n\t\treturn parts[i].start \u003c parts[j].start\n\t})\n\ttexts := make([]string, len(parts))\n\tfor i, p := range parts {\n\t\ttexts[i] = p.text\n\t}\n\treturn strings.Join(texts, \" \")\n}",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e function joinNames\n\n// joinNames orders @name captures by source position and joins them with a\n// single space, producing the display name (e.g. an HCL block's labels).\nfunc joinNames(parts []nameCapture) string {\n\tsort.SliceStable(parts, func(i, j int) bool {\n\t\treturn parts[i].start \u003c parts[j].start\n\t})\n\ttexts := make([]string, len(parts))\n\tfor i, p := range parts {\n\t\ttexts[i] = p.text\n\t}\n\treturn strings.Join(texts, \" \")\n}",
+      "headingContext": "internal/chunk/defindex.go \u003e function joinNames",
+      "startLine": 132,
+      "startCol": 1,
+      "endLine": 143,
+      "endCol": 2
+    },
+    {
+      "text": "// entry returns the defEntry for node, if it was captured as a @definition.*.\nfunc (d *defIndex) entry(node *tree_sitter.Node) (defEntry, bool) {\n\tif d == nil {\n\t\treturn defEntry{}, false\n\t}\n\te, ok := d.info[node.Id()]\n\treturn e, ok\n}",
+      "contextualizedText": "// internal/chunk/defindex.go \u003e method entry\n\n// entry returns the defEntry for node, if it was captured as a @definition.*.\nfunc (d *defIndex) entry(node *tree_sitter.Node) (defEntry, bool) {\n\tif d == nil {\n\t\treturn defEntry{}, false\n\t}\n\te, ok := d.info[node.Id()]\n\treturn e, ok\n}",
+      "headingContext": "internal/chunk/defindex.go \u003e method entry",
+      "startLine": 145,
+      "startCol": 1,
+      "endLine": 152,
+      "endCol": 2
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "blobSha": "a09f0af4bb395f90fa70816485ef5bc72f0d3df7",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package store\n\nimport (\n\t\"database/sql\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)",
+      "contextualizedText": "// internal/store/store_test.go\n\npackage store\n\nimport (\n\t\"database/sql\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)",
+      "headingContext": "internal/store/store_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 10,
+      "endCol": 2
+    },
+    {
+      "text": "func mkChunk(text string) chunk.ChunkInfo {\n\treturn chunk.ChunkInfo{\n\t\tText:  text,\n\t\tStart: chunk.Position{Line: 1, Col: 0},\n\t\tEnd:   chunk.Position{Line: 1, Col: len(text)},\n\t}\n}",
+      "contextualizedText": "// internal/store/store_test.go \u003e function mkChunk\n\nfunc mkChunk(text string) chunk.ChunkInfo {\n\treturn chunk.ChunkInfo{\n\t\tText:  text,\n\t\tStart: chunk.Position{Line: 1, Col: 0},\n\t\tEnd:   chunk.Position{Line: 1, Col: len(text)},\n\t}\n}",
+      "headingContext": "internal/store/store_test.go \u003e function mkChunk",
+      "startLine": 12,
+      "startCol": 1,
+      "endLine": 18,
+      "endCol": 2
+    },
+    {
+      "text": "func openTestStore(t *testing.T) (*Store, *embed.MockModel) {\n\tt.Helper()\n\tdir := t.TempDir()\n\ts, err := Open(filepath.Join(dir, \"test.db\"))\n\tif err != nil {\n\t\tt.Fatalf(\"Open: %v\", err)\n\t}\n\tt.Cleanup(func() { s.Close() })\n\tm := embed.NewMockModel(\"mock@8\", 8)\n\tif err := s.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\tt.Fatalf(\"EnsureVecTable: %v\", err)\n\t}\n\treturn s, m\n}",
+      "contextualizedText": "// internal/store/store_test.go \u003e function openTestStore\n\nfunc openTestStore(t *testing.T) (*Store, *embed.MockModel) {\n\tt.Helper()\n\tdir := t.TempDir()\n\ts, err := Open(filepath.Join(dir, \"test.db\"))\n\tif err != nil {\n\t\tt.Fatalf(\"Open: %v\", err)\n\t}\n\tt.Cleanup(func() { s.Close() })\n\tm := embed.NewMockModel(\"mock@8\", 8)\n\tif err := s.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\tt.Fatalf(\"EnsureVecTable: %v\", err)\n\t}\n\treturn s, m\n}",
+      "headingContext": "internal/store/store_test.go \u003e function openTestStore",
+      "startLine": 20,
+      "startCol": 1,
+      "endLine": 33,
+      "endCol": 2
+    },
+    {
+      "text": "func emb(t *testing.T, m *embed.MockModel, text string) embed.Embedding {\n\tt.Helper()\n\te, err := m.EmbedChunk(text)\n\tif err != nil {\n\t\tt.Fatalf(\"EmbedChunk: %v\", err)\n\t}\n\treturn e\n}",
+      "contextualizedText": "// internal/store/store_test.go \u003e function emb\n\nfunc emb(t *testing.T, m *embed.MockModel, text string) embed.Embedding {\n\tt.Helper()\n\te, err := m.EmbedChunk(text)\n\tif err != nil {\n\t\tt.Fatalf(\"EmbedChunk: %v\", err)\n\t}\n\treturn e\n}",
+      "headingContext": "internal/store/store_test.go \u003e function emb",
+      "startLine": 35,
+      "startCol": 1,
+      "endLine": 42,
+      "endCol": 2
+    },
+    {
+      "text": "// putFile (re)indexes a path via PutFile, deriving the contextualized text and\n// embeddings from the supplied chunks.\nfunc putFile(t *testing.T, s *Store, m *embed.MockModel, path, blobSha string, chunks []chunk.ChunkInfo) {\n\tt.Helper()\n\tcontextualized := make([]string, len(chunks))\n\tembeddings := make([]embed.Embedding, len(chunks))\n\tfor i, c := range chunks {\n\t\tcontextualized[i] = c.Text\n\t\tembeddings[i] = emb(t, m, c.Text)\n\t}\n\tif err := s.PutFile(path, m.ModelName(), blobSha, chunks, contextualized, embeddings); err != nil {\n\t\tt.Fatalf(\"PutFile: %v\", err)\n\t}\n}",
+      "contextualizedText": "// internal/store/store_test.go \u003e function putFile\n\n// putFile (re)indexes a path via PutFile, deriving the contextualized text and\n// embeddings from the supplied chunks.\nfunc putFile(t *testing.T, s *Store, m *embed.MockModel, path, blobSha string, chunks []chunk.ChunkInfo) {\n\tt.Helper()\n\tcontextualized := make([]string, len(chunks))\n\tembeddings := make([]embed.Embedding, len(chunks))\n\tfor i, c := range chunks {\n\t\tcontextualized[i] = c.Text\n\t\tembeddings[i] = emb(t, m, c.Text)\n\t}\n\tif err := s.PutFile(path, m.ModelName(), blobSha, chunks, contextualized, embeddings); err != nil {\n\t\tt.Fatalf(\"PutFile: %v\", err)\n\t}\n}",
+      "headingContext": "internal/store/store_test.go \u003e function putFile",
+      "startLine": 44,
+      "startCol": 1,
+      "endLine": 57,
+      "endCol": 2
+    },
+    {
+      "text": "func TestPutFileLifecycle(t *testing.T) {\n\ts, m := openTestStore(t)\n\tpath := \"doc.md\"\n\n\tc1 := mkChunk(\"alpha chunk\")\n\tc2 := mkChunk(\"beta chunk\")\n\tputFile(t, s, m, path, \"sha1\", []chunk.ChunkInfo{c1, c2})\n\n\t// Indexed file is searchable.\n\tres, err := s.Search(m.ModelName(), emb(t, m, \"alpha chunk\"), 5)\n\tif err != nil {\n\t\tt.Fatalf(\"Search: %v\", err)\n\t}\n\tif len(res) != 2 {\n\t\tt.Fatalf(\"expected 2 results, got %d\", len(res))\n\t}\n\tif res[0].Text != \"alpha chunk\" {\n\t\tt.Fatalf(\"expected alpha chunk top hit, got %q\", res[0].Text)\n\t}\n\n\tst, err := s.Stats(m.ModelName())\n\tif err != nil {\n\t\tt.Fatalf(\"Stats: %v\", err)\n\t}\n\tif st.Files != 1 || st.Chunks != 2 {\n\t\tt.Fatalf(\"expected 1 file / 2 chunks, got %d / %d\", st.Files, st.Chunks)\n\t}\n\n\t// Reuse map keys on ChunkKey.\n\treuse, err := s.ChunkEmbeddings(path, m.ModelName())\n\tif err != nil {\n\t\tt.Fatalf(\"ChunkEmbeddings: %v\", err)\n\t}\n\te, ok := reuse[ChunkKey(\"\", \"alpha chunk\")]\n\tif !ok {\n\t\tt.Fatalf(\"expected reuse entry for alpha chunk\")\n\t}\n\tif len(e) != m.Dimensions() {\n\t\tt.Fatalf(\"expected %d dims, got %d\", m.Dimensions(), len(e))\n\t}\n}",
+      "contextualizedText": "// internal/store/store_test.go \u003e function TestPutFileLifecycle\n\nfunc TestPutFileLifecycle(t *testing.T) {\n\ts, m := openTestStore(t)\n\tpath := \"doc.md\"\n\n\tc1 := mkChunk(\"alpha chunk\")\n\tc2 := mkChunk(\"beta chunk\")\n\tputFile(t, s, m, path, \"sha1\", []chunk.ChunkInfo{c1, c2})\n\n\t// Indexed file is searchable.\n\tres, err := s.Search(m.ModelName(), emb(t, m, \"alpha chunk\"), 5)\n\tif err != nil {\n\t\tt.Fatalf(\"Search: %v\", err)\n\t}\n\tif len(res) != 2 {\n\t\tt.Fatalf(\"expected 2 results, got %d\", len(res))\n\t}\n\tif res[0].Text != \"alpha chunk\" {\n\t\tt.Fatalf(\"expected alpha chunk top hit, got %q\", res[0].Text)\n\t}\n\n\tst, err := s.Stats(m.ModelName())\n\tif err != nil {\n\t\tt.Fatalf(\"Stats: %v\", err)\n\t}\n\tif st.Files != 1 || st.Chunks != 2 {\n\t\tt.Fatalf(\"expected 1 file / 2 chunks, got %d / %d\", st.Files, st.Chunks)\n\t}\n\n\t// Reuse map keys on ChunkKey.\n\treuse, err := s.ChunkEmbeddings(path, m.ModelName())\n\tif err != nil {\n\t\tt.Fatalf(\"ChunkEmbeddings: %v\", err)\n\t}\n\te, ok := reuse[ChunkKey(\"\", \"alpha chunk\")]\n\tif !ok {\n\t\tt.Fatalf(\"expected reuse entry for alpha chunk\")\n\t}\n\tif len(e) != m.Dimensions() {\n\t\tt.Fatalf(\"expected %d dims, got %d\", m.Dimensions(), len(e))\n\t}\n}",
+      "headingContext": "internal/store/store_test.go \u003e function TestPutFileLifecycle",
+      "startLine": 59,
+      "startCol": 1,
+      "endLine": 99,
+      "endCol": 2
+    },
+    {
+      "text": "func TestPutFileReplacesOldChunks(t *testing.T) {\n\ts, m := openTestStore(t)\n\tpath := \"doc.md\"\n\n\tputFile(t, s, m, path, \"sha1\", []chunk.ChunkInfo{mkChunk(\"old chunk\")})\n\t// Reindex the same path with new content: old chunks must be replaced.\n\tputFile(t, s, m, path, \"sha2\", []chunk.ChunkInfo{mkChunk(\"new chunk\")})\n\n\tst, err := s.Stats(m.ModelName())\n\tif err != nil {\n\t\tt.Fatalf(\"Stats: %v\", err)\n\t}\n\tif st.Files != 1 || st.Chunks != 1 {\n\t\tt.Fatalf(\"expected 1 file / 1 chunk after replace, got %d / %d\", st.Files, st.Chunks)\n\t}\n\tres, err := s.Search(m.ModelName(), emb(t, m, \"new chunk\"), 5)\n\tif err != nil {\n\t\tt.Fatalf(\"Search: %v\", err)\n\t}\n\tif len(res) != 1 || res[0].Text != \"new chunk\" {\n\t\tt.Fatalf(\"expected only new chunk, got %v\", res)\n\t}\n}",
+      "contextualizedText": "// internal/store/store_test.go \u003e function TestPutFileReplacesOldChunks\n\nfunc TestPutFileReplacesOldChunks(t *testing.T) {\n\ts, m := openTestStore(t)\n\tpath := \"doc.md\"\n\n\tputFile(t, s, m, path, \"sha1\", []chunk.ChunkInfo{mkChunk(\"old chunk\")})\n\t// Reindex the same path with new content: old chunks must be replaced.\n\tputFile(t, s, m, path, \"sha2\", []chunk.ChunkInfo{mkChunk(\"new chunk\")})\n\n\tst, err := s.Stats(m.ModelName())\n\tif err != nil {\n\t\tt.Fatalf(\"Stats: %v\", err)\n\t}\n\tif st.Files != 1 || st.Chunks != 1 {\n\t\tt.Fatalf(\"expected 1 file / 1 chunk after replace, got %d / %d\", st.Files, st.Chunks)\n\t}\n\tres, err := s.Search(m.ModelName(), emb(t, m, \"new chunk\"), 5)\n\tif err != nil {\n\t\tt.Fatalf(\"Search: %v\", err)\n\t}\n\tif len(res) != 1 || res[0].Text != \"new chunk\" {\n\t\tt.Fatalf(\"expected only new chunk, got %v\", res)\n\t}\n}",
+      "headingContext": "internal/store/store_test.go \u003e function TestPutFileReplacesOldChunks",
+      "startLine": 101,
+      "startCol": 1,
+      "endLine": 123,
+      "endCol": 2
+    },
+    {
+      "text": "func TestMigrationFromOldSchema(t *testing.T) {\n\tdir := t.TempDir()\n\tdbPath := filepath.Join(dir, \"old.db\")\n\n\t// Build a database with the pre-augmentation schema and an existing row.\n\traw, err := sql.Open(\"sqlite3\", dbPath)\n\tif err != nil {\n\t\tt.Fatalf(\"sql.Open: %v\", err)\n\t}\n\t_, err = raw.Exec(`\n\t\tCREATE TABLE files (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tpath TEXT NOT NULL,\n\t\t\tmodel_name TEXT NOT NULL,\n\t\t\tembedding_version INTEGER NOT NULL,\n\t\t\tblob_sha TEXT NOT NULL,\n\t\t\tUNIQUE(path, model_name, embedding_version)\n\t\t);\n\t\tCREATE TABLE chunks (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tfile_id INTEGER NOT NULL,\n\t\t\ttext TEXT NOT NULL,\n\t\t\tcontextualized_text TEXT NOT NULL,\n\t\t\tstart_line INTEGER NOT NULL,\n\t\t\tstart_col INTEGER NOT NULL,\n\t\t\tend_line INTEGER NOT NULL,\n\t\t\tend_col INTEGER NOT NULL\n\t\t);\n\t\tINSERT INTO files (path, model_name, embedding_version, blob_sha)\n\t\t\tVALUES ('legacy.md', 'mock@8', 5, 'oldsha');\n\t\tINSERT INTO chunks (file_id, text, contextualized_text, start_line, start_col, end_line, end_col)\n\t\t\tVALUES (1, 'legacy chunk', 'legacy chunk', 1, 0, 1, 12);\n\t`)\n\tif err != nil {\n\t\tt.Fatalf(\"seed old schema: %v\", err)\n\t}\n\traw.Close()\n\n\t// Open via Store: migrations should add the new columns with safe defaults.\n\ts, err := Open(dbPath)\n\tif err != nil {\n\t\tt.Fatalf(\"Open (migrate): %v\", err)\n\t}\n\tdefer s.Close()\n\n\tfiles, err := s.IndexedFiles(\"mock@8\")\n\tif err != nil {\n\t\tt.Fatalf(\"IndexedFiles: %v\", err)\n\t}\n\tmeta, ok := files[\"legacy.md\"]\n\tif !ok {\n\t\tt.Fatalf(\"expected migrated legacy file\")\n\t}\n\tif meta.Sha != \"oldsha\" {\n\t\tt.Fatalf(\"expected preserved sha, got %q\", meta.Sha)\n\t}\n\n\t// Existing chunk remains visible via Stats.\n\tst, err := s.Stats(\"mock@8\")\n\tif err != nil {\n\t\tt.Fatalf(\"Stats: %v\", err)\n\t}\n\tif st.Files != 1 || st.Chunks != 1 {\n\t\tt.Fatalf(\"expected 1 file / 1 chunk after migration, got %d / %d\", st.Files, st.Chunks)\n\t}\n}",
+      "contextualizedText": "// internal/store/store_test.go \u003e function TestMigrationFromOldSchema\n\nfunc TestMigrationFromOldSchema(t *testing.T) {\n\tdir := t.TempDir()\n\tdbPath := filepath.Join(dir, \"old.db\")\n\n\t// Build a database with the pre-augmentation schema and an existing row.\n\traw, err := sql.Open(\"sqlite3\", dbPath)\n\tif err != nil {\n\t\tt.Fatalf(\"sql.Open: %v\", err)\n\t}\n\t_, err = raw.Exec(`\n\t\tCREATE TABLE files (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tpath TEXT NOT NULL,\n\t\t\tmodel_name TEXT NOT NULL,\n\t\t\tembedding_version INTEGER NOT NULL,\n\t\t\tblob_sha TEXT NOT NULL,\n\t\t\tUNIQUE(path, model_name, embedding_version)\n\t\t);\n\t\tCREATE TABLE chunks (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tfile_id INTEGER NOT NULL,\n\t\t\ttext TEXT NOT NULL,\n\t\t\tcontextualized_text TEXT NOT NULL,\n\t\t\tstart_line INTEGER NOT NULL,\n\t\t\tstart_col INTEGER NOT NULL,\n\t\t\tend_line INTEGER NOT NULL,\n\t\t\tend_col INTEGER NOT NULL\n\t\t);\n\t\tINSERT INTO files (path, model_name, embedding_version, blob_sha)\n\t\t\tVALUES ('legacy.md', 'mock@8', 5, 'oldsha');\n\t\tINSERT INTO chunks (file_id, text, contextualized_text, start_line, start_col, end_line, end_col)\n\t\t\tVALUES (1, 'legacy chunk', 'legacy chunk', 1, 0, 1, 12);\n\t`)\n\tif err != nil {\n\t\tt.Fatalf(\"seed old schema: %v\", err)\n\t}\n\traw.Close()\n\n\t// Open via Store: migrations should add the new columns with safe defaults.\n\ts, err := Open(dbPath)\n\tif err != nil {\n\t\tt.Fatalf(\"Open (migrate): %v\", err)\n\t}\n\tdefer s.Close()\n\n\tfiles, err := s.IndexedFiles(\"mock@8\")\n\tif err != nil {\n\t\tt.Fatalf(\"IndexedFiles: %v\", err)\n\t}\n\tmeta, ok := files[\"legacy.md\"]\n\tif !ok {\n\t\tt.Fatalf(\"expected migrated legacy file\")\n\t}\n\tif meta.Sha != \"oldsha\" {\n\t\tt.Fatalf(\"expected preserved sha, got %q\", meta.Sha)\n\t}\n\n\t// Existing chunk remains visible via Stats.\n\tst, err := s.Stats(\"mock@8\")\n\tif err != nil {\n\t\tt.Fatalf(\"Stats: %v\", err)\n\t}\n\tif st.Files != 1 || st.Chunks != 1 {\n\t\tt.Fatalf(\"expected 1 file / 1 chunk after migration, got %d / %d\", st.Files, st.Chunks)\n\t}\n}",
+      "headingContext": "internal/store/store_test.go \u003e function TestMigrationFromOldSchema",
+      "startLine": 125,
+      "startCol": 1,
+      "endLine": 190,
+      "endCol": 2
+    }
+  ]
+}

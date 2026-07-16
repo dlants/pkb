@@ -1,0 +1,204 @@
+{
+  "blobSha": "c9a09b865fc056d991270be2c298e8ac5d105ca8",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Package store wraps the sqlite + sqlite-vec database: a files table keyed by\n// (path, model, version), a chunks table, and one vec0 table per\n// (modelName, version). There are no tracked-source/exclusion tables.\npackage store\n\nimport (\n\t\"database/sql\"\n\t\"encoding/binary\"\n\t\"fmt\"\n\t\"math\"\n\t\"regexp\"\n\t\"strings\"\n\n\tsqlite_vec \"github.com/asg017/sqlite-vec-go-bindings/cgo\"\n\t_ \"github.com/mattn/go-sqlite3\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)\n\n// MajorVersion is the embedding compatibility identity (\"major version\").\n// Together with the embedding model_name (which already encodes model@dims),\n// it forms the major identity that keys each vec table and the files row, and\n// determines when a stored vector is still usable. Bump it whenever anything\n// that changes the meaning of an embedding changes: the chunking algorithm,\n// breadcrumb/heading-context handling, tree-sitter grammars, or the tags.scm /\n// pkb chunking logic. Bumping it isolates old vectors into separate vec tables\n// and forces a full recompute.\nconst MajorVersion = 5\n\nvar vecOnce bool",
+      "contextualizedText": "// internal/store/store.go\n\n// Package store wraps the sqlite + sqlite-vec database: a files table keyed by\n// (path, model, version), a chunks table, and one vec0 table per\n// (modelName, version). There are no tracked-source/exclusion tables.\npackage store\n\nimport (\n\t\"database/sql\"\n\t\"encoding/binary\"\n\t\"fmt\"\n\t\"math\"\n\t\"regexp\"\n\t\"strings\"\n\n\tsqlite_vec \"github.com/asg017/sqlite-vec-go-bindings/cgo\"\n\t_ \"github.com/mattn/go-sqlite3\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)\n\n// MajorVersion is the embedding compatibility identity (\"major version\").\n// Together with the embedding model_name (which already encodes model@dims),\n// it forms the major identity that keys each vec table and the files row, and\n// determines when a stored vector is still usable. Bump it whenever anything\n// that changes the meaning of an embedding changes: the chunking algorithm,\n// breadcrumb/heading-context handling, tree-sitter grammars, or the tags.scm /\n// pkb chunking logic. Bumping it isolates old vectors into separate vec tables\n// and forces a full recompute.\nconst MajorVersion = 5\n\nvar vecOnce bool",
+      "headingContext": "internal/store/store.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 31,
+      "endCol": 17
+    },
+    {
+      "text": "// Store owns the database connection.\ntype Store struct {\n\tdb *sql.DB\n}",
+      "contextualizedText": "// internal/store/store.go \u003e type Store\n\n// Store owns the database connection.\ntype Store struct {\n\tdb *sql.DB\n}",
+      "headingContext": "internal/store/store.go \u003e type Store",
+      "startLine": 33,
+      "startCol": 1,
+      "endLine": 36,
+      "endCol": 2
+    },
+    {
+      "text": "// Open opens (creating if needed) the database at dbPath and ensures the base\n// schema exists.\nfunc Open(dbPath string) (*Store, error) {\n\tif !vecOnce {\n\t\tsqlite_vec.Auto()\n\t\tvecOnce = true\n\t}\n\tdb, err := sql.Open(\"sqlite3\", dbPath)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdb.SetMaxOpenConns(1)\n\ts := \u0026Store{db: db}\n\tif err := s.init(); err != nil {\n\t\tdb.Close()\n\t\treturn nil, err\n\t}\n\treturn s, nil\n}",
+      "contextualizedText": "// internal/store/store.go \u003e function Open\n\n// Open opens (creating if needed) the database at dbPath and ensures the base\n// schema exists.\nfunc Open(dbPath string) (*Store, error) {\n\tif !vecOnce {\n\t\tsqlite_vec.Auto()\n\t\tvecOnce = true\n\t}\n\tdb, err := sql.Open(\"sqlite3\", dbPath)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdb.SetMaxOpenConns(1)\n\ts := \u0026Store{db: db}\n\tif err := s.init(); err != nil {\n\t\tdb.Close()\n\t\treturn nil, err\n\t}\n\treturn s, nil\n}",
+      "headingContext": "internal/store/store.go \u003e function Open",
+      "startLine": 38,
+      "startCol": 1,
+      "endLine": 56,
+      "endCol": 2
+    },
+    {
+      "text": "// Close closes the underlying database.\nfunc (s *Store) Close() error { return s.db.Close() }",
+      "contextualizedText": "// internal/store/store.go \u003e method Close\n\n// Close closes the underlying database.\nfunc (s *Store) Close() error { return s.db.Close() }",
+      "headingContext": "internal/store/store.go \u003e method Close",
+      "startLine": 58,
+      "startCol": 1,
+      "endLine": 59,
+      "endCol": 54
+    },
+    {
+      "text": "// Vacuum reclaims free pages left behind by reindex churn, shrinking the db\n// file to its live size.\nfunc (s *Store) Vacuum() error {\n\t_, err := s.db.Exec(\"VACUUM\")\n\treturn err\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method Vacuum\n\n// Vacuum reclaims free pages left behind by reindex churn, shrinking the db\n// file to its live size.\nfunc (s *Store) Vacuum() error {\n\t_, err := s.db.Exec(\"VACUUM\")\n\treturn err\n}",
+      "headingContext": "internal/store/store.go \u003e method Vacuum",
+      "startLine": 61,
+      "startCol": 1,
+      "endLine": 66,
+      "endCol": 2
+    },
+    {
+      "text": "func (s *Store) init() error {\n\t_, err := s.db.Exec(`\n\t\tCREATE TABLE IF NOT EXISTS files (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tpath TEXT NOT NULL,\n\t\t\tmodel_name TEXT NOT NULL,\n\t\t\tembedding_version INTEGER NOT NULL,\n\t\t\tblob_sha TEXT NOT NULL,\n\t\t\tUNIQUE(path, model_name, embedding_version)\n\t\t);\n\t\tCREATE TABLE IF NOT EXISTS chunks (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tfile_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,\n\t\t\ttext TEXT NOT NULL,\n\t\t\tcontextualized_text TEXT NOT NULL,\n\t\t\theading_context TEXT NOT NULL DEFAULT '',\n\t\t\tstart_line INTEGER NOT NULL,\n\t\t\tstart_col INTEGER NOT NULL,\n\t\t\tend_line INTEGER NOT NULL,\n\t\t\tend_col INTEGER NOT NULL\n\t\t);\n\t`)\n\tif err != nil {\n\t\treturn err\n\t}\n\t// addColumn applies an idempotent ALTER TABLE migration, tolerating the\n\t// \"duplicate column name\" error so re-opening an already-migrated db is a\n\t// no-op.\n\taddColumn := func(table, def string) error {\n\t\t_, aerr := s.db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s`, table, def))\n\t\tif aerr != nil \u0026\u0026 !strings.Contains(aerr.Error(), \"duplicate column name\") {\n\t\t\treturn aerr\n\t\t}\n\t\treturn nil\n\t}\n\t// Migrate pre-existing databases that lack the newer columns.\n\tfor _, m := range []struct{ table, def string }{\n\t\t{\"chunks\", \"heading_context TEXT NOT NULL DEFAULT ''\"},\n\t} {\n\t\tif err := addColumn(m.table, m.def); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\treturn nil\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method init\n\nfunc (s *Store) init() error {\n\t_, err := s.db.Exec(`\n\t\tCREATE TABLE IF NOT EXISTS files (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tpath TEXT NOT NULL,\n\t\t\tmodel_name TEXT NOT NULL,\n\t\t\tembedding_version INTEGER NOT NULL,\n\t\t\tblob_sha TEXT NOT NULL,\n\t\t\tUNIQUE(path, model_name, embedding_version)\n\t\t);\n\t\tCREATE TABLE IF NOT EXISTS chunks (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tfile_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,\n\t\t\ttext TEXT NOT NULL,\n\t\t\tcontextualized_text TEXT NOT NULL,\n\t\t\theading_context TEXT NOT NULL DEFAULT '',\n\t\t\tstart_line INTEGER NOT NULL,\n\t\t\tstart_col INTEGER NOT NULL,\n\t\t\tend_line INTEGER NOT NULL,\n\t\t\tend_col INTEGER NOT NULL\n\t\t);\n\t`)\n\tif err != nil {\n\t\treturn err\n\t}\n\t// addColumn applies an idempotent ALTER TABLE migration, tolerating the\n\t// \"duplicate column name\" error so re-opening an already-migrated db is a\n\t// no-op.\n\taddColumn := func(table, def string) error {\n\t\t_, aerr := s.db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s`, table, def))\n\t\tif aerr != nil \u0026\u0026 !strings.Contains(aerr.Error(), \"duplicate column name\") {\n\t\t\treturn aerr\n\t\t}\n\t\treturn nil\n\t}\n\t// Migrate pre-existing databases that lack the newer columns.\n\tfor _, m := range []struct{ table, def string }{\n\t\t{\"chunks\", \"heading_context TEXT NOT NULL DEFAULT ''\"},\n\t} {\n\t\tif err := addColumn(m.table, m.def); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\treturn nil\n}",
+      "headingContext": "internal/store/store.go \u003e method init",
+      "startLine": 68,
+      "startCol": 1,
+      "endLine": 112,
+      "endCol": 2
+    },
+    {
+      "text": "var nonIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)",
+      "contextualizedText": "// internal/store/store.go\n\nvar nonIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)",
+      "headingContext": "internal/store/store.go",
+      "startLine": 114,
+      "startCol": 1,
+      "endLine": 114,
+      "endCol": 51
+    },
+    {
+      "text": "func vecTableName(modelName string, version int) string {\n\treturn fmt.Sprintf(\"vec_%s_v%d\", nonIdent.ReplaceAllString(modelName, \"_\"), version)\n}",
+      "contextualizedText": "// internal/store/store.go \u003e function vecTableName\n\nfunc vecTableName(modelName string, version int) string {\n\treturn fmt.Sprintf(\"vec_%s_v%d\", nonIdent.ReplaceAllString(modelName, \"_\"), version)\n}",
+      "headingContext": "internal/store/store.go \u003e function vecTableName",
+      "startLine": 116,
+      "startCol": 1,
+      "endLine": 118,
+      "endCol": 2
+    },
+    {
+      "text": "// EnsureVecTable creates the vec0 table for a model if it does not exist.\nfunc (s *Store) EnsureVecTable(modelName string, dims int) error {\n\tname := vecTableName(modelName, MajorVersion)\n\t_, err := s.db.Exec(fmt.Sprintf(\n\t\t`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(chunk_id INTEGER PRIMARY KEY, embedding float[%d] distance_metric=cosine)`,\n\t\tname, dims))\n\treturn err\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method EnsureVecTable\n\n// EnsureVecTable creates the vec0 table for a model if it does not exist.\nfunc (s *Store) EnsureVecTable(modelName string, dims int) error {\n\tname := vecTableName(modelName, MajorVersion)\n\t_, err := s.db.Exec(fmt.Sprintf(\n\t\t`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(chunk_id INTEGER PRIMARY KEY, embedding float[%d] distance_metric=cosine)`,\n\t\tname, dims))\n\treturn err\n}",
+      "headingContext": "internal/store/store.go \u003e method EnsureVecTable",
+      "startLine": 120,
+      "startCol": 1,
+      "endLine": 127,
+      "endCol": 2
+    },
+    {
+      "text": "// FileMeta records the reuse-relevant metadata stored for an indexed file: the\n// blob sha.\ntype FileMeta struct {\n\tSha string\n}",
+      "contextualizedText": "// internal/store/store.go \u003e type FileMeta\n\n// FileMeta records the reuse-relevant metadata stored for an indexed file: the\n// blob sha.\ntype FileMeta struct {\n\tSha string\n}",
+      "headingContext": "internal/store/store.go \u003e type FileMeta",
+      "startLine": 129,
+      "startCol": 1,
+      "endLine": 133,
+      "endCol": 2
+    },
+    {
+      "text": "// IndexedFiles returns a map of relative path -\u003e FileMeta for files already\n// indexed by the given model.\nfunc (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {\n\trows, err := s.db.Query(\n\t\t`SELECT path, blob_sha FROM files WHERE model_name = ? AND embedding_version = ?`,\n\t\tmodelName, MajorVersion)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n\tout := map[string]FileMeta{}\n\tfor rows.Next() {\n\t\tvar path, sha string\n\t\tif err := rows.Scan(\u0026path, \u0026sha); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tout[path] = FileMeta{Sha: sha}\n\t}\n\treturn out, rows.Err()\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method IndexedFiles\n\n// IndexedFiles returns a map of relative path -\u003e FileMeta for files already\n// indexed by the given model.\nfunc (s *Store) IndexedFiles(modelName string) (map[string]FileMeta, error) {\n\trows, err := s.db.Query(\n\t\t`SELECT path, blob_sha FROM files WHERE model_name = ? AND embedding_version = ?`,\n\t\tmodelName, MajorVersion)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n\tout := map[string]FileMeta{}\n\tfor rows.Next() {\n\t\tvar path, sha string\n\t\tif err := rows.Scan(\u0026path, \u0026sha); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tout[path] = FileMeta{Sha: sha}\n\t}\n\treturn out, rows.Err()\n}",
+      "headingContext": "internal/store/store.go \u003e method IndexedFiles",
+      "startLine": 135,
+      "startCol": 1,
+      "endLine": 154,
+      "endCol": 2
+    },
+    {
+      "text": "// DeleteFile removes a file's row, its chunks, and its vec entries.\nfunc (s *Store) DeleteFile(path, modelName string) error {\n\ttx, err := s.db.Begin()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer tx.Rollback()\n\tif err := deleteFileTx(tx, path, modelName); err != nil {\n\t\treturn err\n\t}\n\treturn tx.Commit()\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method DeleteFile\n\n// DeleteFile removes a file's row, its chunks, and its vec entries.\nfunc (s *Store) DeleteFile(path, modelName string) error {\n\ttx, err := s.db.Begin()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer tx.Rollback()\n\tif err := deleteFileTx(tx, path, modelName); err != nil {\n\t\treturn err\n\t}\n\treturn tx.Commit()\n}",
+      "headingContext": "internal/store/store.go \u003e method DeleteFile",
+      "startLine": 156,
+      "startCol": 1,
+      "endLine": 167,
+      "endCol": 2
+    },
+    {
+      "text": "func deleteFileTx(tx *sql.Tx, path, modelName string) error {\n\tvar fileID int64\n\terr := tx.QueryRow(\n\t\t`SELECT id FROM files WHERE path = ? AND model_name = ? AND embedding_version = ?`,\n\t\tpath, modelName, MajorVersion).Scan(\u0026fileID)\n\tif err == sql.ErrNoRows {\n\t\treturn nil\n\t}\n\tif err != nil {\n\t\treturn err\n\t}\n\tvec := vecTableName(modelName, MajorVersion)\n\tif _, err := tx.Exec(fmt.Sprintf(\n\t\t`DELETE FROM %s WHERE chunk_id IN (SELECT id FROM chunks WHERE file_id = ?)`, vec), fileID); err != nil {\n\t\treturn err\n\t}\n\tif _, err := tx.Exec(`DELETE FROM chunks WHERE file_id = ?`, fileID); err != nil {\n\t\treturn err\n\t}\n\t_, err = tx.Exec(`DELETE FROM files WHERE id = ?`, fileID)\n\treturn err\n}",
+      "contextualizedText": "// internal/store/store.go \u003e function deleteFileTx\n\nfunc deleteFileTx(tx *sql.Tx, path, modelName string) error {\n\tvar fileID int64\n\terr := tx.QueryRow(\n\t\t`SELECT id FROM files WHERE path = ? AND model_name = ? AND embedding_version = ?`,\n\t\tpath, modelName, MajorVersion).Scan(\u0026fileID)\n\tif err == sql.ErrNoRows {\n\t\treturn nil\n\t}\n\tif err != nil {\n\t\treturn err\n\t}\n\tvec := vecTableName(modelName, MajorVersion)\n\tif _, err := tx.Exec(fmt.Sprintf(\n\t\t`DELETE FROM %s WHERE chunk_id IN (SELECT id FROM chunks WHERE file_id = ?)`, vec), fileID); err != nil {\n\t\treturn err\n\t}\n\tif _, err := tx.Exec(`DELETE FROM chunks WHERE file_id = ?`, fileID); err != nil {\n\t\treturn err\n\t}\n\t_, err = tx.Exec(`DELETE FROM files WHERE id = ?`, fileID)\n\treturn err\n}",
+      "headingContext": "internal/store/store.go \u003e function deleteFileTx",
+      "startLine": 169,
+      "startCol": 1,
+      "endLine": 190,
+      "endCol": 2
+    },
+    {
+      "text": "// PutFile (re)indexes a single file in one transaction: it deletes any existing\n// rows for the path, inserts the file row recording the new blob sha, then\n// inserts every chunk (with its vector). Because the whole write is a single\n// transaction, a crash leaves the previously committed state intact, so the\n// file is simply reindexed on the next run; expensive embedding work has\n// already been done in memory by the caller before this is invoked.\nfunc (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInfo, contextualized []string, embeddings []embed.Embedding) error {\n\ttx, err := s.db.Begin()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer tx.Rollback()\n\n\tif err := deleteFileTx(tx, path, modelName); err != nil {\n\t\treturn err\n\t}\n\n\tres, err := tx.Exec(\n\t\t`INSERT INTO files (path, model_name, embedding_version, blob_sha) VALUES (?, ?, ?, ?)`,\n\t\tpath, modelName, MajorVersion, blobSha)\n\tif err != nil {\n\t\treturn err\n\t}\n\tfileID, err := res.LastInsertId()\n\tif err != nil {\n\t\treturn err\n\t}\n\n\tvec := vecTableName(modelName, MajorVersion)\n\tfor i, c := range chunks {\n\t\tcres, err := tx.Exec(\n\t\t\t`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col)\n\t\t\t VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,\n\t\t\tfileID, c.Text, contextualized[i], c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tchunkID, err := cres.LastInsertId()\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tblob, err := sqlite_vec.SerializeFloat32(embeddings[i])\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tif _, err := tx.Exec(fmt.Sprintf(`INSERT INTO %s (chunk_id, embedding) VALUES (?, ?)`, vec), chunkID, blob); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\n\treturn tx.Commit()\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method PutFile\n\n// PutFile (re)indexes a single file in one transaction: it deletes any existing\n// rows for the path, inserts the file row recording the new blob sha, then\n// inserts every chunk (with its vector). Because the whole write is a single\n// transaction, a crash leaves the previously committed state intact, so the\n// file is simply reindexed on the next run; expensive embedding work has\n// already been done in memory by the caller before this is invoked.\nfunc (s *Store) PutFile(path, modelName, blobSha string, chunks []chunk.ChunkInfo, contextualized []string, embeddings []embed.Embedding) error {\n\ttx, err := s.db.Begin()\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer tx.Rollback()\n\n\tif err := deleteFileTx(tx, path, modelName); err != nil {\n\t\treturn err\n\t}\n\n\tres, err := tx.Exec(\n\t\t`INSERT INTO files (path, model_name, embedding_version, blob_sha) VALUES (?, ?, ?, ?)`,\n\t\tpath, modelName, MajorVersion, blobSha)\n\tif err != nil {\n\t\treturn err\n\t}\n\tfileID, err := res.LastInsertId()\n\tif err != nil {\n\t\treturn err\n\t}\n\n\tvec := vecTableName(modelName, MajorVersion)\n\tfor i, c := range chunks {\n\t\tcres, err := tx.Exec(\n\t\t\t`INSERT INTO chunks (file_id, text, contextualized_text, heading_context, start_line, start_col, end_line, end_col)\n\t\t\t VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,\n\t\t\tfileID, c.Text, contextualized[i], c.HeadingContext, c.Start.Line, c.Start.Col, c.End.Line, c.End.Col)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tchunkID, err := cres.LastInsertId()\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tblob, err := sqlite_vec.SerializeFloat32(embeddings[i])\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tif _, err := tx.Exec(fmt.Sprintf(`INSERT INTO %s (chunk_id, embedding) VALUES (?, ?)`, vec), chunkID, blob); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\n\treturn tx.Commit()\n}",
+      "headingContext": "internal/store/store.go \u003e method PutFile",
+      "startLine": 192,
+      "startCol": 1,
+      "endLine": 243,
+      "endCol": 2
+    },
+    {
+      "text": "// ChunkKey is the reuse key for a chunk: the deterministic inputs to its\n// embedding (heading breadcrumb + raw text). A chunk re-embeds when its text or\n// any parent heading/breadcrumb changes, but is reused otherwise.\nfunc ChunkKey(headingContext, text string) string {\n\treturn headingContext + \"\\x00\" + text\n}",
+      "contextualizedText": "// internal/store/store.go \u003e function ChunkKey\n\n// ChunkKey is the reuse key for a chunk: the deterministic inputs to its\n// embedding (heading breadcrumb + raw text). A chunk re-embeds when its text or\n// any parent heading/breadcrumb changes, but is reused otherwise.\nfunc ChunkKey(headingContext, text string) string {\n\treturn headingContext + \"\\x00\" + text\n}",
+      "headingContext": "internal/store/store.go \u003e function ChunkKey",
+      "startLine": 245,
+      "startCol": 1,
+      "endLine": 250,
+      "endCol": 2
+    },
+    {
+      "text": "// ChunkEmbeddings returns a map of ChunkKey -\u003e embedding for a path/model, so an\n// incremental reindex can reuse vectors for unchanged chunks instead of\n// re-embedding them. Duplicate keys collapse harmlessly (identical\n// deterministic input yields an identical embedding).\nfunc (s *Store) ChunkEmbeddings(path, modelName string) (map[string]embed.Embedding, error) {\n\tvec := vecTableName(modelName, MajorVersion)\n\trows, err := s.db.Query(fmt.Sprintf(\n\t\t`SELECT c.heading_context, c.text, v.embedding\n\t\t FROM chunks c\n\t\t JOIN files f ON f.id = c.file_id\n\t\t JOIN %s v ON v.chunk_id = c.id\n\t\t WHERE f.path = ? AND f.model_name = ? AND f.embedding_version = ?`, vec),\n\t\tpath, modelName, MajorVersion)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n\tout := map[string]embed.Embedding{}\n\tfor rows.Next() {\n\t\tvar headingContext, text string\n\t\tvar blob []byte\n\t\tif err := rows.Scan(\u0026headingContext, \u0026text, \u0026blob); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tout[ChunkKey(headingContext, text)] = deserializeFloat32(blob)\n\t}\n\treturn out, rows.Err()\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method ChunkEmbeddings\n\n// ChunkEmbeddings returns a map of ChunkKey -\u003e embedding for a path/model, so an\n// incremental reindex can reuse vectors for unchanged chunks instead of\n// re-embedding them. Duplicate keys collapse harmlessly (identical\n// deterministic input yields an identical embedding).\nfunc (s *Store) ChunkEmbeddings(path, modelName string) (map[string]embed.Embedding, error) {\n\tvec := vecTableName(modelName, MajorVersion)\n\trows, err := s.db.Query(fmt.Sprintf(\n\t\t`SELECT c.heading_context, c.text, v.embedding\n\t\t FROM chunks c\n\t\t JOIN files f ON f.id = c.file_id\n\t\t JOIN %s v ON v.chunk_id = c.id\n\t\t WHERE f.path = ? AND f.model_name = ? AND f.embedding_version = ?`, vec),\n\t\tpath, modelName, MajorVersion)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n\tout := map[string]embed.Embedding{}\n\tfor rows.Next() {\n\t\tvar headingContext, text string\n\t\tvar blob []byte\n\t\tif err := rows.Scan(\u0026headingContext, \u0026text, \u0026blob); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tout[ChunkKey(headingContext, text)] = deserializeFloat32(blob)\n\t}\n\treturn out, rows.Err()\n}",
+      "headingContext": "internal/store/store.go \u003e method ChunkEmbeddings",
+      "startLine": 252,
+      "startCol": 1,
+      "endLine": 279,
+      "endCol": 2
+    },
+    {
+      "text": "func deserializeFloat32(b []byte) embed.Embedding {\n\tout := make(embed.Embedding, len(b)/4)\n\tfor i := range out {\n\t\tout[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[i*4:]))\n\t}\n\treturn out\n}",
+      "contextualizedText": "// internal/store/store.go \u003e function deserializeFloat32\n\nfunc deserializeFloat32(b []byte) embed.Embedding {\n\tout := make(embed.Embedding, len(b)/4)\n\tfor i := range out {\n\t\tout[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[i*4:]))\n\t}\n\treturn out\n}",
+      "headingContext": "internal/store/store.go \u003e function deserializeFloat32",
+      "startLine": 281,
+      "startCol": 1,
+      "endLine": 287,
+      "endCol": 2
+    },
+    {
+      "text": "// CleanupOrphans drops vec tables and removes files/chunks rows for any model\n// that is not in activeModels (at the current MajorVersion). This is how a\n// model-name change reclaims storage instead of silently mixing vectors.\nfunc (s *Store) CleanupOrphans(activeModels []string) error {\n\tkeep := map[string]struct{}{}\n\tfor _, m := range activeModels {\n\t\tkeep[vecTableName(m, MajorVersion)] = struct{}{}\n\t}\n\n\trows, err := s.db.Query(\n\t\t`SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%USING vec0%'`)\n\tif err != nil {\n\t\treturn err\n\t}\n\tvar tables []string\n\tfor rows.Next() {\n\t\tvar name string\n\t\tif err := rows.Scan(\u0026name); err != nil {\n\t\t\trows.Close()\n\t\t\treturn err\n\t\t}\n\t\ttables = append(tables, name)\n\t}\n\tif err := rows.Err(); err != nil {\n\t\trows.Close()\n\t\treturn err\n\t}\n\trows.Close()\n\n\tfor _, name := range tables {\n\t\tif _, ok := keep[name]; ok {\n\t\t\tcontinue\n\t\t}\n\t\tif _, err := s.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\n\t// Remove files/chunks rows whose model is no longer active.\n\tmrows, err := s.db.Query(`SELECT DISTINCT model_name FROM files`)\n\tif err != nil {\n\t\treturn err\n\t}\n\tvar models []string\n\tfor mrows.Next() {\n\t\tvar m string\n\t\tif err := mrows.Scan(\u0026m); err != nil {\n\t\t\tmrows.Close()\n\t\t\treturn err\n\t\t}\n\t\tmodels = append(models, m)\n\t}\n\tif err := mrows.Err(); err != nil {\n\t\tmrows.Close()\n\t\treturn err\n\t}\n\tmrows.Close()\n\n\tactive := map[string]struct{}{}\n\tfor _, m := range activeModels {\n\t\tactive[m] = struct{}{}\n\t}\n\tfor _, m := range models {\n\t\tif _, ok := active[m]; ok {\n\t\t\tcontinue\n\t\t}\n\t\tif _, err := s.db.Exec(\n\t\t\t`DELETE FROM chunks WHERE file_id IN (SELECT id FROM files WHERE model_name = ?)`, m); err != nil {\n\t\t\treturn err\n\t\t}\n\t\tif _, err := s.db.Exec(`DELETE FROM files WHERE model_name = ?`, m); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\treturn nil\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method CleanupOrphans\n\n// CleanupOrphans drops vec tables and removes files/chunks rows for any model\n// that is not in activeModels (at the current MajorVersion). This is how a\n// model-name change reclaims storage instead of silently mixing vectors.\nfunc (s *Store) CleanupOrphans(activeModels []string) error {\n\tkeep := map[string]struct{}{}\n\tfor _, m := range activeModels {\n\t\tkeep[vecTableName(m, MajorVersion)] = struct{}{}\n\t}\n\n\trows, err := s.db.Query(\n\t\t`SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%USING vec0%'`)\n\tif err != nil {\n\t\treturn err\n\t}\n\tvar tables []string\n\tfor rows.Next() {\n\t\tvar name string\n\t\tif err := rows.Scan(\u0026name); err != nil {\n\t\t\trows.Close()\n\t\t\treturn err\n\t\t}\n\t\ttables = append(tables, name)\n\t}\n\tif err := rows.Err(); err != nil {\n\t\trows.Close()\n\t\treturn err\n\t}\n\trows.Close()\n\n\tfor _, name := range tables {\n\t\tif _, ok := keep[name]; ok {\n\t\t\tcontinue\n\t\t}\n\t\tif _, err := s.db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\n\t// Remove files/chunks rows whose model is no longer active.\n\tmrows, err := s.db.Query(`SELECT DISTINCT model_name FROM files`)\n\tif err != nil {\n\t\treturn err\n\t}\n\tvar models []string\n\tfor mrows.Next() {\n\t\tvar m string\n\t\tif err := mrows.Scan(\u0026m); err != nil {\n\t\t\tmrows.Close()\n\t\t\treturn err\n\t\t}\n\t\tmodels = append(models, m)\n\t}\n\tif err := mrows.Err(); err != nil {\n\t\tmrows.Close()\n\t\treturn err\n\t}\n\tmrows.Close()\n\n\tactive := map[string]struct{}{}\n\tfor _, m := range activeModels {\n\t\tactive[m] = struct{}{}\n\t}\n\tfor _, m := range models {\n\t\tif _, ok := active[m]; ok {\n\t\t\tcontinue\n\t\t}\n\t\tif _, err := s.db.Exec(\n\t\t\t`DELETE FROM chunks WHERE file_id IN (SELECT id FROM files WHERE model_name = ?)`, m); err != nil {\n\t\t\treturn err\n\t\t}\n\t\tif _, err := s.db.Exec(`DELETE FROM files WHERE model_name = ?`, m); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\treturn nil\n}",
+      "headingContext": "internal/store/store.go \u003e method CleanupOrphans",
+      "startLine": 289,
+      "startCol": 1,
+      "endLine": 364,
+      "endCol": 2
+    },
+    {
+      "text": "// SearchResult is one hit from a vector search.\ntype SearchResult struct {\n\tPath           string\n\tText           string\n\tHeadingContext string\n\tStartLine      int\n\tEndLine        int\n\tScore          float64\n}",
+      "contextualizedText": "// internal/store/store.go \u003e type SearchResult\n\n// SearchResult is one hit from a vector search.\ntype SearchResult struct {\n\tPath           string\n\tText           string\n\tHeadingContext string\n\tStartLine      int\n\tEndLine        int\n\tScore          float64\n}",
+      "headingContext": "internal/store/store.go \u003e type SearchResult",
+      "startLine": 366,
+      "startCol": 1,
+      "endLine": 374,
+      "endCol": 2
+    },
+    {
+      "text": "// Search queries a model's vec table for the topK nearest chunks to the query\n// embedding.\nfunc (s *Store) Search(modelName string, query embed.Embedding, topK int) ([]SearchResult, error) {\n\tvec := vecTableName(modelName, MajorVersion)\n\tblob, err := sqlite_vec.SerializeFloat32(query)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\trows, err := s.db.Query(fmt.Sprintf(\n\t\t`SELECT f.path, c.text, c.heading_context, c.start_line, c.end_line, v.distance\n\t\t FROM %s v\n\t\t JOIN chunks c ON c.id = v.chunk_id\n\t\t JOIN files f ON f.id = c.file_id\n\t\t WHERE v.embedding MATCH ? AND v.k = ?\n\t\t ORDER BY v.distance`, vec), blob, topK)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n\tvar results []SearchResult\n\tfor rows.Next() {\n\t\tvar r SearchResult\n\t\tvar distance float64\n\t\tif err := rows.Scan(\u0026r.Path, \u0026r.Text, \u0026r.HeadingContext, \u0026r.StartLine, \u0026r.EndLine, \u0026distance); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tr.Score = 1 - distance\n\t\tresults = append(results, r)\n\t}\n\treturn results, rows.Err()\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method Search\n\n// Search queries a model's vec table for the topK nearest chunks to the query\n// embedding.\nfunc (s *Store) Search(modelName string, query embed.Embedding, topK int) ([]SearchResult, error) {\n\tvec := vecTableName(modelName, MajorVersion)\n\tblob, err := sqlite_vec.SerializeFloat32(query)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\trows, err := s.db.Query(fmt.Sprintf(\n\t\t`SELECT f.path, c.text, c.heading_context, c.start_line, c.end_line, v.distance\n\t\t FROM %s v\n\t\t JOIN chunks c ON c.id = v.chunk_id\n\t\t JOIN files f ON f.id = c.file_id\n\t\t WHERE v.embedding MATCH ? AND v.k = ?\n\t\t ORDER BY v.distance`, vec), blob, topK)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n\tvar results []SearchResult\n\tfor rows.Next() {\n\t\tvar r SearchResult\n\t\tvar distance float64\n\t\tif err := rows.Scan(\u0026r.Path, \u0026r.Text, \u0026r.HeadingContext, \u0026r.StartLine, \u0026r.EndLine, \u0026distance); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tr.Score = 1 - distance\n\t\tresults = append(results, r)\n\t}\n\treturn results, rows.Err()\n}",
+      "headingContext": "internal/store/store.go \u003e method Search",
+      "startLine": 376,
+      "startCol": 1,
+      "endLine": 406,
+      "endCol": 2
+    },
+    {
+      "text": "// Stats holds index counts for a model.\ntype Stats struct {\n\tFiles  int\n\tChunks int\n}",
+      "contextualizedText": "// internal/store/store.go \u003e type Stats\n\n// Stats holds index counts for a model.\ntype Stats struct {\n\tFiles  int\n\tChunks int\n}",
+      "headingContext": "internal/store/store.go \u003e type Stats",
+      "startLine": 408,
+      "startCol": 1,
+      "endLine": 412,
+      "endCol": 2
+    },
+    {
+      "text": "// Stats returns file and chunk counts for a model.\nfunc (s *Store) Stats(modelName string) (Stats, error) {\n\tvar st Stats\n\terr := s.db.QueryRow(\n\t\t`SELECT COUNT(*) FROM files WHERE model_name = ? AND embedding_version = ?`,\n\t\tmodelName, MajorVersion).Scan(\u0026st.Files)\n\tif err != nil {\n\t\treturn st, err\n\t}\n\terr = s.db.QueryRow(\n\t\t`SELECT COUNT(*) FROM chunks c JOIN files f ON c.file_id = f.id\n\t\t WHERE f.model_name = ? AND f.embedding_version = ?`,\n\t\tmodelName, MajorVersion).Scan(\u0026st.Chunks)\n\treturn st, err\n}",
+      "contextualizedText": "// internal/store/store.go \u003e method Stats\n\n// Stats returns file and chunk counts for a model.\nfunc (s *Store) Stats(modelName string) (Stats, error) {\n\tvar st Stats\n\terr := s.db.QueryRow(\n\t\t`SELECT COUNT(*) FROM files WHERE model_name = ? AND embedding_version = ?`,\n\t\tmodelName, MajorVersion).Scan(\u0026st.Files)\n\tif err != nil {\n\t\treturn st, err\n\t}\n\terr = s.db.QueryRow(\n\t\t`SELECT COUNT(*) FROM chunks c JOIN files f ON c.file_id = f.id\n\t\t WHERE f.model_name = ? AND f.embedding_version = ?`,\n\t\tmodelName, MajorVersion).Scan(\u0026st.Chunks)\n\treturn st, err\n}",
+      "headingContext": "internal/store/store.go \u003e method Stats",
+      "startLine": 414,
+      "startCol": 1,
+      "endLine": 428,
+      "endCol": 2
+    }
+  ]
+}

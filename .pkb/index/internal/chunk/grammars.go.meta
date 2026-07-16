@@ -1,0 +1,33 @@
+{
+  "blobSha": "f13c77e0e6a97347ea0b59b412777092f63d8417",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package chunk\n\nimport (\n\ttshcl \"github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go\"\n\ttstoml \"github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go\"\n\ttsyaml \"github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go\"\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n\ttsgo \"github.com/tree-sitter/tree-sitter-go/bindings/go\"\n\ttsjs \"github.com/tree-sitter/tree-sitter-javascript/bindings/go\"\n\ttsjson \"github.com/tree-sitter/tree-sitter-json/bindings/go\"\n\ttspy \"github.com/tree-sitter/tree-sitter-python/bindings/go\"\n\ttsrust \"github.com/tree-sitter/tree-sitter-rust/bindings/go\"\n\ttsts \"github.com/tree-sitter/tree-sitter-typescript/bindings/go\"\n)\n\n// grammars maps a grammar name (as produced by filetype routing) to a factory\n// for its tree-sitter Language. Grammars are statically linked into the binary\n// via cgo, so construction is cheap and never fails.\nvar grammars = map[string]func() *tree_sitter.Language{\n\t\"go\":         func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsgo.Language()) },\n\t\"javascript\": func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsjs.Language()) },\n\t\"python\":     func() *tree_sitter.Language { return tree_sitter.NewLanguage(tspy.Language()) },\n\t\"rust\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsrust.Language()) },\n\t\"typescript\": func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTypescript()) },\n\t\"tsx\":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTSX()) },\n\t\"hcl\":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tshcl.Language()) },\n\t\"json\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsjson.Language()) },\n\t\"toml\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tstoml.Language()) },\n\t\"yaml\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsyaml.Language()) },\n}",
+      "contextualizedText": "// internal/chunk/grammars.go\n\npackage chunk\n\nimport (\n\ttshcl \"github.com/tree-sitter-grammars/tree-sitter-hcl/bindings/go\"\n\ttstoml \"github.com/tree-sitter-grammars/tree-sitter-toml/bindings/go\"\n\ttsyaml \"github.com/tree-sitter-grammars/tree-sitter-yaml/bindings/go\"\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n\ttsgo \"github.com/tree-sitter/tree-sitter-go/bindings/go\"\n\ttsjs \"github.com/tree-sitter/tree-sitter-javascript/bindings/go\"\n\ttsjson \"github.com/tree-sitter/tree-sitter-json/bindings/go\"\n\ttspy \"github.com/tree-sitter/tree-sitter-python/bindings/go\"\n\ttsrust \"github.com/tree-sitter/tree-sitter-rust/bindings/go\"\n\ttsts \"github.com/tree-sitter/tree-sitter-typescript/bindings/go\"\n)\n\n// grammars maps a grammar name (as produced by filetype routing) to a factory\n// for its tree-sitter Language. Grammars are statically linked into the binary\n// via cgo, so construction is cheap and never fails.\nvar grammars = map[string]func() *tree_sitter.Language{\n\t\"go\":         func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsgo.Language()) },\n\t\"javascript\": func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsjs.Language()) },\n\t\"python\":     func() *tree_sitter.Language { return tree_sitter.NewLanguage(tspy.Language()) },\n\t\"rust\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsrust.Language()) },\n\t\"typescript\": func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTypescript()) },\n\t\"tsx\":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsts.LanguageTSX()) },\n\t\"hcl\":        func() *tree_sitter.Language { return tree_sitter.NewLanguage(tshcl.Language()) },\n\t\"json\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsjson.Language()) },\n\t\"toml\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tstoml.Language()) },\n\t\"yaml\":       func() *tree_sitter.Language { return tree_sitter.NewLanguage(tsyaml.Language()) },\n}",
+      "headingContext": "internal/chunk/grammars.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 30,
+      "endCol": 2
+    },
+    {
+      "text": "// HasGrammar reports whether a tree-sitter grammar is available for the name.\nfunc HasGrammar(name string) bool {\n\t_, ok := grammars[name]\n\treturn ok\n}",
+      "contextualizedText": "// internal/chunk/grammars.go \u003e function HasGrammar\n\n// HasGrammar reports whether a tree-sitter grammar is available for the name.\nfunc HasGrammar(name string) bool {\n\t_, ok := grammars[name]\n\treturn ok\n}",
+      "headingContext": "internal/chunk/grammars.go \u003e function HasGrammar",
+      "startLine": 32,
+      "startCol": 1,
+      "endLine": 36,
+      "endCol": 2
+    },
+    {
+      "text": "// languageFor returns the tree-sitter Language for a grammar name, or nil if\n// the grammar is not registered.\nfunc languageFor(name string) *tree_sitter.Language {\n\tif f, ok := grammars[name]; ok {\n\t\treturn f()\n\t}\n\treturn nil\n}",
+      "contextualizedText": "// internal/chunk/grammars.go \u003e function languageFor\n\n// languageFor returns the tree-sitter Language for a grammar name, or nil if\n// the grammar is not registered.\nfunc languageFor(name string) *tree_sitter.Language {\n\tif f, ok := grammars[name]; ok {\n\t\treturn f()\n\t}\n\treturn nil\n}",
+      "headingContext": "internal/chunk/grammars.go \u003e function languageFor",
+      "startLine": 38,
+      "startCol": 1,
+      "endLine": 45,
+      "endCol": 2
+    }
+  ]
+}

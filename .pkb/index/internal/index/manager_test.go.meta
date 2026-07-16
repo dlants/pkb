@@ -1,0 +1,483 @@
+{
+  "blobSha": "56b1ca4a8d333d0f0e7dd7da0bc5dbda562c89ce",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package index\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\t\"os/exec\"\n\t\"path/filepath\"\n\t\"strings\"\n\t\"sync\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/mirror\"\n\t\"github.com/dlants/pkb/internal/paths\"\n\t\"github.com/dlants/pkb/internal/store\"\n\t\"github.com/stretchr/testify/require\"\n)",
+      "contextualizedText": "// internal/index/manager_test.go\n\npackage index\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\t\"os/exec\"\n\t\"path/filepath\"\n\t\"strings\"\n\t\"sync\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/mirror\"\n\t\"github.com/dlants/pkb/internal/paths\"\n\t\"github.com/dlants/pkb/internal/store\"\n\t\"github.com/stretchr/testify/require\"\n)",
+      "headingContext": "internal/index/manager_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 19,
+      "endCol": 2
+    },
+    {
+      "text": "type harness struct {\n\tt    *testing.T\n\troot string\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e type harness\n\ntype harness struct {\n\tt    *testing.T\n\troot string\n}",
+      "headingContext": "internal/index/manager_test.go \u003e type harness",
+      "startLine": 21,
+      "startCol": 1,
+      "endLine": 24,
+      "endCol": 2
+    },
+    {
+      "text": "func newHarness(t *testing.T) *harness {\n\tt.Helper()\n\troot := t.TempDir()\n\th := \u0026harness{t: t, root: root}\n\th.git(\"init\")\n\th.git(\"config\", \"user.email\", \"test@example.com\")\n\th.git(\"config\", \"user.name\", \"Test\")\n\th.git(\"config\", \"commit.gpgsign\", \"false\")\n\th.git(\"checkout\", \"-b\", \"master\")\n\treturn h\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function newHarness\n\nfunc newHarness(t *testing.T) *harness {\n\tt.Helper()\n\troot := t.TempDir()\n\th := \u0026harness{t: t, root: root}\n\th.git(\"init\")\n\th.git(\"config\", \"user.email\", \"test@example.com\")\n\th.git(\"config\", \"user.name\", \"Test\")\n\th.git(\"config\", \"commit.gpgsign\", \"false\")\n\th.git(\"checkout\", \"-b\", \"master\")\n\treturn h\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function newHarness",
+      "startLine": 26,
+      "startCol": 1,
+      "endLine": 36,
+      "endCol": 2
+    },
+    {
+      "text": "func (h *harness) git(args ...string) string {\n\th.t.Helper()\n\tcmd := exec.Command(\"git\", args...)\n\tcmd.Dir = h.root\n\tout, err := cmd.CombinedOutput()\n\trequire.NoErrorf(h.t, err, \"git %v: %s\", args, out)\n\treturn string(out)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method git\n\nfunc (h *harness) git(args ...string) string {\n\th.t.Helper()\n\tcmd := exec.Command(\"git\", args...)\n\tcmd.Dir = h.root\n\tout, err := cmd.CombinedOutput()\n\trequire.NoErrorf(h.t, err, \"git %v: %s\", args, out)\n\treturn string(out)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method git",
+      "startLine": 38,
+      "startCol": 1,
+      "endLine": 45,
+      "endCol": 2
+    },
+    {
+      "text": "func (h *harness) write(rel, content string) {\n\th.t.Helper()\n\tfull := filepath.Join(h.root, rel)\n\trequire.NoError(h.t, os.MkdirAll(filepath.Dir(full), 0o755))\n\trequire.NoError(h.t, os.WriteFile(full, []byte(content), 0o644))\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method write\n\nfunc (h *harness) write(rel, content string) {\n\th.t.Helper()\n\tfull := filepath.Join(h.root, rel)\n\trequire.NoError(h.t, os.MkdirAll(filepath.Dir(full), 0o755))\n\trequire.NoError(h.t, os.WriteFile(full, []byte(content), 0o644))\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method write",
+      "startLine": 47,
+      "startCol": 1,
+      "endLine": 52,
+      "endCol": 2
+    },
+    {
+      "text": "func (h *harness) remove(rel string) {\n\th.t.Helper()\n\trequire.NoError(h.t, os.Remove(filepath.Join(h.root, rel)))\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method remove\n\nfunc (h *harness) remove(rel string) {\n\th.t.Helper()\n\trequire.NoError(h.t, os.Remove(filepath.Join(h.root, rel)))\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method remove",
+      "startLine": 54,
+      "startCol": 1,
+      "endLine": 57,
+      "endCol": 2
+    },
+    {
+      "text": "func (h *harness) commit(msg string) string {\n\th.t.Helper()\n\th.git(\"add\", \"-A\")\n\th.git(\"commit\", \"-m\", msg, \"--allow-empty\")\n\treturn h.headSha()\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method commit\n\nfunc (h *harness) commit(msg string) string {\n\th.t.Helper()\n\th.git(\"add\", \"-A\")\n\th.git(\"commit\", \"-m\", msg, \"--allow-empty\")\n\treturn h.headSha()\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method commit",
+      "startLine": 59,
+      "startCol": 1,
+      "endLine": 64,
+      "endCol": 2
+    },
+    {
+      "text": "func (h *harness) headSha() string {\n\treturn chomp(h.git(\"rev-parse\", \"HEAD\"))\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method headSha\n\nfunc (h *harness) headSha() string {\n\treturn chomp(h.git(\"rev-parse\", \"HEAD\"))\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method headSha",
+      "startLine": 66,
+      "startCol": 1,
+      "endLine": 68,
+      "endCol": 2
+    },
+    {
+      "text": "func chomp(s string) string {\n\tfor len(s) \u003e 0 \u0026\u0026 (s[len(s)-1] == '\\n' || s[len(s)-1] == '\\r') {\n\t\ts = s[:len(s)-1]\n\t}\n\treturn s\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function chomp\n\nfunc chomp(s string) string {\n\tfor len(s) \u003e 0 \u0026\u0026 (s[len(s)-1] == '\\n' || s[len(s)-1] == '\\r') {\n\t\ts = s[:len(s)-1]\n\t}\n\treturn s\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function chomp",
+      "startLine": 70,
+      "startCol": 1,
+      "endLine": 75,
+      "endCol": 2
+    },
+    {
+      "text": "func (h *harness) opts(t *testing.T, model embed.EmbeddingModel) (*Options, *store.Store) {\n\tt.Helper()\n\trepo, err := git.Open(h.root)\n\trequire.NoError(t, err)\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\treturn \u0026Options{Repo: repo, Store: st, Model: model, Ignore: NewIgnore(nil)}, st\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method opts\n\nfunc (h *harness) opts(t *testing.T, model embed.EmbeddingModel) (*Options, *store.Store) {\n\tt.Helper()\n\trepo, err := git.Open(h.root)\n\trequire.NoError(t, err)\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\treturn \u0026Options{Repo: repo, Store: st, Model: model, Ignore: NewIgnore(nil)}, st\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method opts",
+      "startLine": 77,
+      "startCol": 1,
+      "endLine": 84,
+      "endCol": 2
+    },
+    {
+      "text": "func TestHealthcheckHealthyAndStale(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"b.md\", \"# B\\n\\nbeta content\")\n\th.commit(\"init\")\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\trep, err := Healthcheck(o)\n\trequire.NoError(t, err)\n\trequire.Empty(t, rep.Issues, \"expected healthy index, got: %v\", rep.Issues)\n\trequire.Equal(t, 2, rep.ExpectedFiles)\n\trequire.Equal(t, 2, rep.IndexedFiles)\n\n\t// Advance HEAD without reindexing: the index and state are now stale.\n\th.write(\"a.md\", \"# A\\n\\nalpha content changed\")\n\th.write(\"c.md\", \"# C\\n\\ngamma content\")\n\th.commit(\"changes\")\n\n\trep, err = Healthcheck(o)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, rep.Issues)\n\tmsgs := strings.Join(issueStrings(rep), \"\\n\")\n\trequire.Contains(t, msgs, \"c.md: expected file is missing from the index\")\n\trequire.Contains(t, msgs, \"a.md: stale blob\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestHealthcheckHealthyAndStale\n\nfunc TestHealthcheckHealthyAndStale(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"b.md\", \"# B\\n\\nbeta content\")\n\th.commit(\"init\")\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\trep, err := Healthcheck(o)\n\trequire.NoError(t, err)\n\trequire.Empty(t, rep.Issues, \"expected healthy index, got: %v\", rep.Issues)\n\trequire.Equal(t, 2, rep.ExpectedFiles)\n\trequire.Equal(t, 2, rep.IndexedFiles)\n\n\t// Advance HEAD without reindexing: the index and state are now stale.\n\th.write(\"a.md\", \"# A\\n\\nalpha content changed\")\n\th.write(\"c.md\", \"# C\\n\\ngamma content\")\n\th.commit(\"changes\")\n\n\trep, err = Healthcheck(o)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, rep.Issues)\n\tmsgs := strings.Join(issueStrings(rep), \"\\n\")\n\trequire.Contains(t, msgs, \"c.md: expected file is missing from the index\")\n\trequire.Contains(t, msgs, \"a.md: stale blob\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestHealthcheckHealthyAndStale",
+      "startLine": 86,
+      "startCol": 1,
+      "endLine": 115,
+      "endCol": 2
+    },
+    {
+      "text": "func issueStrings(rep HealthReport) []string {\n\tout := make([]string, len(rep.Issues))\n\tfor i, iss := range rep.Issues {\n\t\tif iss.Path == \"\" {\n\t\t\tout[i] = iss.Msg\n\t\t} else {\n\t\t\tout[i] = iss.Path + \": \" + iss.Msg\n\t\t}\n\t}\n\treturn out\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function issueStrings\n\nfunc issueStrings(rep HealthReport) []string {\n\tout := make([]string, len(rep.Issues))\n\tfor i, iss := range rep.Issues {\n\t\tif iss.Path == \"\" {\n\t\t\tout[i] = iss.Msg\n\t\t} else {\n\t\t\tout[i] = iss.Path + \": \" + iss.Msg\n\t\t}\n\t}\n\treturn out\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function issueStrings",
+      "startLine": 117,
+      "startCol": 1,
+      "endLine": 127,
+      "endCol": 2
+    },
+    {
+      "text": "func TestColdStartIndexesEverything(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"b.md\", \"# B\\n\\nbeta content\")\n\tsha := h.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, sha, state.Commit)\n\trequire.Equal(t, 2, state.FileCount)\n\trequire.Greater(t, model.DocumentCalls(), 0)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestColdStartIndexesEverything\n\nfunc TestColdStartIndexesEverything(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"b.md\", \"# B\\n\\nbeta content\")\n\tsha := h.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, sha, state.Commit)\n\trequire.Equal(t, 2, state.FileCount)\n\trequire.Greater(t, model.DocumentCalls(), 0)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestColdStartIndexesEverything",
+      "startLine": 129,
+      "startCol": 1,
+      "endLine": 144,
+      "endCol": 2
+    },
+    {
+      "text": "func TestNoOpWhenNothingChanged(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tcalls := model.DocumentCalls()\n\trequire.Greater(t, calls, 0)\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, calls, model.DocumentCalls(), \"second reindex should embed nothing\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestNoOpWhenNothingChanged\n\nfunc TestNoOpWhenNothingChanged(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tcalls := model.DocumentCalls()\n\trequire.Greater(t, calls, 0)\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, calls, model.DocumentCalls(), \"second reindex should embed nothing\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestNoOpWhenNothingChanged",
+      "startLine": 146,
+      "startCol": 1,
+      "endLine": 163,
+      "endCol": 2
+    },
+    {
+      "text": "func TestIncrementalAddModifyDelete(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"mod.md\", \"# Mod\\n\\noriginal\")\n\th.write(\"del.md\", \"# Del\\n\\ndelete me\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\th.write(\"add.md\", \"# Add\\n\\nbrand new\")\n\th.write(\"mod.md\", \"# Mod\\n\\nchanged content here\")\n\th.remove(\"del.md\")\n\tsha := h.commit(\"changes\")\n\n\tcallsBefore := model.DocumentCalls()\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, sha, state.Commit)\n\trequire.Equal(t, 3, state.FileCount) // keep, mod, add\n\trequire.Greater(t, model.DocumentCalls(), callsBefore)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"add.md\")\n\trequire.Contains(t, files, \"mod.md\")\n\trequire.Contains(t, files, \"keep.md\")\n\trequire.NotContains(t, files, \"del.md\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestIncrementalAddModifyDelete\n\nfunc TestIncrementalAddModifyDelete(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"mod.md\", \"# Mod\\n\\noriginal\")\n\th.write(\"del.md\", \"# Del\\n\\ndelete me\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\th.write(\"add.md\", \"# Add\\n\\nbrand new\")\n\th.write(\"mod.md\", \"# Mod\\n\\nchanged content here\")\n\th.remove(\"del.md\")\n\tsha := h.commit(\"changes\")\n\n\tcallsBefore := model.DocumentCalls()\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, sha, state.Commit)\n\trequire.Equal(t, 3, state.FileCount) // keep, mod, add\n\trequire.Greater(t, model.DocumentCalls(), callsBefore)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"add.md\")\n\trequire.Contains(t, files, \"mod.md\")\n\trequire.Contains(t, files, \"keep.md\")\n\trequire.NotContains(t, files, \"del.md\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestIncrementalAddModifyDelete",
+      "startLine": 165,
+      "startCol": 1,
+      "endLine": 197,
+      "endCol": 2
+    },
+    {
+      "text": "func TestStagedReindexIndexesUncommittedThenNoOp(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"committed.md\", \"# Committed\\n\\nalready committed content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Stage a new file but do not commit it. A staged reindex indexes the\n\t// write-tree snapshot, so the staged-but-uncommitted file is picked up.\n\th.write(\"staged.md\", \"# Staged\\n\\nnot yet committed\")\n\th.git(\"add\", \"staged.md\")\n\n\to.Staged = true\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 2, state.FileCount)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"staged.md\")\n\n\t// Committing the staged content yields identical blob shas, so a normal\n\t// post-commit reindex embeds nothing.\n\th.commit(\"add staged\")\n\to.Staged = false\n\tcallsBefore := model.DocumentCalls()\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, callsBefore, model.DocumentCalls(), \"post-commit reindex should be a no-op\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestStagedReindexIndexesUncommittedThenNoOp\n\nfunc TestStagedReindexIndexesUncommittedThenNoOp(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"committed.md\", \"# Committed\\n\\nalready committed content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Stage a new file but do not commit it. A staged reindex indexes the\n\t// write-tree snapshot, so the staged-but-uncommitted file is picked up.\n\th.write(\"staged.md\", \"# Staged\\n\\nnot yet committed\")\n\th.git(\"add\", \"staged.md\")\n\n\to.Staged = true\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 2, state.FileCount)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"staged.md\")\n\n\t// Committing the staged content yields identical blob shas, so a normal\n\t// post-commit reindex embeds nothing.\n\th.commit(\"add staged\")\n\to.Staged = false\n\tcallsBefore := model.DocumentCalls()\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, callsBefore, model.DocumentCalls(), \"post-commit reindex should be a no-op\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestStagedReindexIndexesUncommittedThenNoOp",
+      "startLine": 199,
+      "startCol": 1,
+      "endLine": 233,
+      "endCol": 2
+    },
+    {
+      "text": "func TestTextFileUnchangedBlobReusesAll(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tcalls := model.DocumentCalls()\n\n\t// No change at all: the whole file is reused via blob_sha, nothing re-embeds.\n\th.commit(\"empty\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, calls, model.DocumentCalls(), \"unchanged text file should embed nothing\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestTextFileUnchangedBlobReusesAll\n\nfunc TestTextFileUnchangedBlobReusesAll(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tcalls := model.DocumentCalls()\n\n\t// No change at all: the whole file is reused via blob_sha, nothing re-embeds.\n\th.commit(\"empty\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, calls, model.DocumentCalls(), \"unchanged text file should embed nothing\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestTextFileUnchangedBlobReusesAll",
+      "startLine": 235,
+      "startCol": 1,
+      "endLine": 253,
+      "endCol": 2
+    },
+    {
+      "text": "// recordingModel wraps a mock embedding model and captures the exact chunk\n// strings passed to EmbedChunks so tests can assert what was embedded.\ntype recordingModel struct {\n\t*embed.MockModel\n\tmu       sync.Mutex\n\tembedded []string\n\tfailOnce bool\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e type recordingModel\n\n// recordingModel wraps a mock embedding model and captures the exact chunk\n// strings passed to EmbedChunks so tests can assert what was embedded.\ntype recordingModel struct {\n\t*embed.MockModel\n\tmu       sync.Mutex\n\tembedded []string\n\tfailOnce bool\n}",
+      "headingContext": "internal/index/manager_test.go \u003e type recordingModel",
+      "startLine": 255,
+      "startCol": 1,
+      "endLine": 262,
+      "endCol": 2
+    },
+    {
+      "text": "func (r *recordingModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {\n\tr.mu.Lock()\n\tif r.failOnce {\n\t\tr.failOnce = false\n\t\tr.mu.Unlock()\n\t\treturn nil, fmt.Errorf(\"injected embed failure\")\n\t}\n\tr.embedded = append(r.embedded, chunks...)\n\tr.mu.Unlock()\n\treturn r.MockModel.EmbedChunks(chunks)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method EmbedChunks\n\nfunc (r *recordingModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {\n\tr.mu.Lock()\n\tif r.failOnce {\n\t\tr.failOnce = false\n\t\tr.mu.Unlock()\n\t\treturn nil, fmt.Errorf(\"injected embed failure\")\n\t}\n\tr.embedded = append(r.embedded, chunks...)\n\tr.mu.Unlock()\n\treturn r.MockModel.EmbedChunks(chunks)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method EmbedChunks",
+      "startLine": 264,
+      "startCol": 1,
+      "endLine": 274,
+      "endCol": 2
+    },
+    {
+      "text": "func (r *recordingModel) inputs() []string {\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\treturn append([]string(nil), r.embedded...)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method inputs\n\nfunc (r *recordingModel) inputs() []string {\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\treturn append([]string(nil), r.embedded...)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method inputs",
+      "startLine": 276,
+      "startCol": 1,
+      "endLine": 280,
+      "endCol": 2
+    },
+    {
+      "text": "func TestCrashMidFileReusesCommittedChunks(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 2\\n}\\n\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tfirstRun := rec.inputs()\n\trequire.Len(t, firstRun, 3, \"fixture should embed three chunks on first run\")\n\n\t// Edit only the second function, then crash the next embed call.\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 22\\n}\\n\")\n\th.commit(\"edit body\")\n\trec.failOnce = true\n\t_, err = Reindex(o)\n\trequire.Error(t, err, \"injected failure should abort the run\")\n\n\t// Retry to completion. The unchanged first chunk is reused from the last\n\t// committed index and is never re-embedded; only the changed chunk is\n\t// embedded on the retry.\n\tbefore := rec.inputs()\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\tretry := rec.inputs()[len(before):]\n\trequire.Len(t, retry, 1, \"retry re-embeds only the changed chunk\")\n\n\t// The committed index holds exactly two chunks.\n\tstats, err := st.Stats(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, stats.Files)\n\trequire.Equal(t, 3, stats.Chunks)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestCrashMidFileReusesCommittedChunks\n\nfunc TestCrashMidFileReusesCommittedChunks(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 2\\n}\\n\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tfirstRun := rec.inputs()\n\trequire.Len(t, firstRun, 3, \"fixture should embed three chunks on first run\")\n\n\t// Edit only the second function, then crash the next embed call.\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 22\\n}\\n\")\n\th.commit(\"edit body\")\n\trec.failOnce = true\n\t_, err = Reindex(o)\n\trequire.Error(t, err, \"injected failure should abort the run\")\n\n\t// Retry to completion. The unchanged first chunk is reused from the last\n\t// committed index and is never re-embedded; only the changed chunk is\n\t// embedded on the retry.\n\tbefore := rec.inputs()\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\tretry := rec.inputs()[len(before):]\n\trequire.Len(t, retry, 1, \"retry re-embeds only the changed chunk\")\n\n\t// The committed index holds exactly two chunks.\n\tstats, err := st.Stats(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, stats.Files)\n\trequire.Equal(t, 3, stats.Chunks)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestCrashMidFileReusesCommittedChunks",
+      "startLine": 282,
+      "startCol": 1,
+      "endLine": 317,
+      "endCol": 2
+    },
+    {
+      "text": "func TestReusesUnchangedChunksCode(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 2\\n}\\n\\nfunc Gamma() int {\\n\\treturn 3\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\ttotal := model.ChunkCount()\n\trequire.Greater(t, total, 1, \"fixture should produce multiple chunks\")\n\n\t// Change only the body of one function.\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 22\\n}\\n\\nfunc Gamma() int {\\n\\treturn 3\\n}\\n\")\n\th.commit(\"edit beta\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\tdelta := model.ChunkCount() - total\n\trequire.Greater(t, delta, 0, \"changed function must re-embed\")\n\trequire.Less(t, delta, total, \"unchanged functions must be reused\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestReusesUnchangedChunksCode\n\nfunc TestReusesUnchangedChunksCode(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 2\\n}\\n\\nfunc Gamma() int {\\n\\treturn 3\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\ttotal := model.ChunkCount()\n\trequire.Greater(t, total, 1, \"fixture should produce multiple chunks\")\n\n\t// Change only the body of one function.\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 22\\n}\\n\\nfunc Gamma() int {\\n\\treturn 3\\n}\\n\")\n\th.commit(\"edit beta\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\tdelta := model.ChunkCount() - total\n\trequire.Greater(t, delta, 0, \"changed function must re-embed\")\n\trequire.Less(t, delta, total, \"unchanged functions must be reused\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestReusesUnchangedChunksCode",
+      "startLine": 319,
+      "startCol": 1,
+      "endLine": 342,
+      "endCol": 2
+    },
+    {
+      "text": "func bigClass(name string) string {\n\tvar b strings.Builder\n\tb.WriteString(\"class \" + name + \" {\\n\")\n\tfor i := 0; i \u003c 12; i++ {\n\t\tfmt.Fprintf(\u0026b, \"  method%c() {\\n\", 'a'+i)\n\t\tfor j := 0; j \u003c 6; j++ {\n\t\t\tb.WriteString(\"    const x = 'padding padding padding padding padding';\\n\")\n\t\t}\n\t\tb.WriteString(\"    return 1;\\n  }\\n\")\n\t}\n\tb.WriteString(\"}\\n\")\n\treturn b.String()\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function bigClass\n\nfunc bigClass(name string) string {\n\tvar b strings.Builder\n\tb.WriteString(\"class \" + name + \" {\\n\")\n\tfor i := 0; i \u003c 12; i++ {\n\t\tfmt.Fprintf(\u0026b, \"  method%c() {\\n\", 'a'+i)\n\t\tfor j := 0; j \u003c 6; j++ {\n\t\t\tb.WriteString(\"    const x = 'padding padding padding padding padding';\\n\")\n\t\t}\n\t\tb.WriteString(\"    return 1;\\n  }\\n\")\n\t}\n\tb.WriteString(\"}\\n\")\n\treturn b.String()\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function bigClass",
+      "startLine": 344,
+      "startCol": 1,
+      "endLine": 356,
+      "endCol": 2
+    },
+    {
+      "text": "func TestReindexOnParentClassRenameCode(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"f.ts\", bigClass(\"Foo\"))\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\ttotal := model.ChunkCount()\n\trequire.Greater(t, total, 2, \"fixture should split into many method chunks\")\n\n\t// Rename the enclosing class. Method-body text is identical, but the class\n\t// is a parent breadcrumb of every method chunk, so all must re-embed.\n\th.write(\"f.ts\", bigClass(\"Bar\"))\n\th.commit(\"rename class\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, total*2, model.ChunkCount(), \"renaming parent class must re-embed all chunks\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestReindexOnParentClassRenameCode\n\nfunc TestReindexOnParentClassRenameCode(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"f.ts\", bigClass(\"Foo\"))\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\ttotal := model.ChunkCount()\n\trequire.Greater(t, total, 2, \"fixture should split into many method chunks\")\n\n\t// Rename the enclosing class. Method-body text is identical, but the class\n\t// is a parent breadcrumb of every method chunk, so all must re-embed.\n\th.write(\"f.ts\", bigClass(\"Bar\"))\n\th.commit(\"rename class\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, total*2, model.ChunkCount(), \"renaming parent class must re-embed all chunks\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestReindexOnParentClassRenameCode",
+      "startLine": 358,
+      "startCol": 1,
+      "endLine": 380,
+      "endCol": 2
+    },
+    {
+      "text": "func TestRenameHandled(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"old.md\", \"# Old\\n\\nrename content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\th.git(\"mv\", \"old.md\", \"new.md\")\n\th.commit(\"rename\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.NotContains(t, files, \"old.md\")\n\trequire.Contains(t, files, \"new.md\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestRenameHandled\n\nfunc TestRenameHandled(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"old.md\", \"# Old\\n\\nrename content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\th.git(\"mv\", \"old.md\", \"new.md\")\n\th.commit(\"rename\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.NotContains(t, files, \"old.md\")\n\trequire.Contains(t, files, \"new.md\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestRenameHandled",
+      "startLine": 382,
+      "startCol": 1,
+      "endLine": 403,
+      "endCol": 2
+    },
+    {
+      "text": "func TestPartialRunMarkerSafety(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.go\", \"package a\\n\\nfunc A() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tfailing := \u0026embed.FailingModel{MockModel: embed.NewMockModel(\"mock\", 3), FailAfter: 0}\n\to, st := h.opts(t, failing)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.Error(t, err)\n\n\t_, statErr := os.Stat(filepath.Join(h.root, \"pkb-state.toml\"))\n\trequire.True(t, os.IsNotExist(statErr), \"marker must not be written on failed run\")\n\n\t// Fix and retry.\n\tfixed := embed.NewMockModel(\"mock\", 3)\n\to.Model = fixed\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, h.headSha(), state.Commit)\n\trequire.Equal(t, 1, state.FileCount)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestPartialRunMarkerSafety\n\nfunc TestPartialRunMarkerSafety(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.go\", \"package a\\n\\nfunc A() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tfailing := \u0026embed.FailingModel{MockModel: embed.NewMockModel(\"mock\", 3), FailAfter: 0}\n\to, st := h.opts(t, failing)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.Error(t, err)\n\n\t_, statErr := os.Stat(filepath.Join(h.root, \"pkb-state.toml\"))\n\trequire.True(t, os.IsNotExist(statErr), \"marker must not be written on failed run\")\n\n\t// Fix and retry.\n\tfixed := embed.NewMockModel(\"mock\", 3)\n\to.Model = fixed\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, h.headSha(), state.Commit)\n\trequire.Equal(t, 1, state.FileCount)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestPartialRunMarkerSafety",
+      "startLine": 405,
+      "startCol": 1,
+      "endLine": 427,
+      "endCol": 2
+    },
+    {
+      "text": "func TestDivergenceViaMergeBase(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"base.md\", \"# Base\\n\\nbase content\")\n\th.commit(\"base\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t// index on a side branch commit S\n\th.git(\"checkout\", \"-b\", \"side\")\n\th.write(\"side.md\", \"# Side\\n\\nside content\")\n\tsShaCommit := h.commit(\"side change\")\n\t_ = sShaCommit\n\tstateS, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// rewrite history: go back to base and make a different commit C\n\th.git(\"checkout\", \"master\")\n\th.write(\"main.md\", \"# Main\\n\\nmain content\")\n\tcSha := h.commit(\"main change\")\n\n\t// Now reindex against master (C). S is not an ancestor of C.\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, cSha, state.Commit)\n\trequire.NotEqual(t, stateS.Commit, state.Commit)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"base.md\")\n\trequire.Contains(t, files, \"main.md\")\n\trequire.NotContains(t, files, \"side.md\", \"abandoned-branch file should be removed\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestDivergenceViaMergeBase\n\nfunc TestDivergenceViaMergeBase(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"base.md\", \"# Base\\n\\nbase content\")\n\th.commit(\"base\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t// index on a side branch commit S\n\th.git(\"checkout\", \"-b\", \"side\")\n\th.write(\"side.md\", \"# Side\\n\\nside content\")\n\tsShaCommit := h.commit(\"side change\")\n\t_ = sShaCommit\n\tstateS, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// rewrite history: go back to base and make a different commit C\n\th.git(\"checkout\", \"master\")\n\th.write(\"main.md\", \"# Main\\n\\nmain content\")\n\tcSha := h.commit(\"main change\")\n\n\t// Now reindex against master (C). S is not an ancestor of C.\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, cSha, state.Commit)\n\trequire.NotEqual(t, stateS.Commit, state.Commit)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"base.md\")\n\trequire.Contains(t, files, \"main.md\")\n\trequire.NotContains(t, files, \"side.md\", \"abandoned-branch file should be removed\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestDivergenceViaMergeBase",
+      "startLine": 429,
+      "startCol": 1,
+      "endLine": 462,
+      "endCol": 2
+    },
+    {
+      "text": "func TestTotalRecoveryWhenCommitGone(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Corrupt the marker to a non-existent commit sha.\n\trequire.NoError(t, writeState(h.root, State{Commit: \"0000000000000000000000000000000000000000\"}))\n\n\tcallsBefore := model.ChunkCalls()\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, h.headSha(), state.Commit)\n\trequire.Equal(t, 1, state.FileCount)\n\t// content unchanged -\u003e blob-sha short-circuit means no re-embed\n\trequire.Equal(t, callsBefore, model.ChunkCalls())\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestTotalRecoveryWhenCommitGone\n\nfunc TestTotalRecoveryWhenCommitGone(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Corrupt the marker to a non-existent commit sha.\n\trequire.NoError(t, writeState(h.root, State{Commit: \"0000000000000000000000000000000000000000\"}))\n\n\tcallsBefore := model.ChunkCalls()\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, h.headSha(), state.Commit)\n\trequire.Equal(t, 1, state.FileCount)\n\t// content unchanged -\u003e blob-sha short-circuit means no re-embed\n\trequire.Equal(t, callsBefore, model.ChunkCalls())\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestTotalRecoveryWhenCommitGone",
+      "startLine": 464,
+      "startCol": 1,
+      "endLine": 485,
+      "endCol": 2
+    },
+    {
+      "text": "func TestExcludeGlobExcludesPath(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"private/secret.md\", \"# Secret\\n\\nsecret content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\to.Ignore = NewIgnore([]string{\"private\"})\n\tdefer st.Close()\n\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, state.FileCount)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"keep.md\")\n\trequire.NotContains(t, files, \"private/secret.md\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestExcludeGlobExcludesPath\n\nfunc TestExcludeGlobExcludesPath(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"private/secret.md\", \"# Secret\\n\\nsecret content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\to.Ignore = NewIgnore([]string{\"private\"})\n\tdefer st.Close()\n\n\tstate, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, state.FileCount)\n\n\tfiles, err := st.IndexedFiles(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"keep.md\")\n\trequire.NotContains(t, files, \"private/secret.md\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestExcludeGlobExcludesPath",
+      "startLine": 487,
+      "startCol": 1,
+      "endLine": 506,
+      "endCol": 2
+    },
+    {
+      "text": "func TestModelChangeCleansUpOrphanTable(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Doc\\n\\ntext content here\")\n\th.commit(\"init\")\n\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\tdefer st.Close()\n\trepo, err := git.Open(h.root)\n\trequire.NoError(t, err)\n\tm1 := embed.NewMockModel(\"mock-v1\", 3)\n\to := \u0026Options{Repo: repo, Store: st, Model: m1, Ignore: NewIgnore(nil)}\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\tfiles, err := st.IndexedFiles(\"mock-v1\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"doc.md\")\n\n\t// Switch the configured model; the old model's rows/tables should be purged.\n\tm2 := embed.NewMockModel(\"mock-v2\", 3)\n\to.Model = m2\n\t// Force a full re-run by clearing the marker.\n\trequire.NoError(t, os.Remove(filepath.Join(h.root, \"pkb-state.toml\")))\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\told, err := st.IndexedFiles(\"mock-v1\")\n\trequire.NoError(t, err)\n\trequire.Empty(t, old, \"orphaned model rows should be cleaned up\")\n\n\tnewFiles, err := st.IndexedFiles(\"mock-v2\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, newFiles, \"doc.md\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestModelChangeCleansUpOrphanTable\n\nfunc TestModelChangeCleansUpOrphanTable(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Doc\\n\\ntext content here\")\n\th.commit(\"init\")\n\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\tdefer st.Close()\n\trepo, err := git.Open(h.root)\n\trequire.NoError(t, err)\n\tm1 := embed.NewMockModel(\"mock-v1\", 3)\n\to := \u0026Options{Repo: repo, Store: st, Model: m1, Ignore: NewIgnore(nil)}\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\tfiles, err := st.IndexedFiles(\"mock-v1\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"doc.md\")\n\n\t// Switch the configured model; the old model's rows/tables should be purged.\n\tm2 := embed.NewMockModel(\"mock-v2\", 3)\n\to.Model = m2\n\t// Force a full re-run by clearing the marker.\n\trequire.NoError(t, os.Remove(filepath.Join(h.root, \"pkb-state.toml\")))\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\told, err := st.IndexedFiles(\"mock-v1\")\n\trequire.NoError(t, err)\n\trequire.Empty(t, old, \"orphaned model rows should be cleaned up\")\n\n\tnewFiles, err := st.IndexedFiles(\"mock-v2\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, newFiles, \"doc.md\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestModelChangeCleansUpOrphanTable",
+      "startLine": 508,
+      "startCol": 1,
+      "endLine": 542,
+      "endCol": 2
+    },
+    {
+      "text": "func TestModelChangeForcesFullReembedSameCommit(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Doc\\n\\ntext content here\")\n\th.commit(\"init\")\n\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\tdefer st.Close()\n\trepo, err := git.Open(h.root)\n\trequire.NoError(t, err)\n\tm1 := embed.NewMockModel(\"mock-v1\", 3)\n\to := \u0026Options{Repo: repo, Store: st, Model: m1, Ignore: NewIgnore(nil)}\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Swap the embedding model without changing the commit or removing the\n\t// state marker; the swap alone must force a full re-embed under the new\n\t// model.\n\to.Model = embed.NewMockModel(\"mock-v2\", 3)\n\tres, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Greater(t, res.FileCount, 0, \"model swap should re-embed files\")\n\n\tnewFiles, err := st.IndexedFiles(\"mock-v2\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, newFiles, \"doc.md\")\n\n\told, err := st.IndexedFiles(\"mock-v1\")\n\trequire.NoError(t, err)\n\trequire.Empty(t, old, \"orphaned model rows should be cleaned up\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestModelChangeForcesFullReembedSameCommit\n\nfunc TestModelChangeForcesFullReembedSameCommit(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Doc\\n\\ntext content here\")\n\th.commit(\"init\")\n\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\tdefer st.Close()\n\trepo, err := git.Open(h.root)\n\trequire.NoError(t, err)\n\tm1 := embed.NewMockModel(\"mock-v1\", 3)\n\to := \u0026Options{Repo: repo, Store: st, Model: m1, Ignore: NewIgnore(nil)}\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Swap the embedding model without changing the commit or removing the\n\t// state marker; the swap alone must force a full re-embed under the new\n\t// model.\n\to.Model = embed.NewMockModel(\"mock-v2\", 3)\n\tres, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Greater(t, res.FileCount, 0, \"model swap should re-embed files\")\n\n\tnewFiles, err := st.IndexedFiles(\"mock-v2\")\n\trequire.NoError(t, err)\n\trequire.Contains(t, newFiles, \"doc.md\")\n\n\told, err := st.IndexedFiles(\"mock-v1\")\n\trequire.NoError(t, err)\n\trequire.Empty(t, old, \"orphaned model rows should be cleaned up\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestModelChangeForcesFullReembedSameCommit",
+      "startLine": 544,
+      "startCol": 1,
+      "endLine": 574,
+      "endCol": 2
+    },
+    {
+      "text": "func TestBudgetGateAbortsOverBudget(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\to.MaxReindexCost = 1e-12 // any real work exceeds this\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.Error(t, err, \"estimate over budget must abort the run\")\n\trequire.Contains(t, err.Error(), \"max reindex cost\")\n\n\t// No paid work and no mutation occurred.\n\trequire.Empty(t, rec.inputs(), \"over-budget run must not embed\")\n\tstats, err := st.Stats(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Equal(t, 0, stats.Files)\n\trequire.Equal(t, 0, stats.Chunks)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestBudgetGateAbortsOverBudget\n\nfunc TestBudgetGateAbortsOverBudget(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\to.MaxReindexCost = 1e-12 // any real work exceeds this\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.Error(t, err, \"estimate over budget must abort the run\")\n\trequire.Contains(t, err.Error(), \"max reindex cost\")\n\n\t// No paid work and no mutation occurred.\n\trequire.Empty(t, rec.inputs(), \"over-budget run must not embed\")\n\tstats, err := st.Stats(\"mock\")\n\trequire.NoError(t, err)\n\trequire.Equal(t, 0, stats.Files)\n\trequire.Equal(t, 0, stats.Chunks)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestBudgetGateAbortsOverBudget",
+      "startLine": 576,
+      "startCol": 1,
+      "endLine": 596,
+      "endCol": 2
+    },
+    {
+      "text": "func TestBudgetGateDoesNotChargeReuse(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\tdefer st.Close()\n\n\t// First run, generous budget, indexes everything.\n\to.MaxReindexCost = 1000\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Force a full revisit with a tiny budget. Every file is already complete\n\t// against the same blob, so the estimate is $0 and the run proceeds.\n\to.MaxReindexCost = 1e-12\n\trequire.NoError(t, os.Remove(filepath.Join(h.root, \"pkb-state.toml\")))\n\t_, err = Reindex(o)\n\trequire.NoError(t, err, \"reuse hits must not be charged against the budget\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestBudgetGateDoesNotChargeReuse\n\nfunc TestBudgetGateDoesNotChargeReuse(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\tdefer st.Close()\n\n\t// First run, generous budget, indexes everything.\n\to.MaxReindexCost = 1000\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// Force a full revisit with a tiny budget. Every file is already complete\n\t// against the same blob, so the estimate is $0 and the run proceeds.\n\to.MaxReindexCost = 1e-12\n\trequire.NoError(t, os.Remove(filepath.Join(h.root, \"pkb-state.toml\")))\n\t_, err = Reindex(o)\n\trequire.NoError(t, err, \"reuse hits must not be charged against the budget\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestBudgetGateDoesNotChargeReuse",
+      "startLine": 598,
+      "startCol": 1,
+      "endLine": 618,
+      "endCol": 2
+    },
+    {
+      "text": "func TestReindexWritesMirrorTree(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"pkg/p.go\", \"package pkg\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// No monolithic DB is written at the repo root; the mirror tree is the\n\t// source of truth.\n\t_, statErr := os.Stat(filepath.Join(h.root, \"pkb.db\"))\n\trequire.True(t, os.IsNotExist(statErr), \"reindex must not write pkb.db at the repo root\")\n\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\tentries, err := tree.List()\n\trequire.NoError(t, err)\n\trequire.Len(t, entries, 2)\n\trequire.Contains(t, entries, paths.GitRootRelativePath(\"a.md\"))\n\trequire.Contains(t, entries, paths.GitRootRelativePath(\"pkg/p.go\"))\n\n\t// Both sibling files exist for each artifact and decode to aligned chunks.\n\tfor rel := range entries {\n\t\trequire.FileExists(t, filepath.Join(h.root, mirror.IndexDir, string(rel)+mirror.MetaExt))\n\t\trequire.FileExists(t, filepath.Join(h.root, mirror.IndexDir, string(rel)+mirror.VecExt))\n\t\ta, ok, err := tree.TryRead(rel)\n\t\trequire.NoError(t, err)\n\t\trequire.True(t, ok)\n\t\trequire.NotEmpty(t, a.Chunks)\n\t\tfor _, c := range a.Chunks {\n\t\t\trequire.Len(t, c.Embedding, 3, \"each chunk carries its vector\")\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestReindexWritesMirrorTree\n\nfunc TestReindexWritesMirrorTree(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"pkg/p.go\", \"package pkg\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\t// No monolithic DB is written at the repo root; the mirror tree is the\n\t// source of truth.\n\t_, statErr := os.Stat(filepath.Join(h.root, \"pkb.db\"))\n\trequire.True(t, os.IsNotExist(statErr), \"reindex must not write pkb.db at the repo root\")\n\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\tentries, err := tree.List()\n\trequire.NoError(t, err)\n\trequire.Len(t, entries, 2)\n\trequire.Contains(t, entries, paths.GitRootRelativePath(\"a.md\"))\n\trequire.Contains(t, entries, paths.GitRootRelativePath(\"pkg/p.go\"))\n\n\t// Both sibling files exist for each artifact and decode to aligned chunks.\n\tfor rel := range entries {\n\t\trequire.FileExists(t, filepath.Join(h.root, mirror.IndexDir, string(rel)+mirror.MetaExt))\n\t\trequire.FileExists(t, filepath.Join(h.root, mirror.IndexDir, string(rel)+mirror.VecExt))\n\t\ta, ok, err := tree.TryRead(rel)\n\t\trequire.NoError(t, err)\n\t\trequire.True(t, ok)\n\t\trequire.NotEmpty(t, a.Chunks)\n\t\tfor _, c := range a.Chunks {\n\t\t\trequire.Len(t, c.Embedding, 3, \"each chunk carries its vector\")\n\t\t}\n\t}\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestReindexWritesMirrorTree",
+      "startLine": 620,
+      "startCol": 1,
+      "endLine": 657,
+      "endCol": 2
+    },
+    {
+      "text": "func TestReindexReusesChunkKeepsArtifactBytes(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 2\\n}\\n\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tfirstEmbeds := len(rec.inputs())\n\n\t// Capture the Alpha chunk's bytes: its meta+vec must be untouched after an\n\t// edit to a different chunk. We locate it by decoding the artifact.\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\tbefore, ok, err := tree.TryRead(\"p.go\")\n\trequire.NoError(t, err)\n\trequire.True(t, ok)\n\talphaBefore := findChunk(t, before, \"return 1\")\n\n\t// Edit only Beta's body.\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 22\\n}\\n\")\n\th.commit(\"edit beta\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, firstEmbeds+1, len(rec.inputs()), \"only the changed chunk re-embeds\")\n\n\tafter, ok, err := tree.TryRead(\"p.go\")\n\trequire.NoError(t, err)\n\trequire.True(t, ok)\n\talphaAfter := findChunk(t, after, \"return 1\")\n\trequire.Equal(t, alphaBefore.Embedding, alphaAfter.Embedding, \"reused chunk keeps its vector\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestReindexReusesChunkKeepsArtifactBytes\n\nfunc TestReindexReusesChunkKeepsArtifactBytes(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 2\\n}\\n\")\n\th.commit(\"init\")\n\n\trec := \u0026recordingModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, st := h.opts(t, rec)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\tfirstEmbeds := len(rec.inputs())\n\n\t// Capture the Alpha chunk's bytes: its meta+vec must be untouched after an\n\t// edit to a different chunk. We locate it by decoding the artifact.\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\tbefore, ok, err := tree.TryRead(\"p.go\")\n\trequire.NoError(t, err)\n\trequire.True(t, ok)\n\talphaBefore := findChunk(t, before, \"return 1\")\n\n\t// Edit only Beta's body.\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\\nfunc Beta() int {\\n\\treturn 22\\n}\\n\")\n\th.commit(\"edit beta\")\n\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, firstEmbeds+1, len(rec.inputs()), \"only the changed chunk re-embeds\")\n\n\tafter, ok, err := tree.TryRead(\"p.go\")\n\trequire.NoError(t, err)\n\trequire.True(t, ok)\n\talphaAfter := findChunk(t, after, \"return 1\")\n\trequire.Equal(t, alphaBefore.Embedding, alphaAfter.Embedding, \"reused chunk keeps its vector\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestReindexReusesChunkKeepsArtifactBytes",
+      "startLine": 659,
+      "startCol": 1,
+      "endLine": 693,
+      "endCol": 2
+    },
+    {
+      "text": "func findChunk(t *testing.T, a mirror.Artifact, needle string) mirror.Chunk {\n\tt.Helper()\n\tfor _, c := range a.Chunks {\n\t\tif strings.Contains(c.Info.Text, needle) {\n\t\t\treturn c\n\t\t}\n\t}\n\tt.Fatalf(\"no chunk containing %q\", needle)\n\treturn mirror.Chunk{}\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function findChunk\n\nfunc findChunk(t *testing.T, a mirror.Artifact, needle string) mirror.Chunk {\n\tt.Helper()\n\tfor _, c := range a.Chunks {\n\t\tif strings.Contains(c.Info.Text, needle) {\n\t\t\treturn c\n\t\t}\n\t}\n\tt.Fatalf(\"no chunk containing %q\", needle)\n\treturn mirror.Chunk{}\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function findChunk",
+      "startLine": 695,
+      "startCol": 1,
+      "endLine": 704,
+      "endCol": 2
+    },
+    {
+      "text": "func TestReindexDeleteRemovesArtifact(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"del.md\", \"# Del\\n\\ndelete me\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\th.remove(\"del.md\")\n\th.commit(\"remove del\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\tentries, err := tree.List()\n\trequire.NoError(t, err)\n\trequire.Contains(t, entries, paths.GitRootRelativePath(\"keep.md\"))\n\trequire.NotContains(t, entries, paths.GitRootRelativePath(\"del.md\"))\n\trequire.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, \"del.md\"+mirror.MetaExt))\n\trequire.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, \"del.md\"+mirror.VecExt))\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestReindexDeleteRemovesArtifact\n\nfunc TestReindexDeleteRemovesArtifact(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"del.md\", \"# Del\\n\\ndelete me\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\th.remove(\"del.md\")\n\th.commit(\"remove del\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\tentries, err := tree.List()\n\trequire.NoError(t, err)\n\trequire.Contains(t, entries, paths.GitRootRelativePath(\"keep.md\"))\n\trequire.NotContains(t, entries, paths.GitRootRelativePath(\"del.md\"))\n\trequire.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, \"del.md\"+mirror.MetaExt))\n\trequire.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, \"del.md\"+mirror.VecExt))\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestReindexDeleteRemovesArtifact",
+      "startLine": 706,
+      "startCol": 1,
+      "endLine": 731,
+      "endCol": 2
+    },
+    {
+      "text": "func TestCompactPreparedDropsZeroSignalChunks(t *testing.T) {\n\t// A chunk whose contextualized text is whitespace-only carries no\n\t// embeddable content; embedding it would send an empty string to the\n\t// provider. compactPrepared must drop the chunk row and its vector slot\n\t// together so the parallel slices passed to PutFile stay aligned.\n\tchunks := []chunk.ChunkInfo{\n\t\t{Text: \"package main\", HeadingContext: \"a.go\"},\n\t\t{Text: \"   \", HeadingContext: \"\"}, // zero-signal: Contextualize -\u003e \"   \"\n\t\t{Text: \"func main() {}\", HeadingContext: \"a.go\"},\n\t}\n\treuse := []bool{false, false, false}\n\treuseEmb := make([]embed.Embedding, 3)\n\n\tpf := compactPrepared(\"a.go\", \"//\", chunks, reuse, reuseEmb)\n\n\trequire.Len(t, pf.chunks, 2, \"the whitespace-only chunk must be dropped\")\n\tn := len(pf.chunks)\n\trequire.Len(t, pf.contextualized, n)\n\trequire.Len(t, pf.embeddings, n)\n\trequire.Equal(t, []int{0, 1}, pf.embedIdx)\n\trequire.Equal(t, n, pf.remaining)\n\tfor _, c := range pf.contextualized {\n\t\trequire.NotEmpty(t, strings.TrimSpace(c), \"no empty text may survive compaction\")\n\t}\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestCompactPreparedDropsZeroSignalChunks\n\nfunc TestCompactPreparedDropsZeroSignalChunks(t *testing.T) {\n\t// A chunk whose contextualized text is whitespace-only carries no\n\t// embeddable content; embedding it would send an empty string to the\n\t// provider. compactPrepared must drop the chunk row and its vector slot\n\t// together so the parallel slices passed to PutFile stay aligned.\n\tchunks := []chunk.ChunkInfo{\n\t\t{Text: \"package main\", HeadingContext: \"a.go\"},\n\t\t{Text: \"   \", HeadingContext: \"\"}, // zero-signal: Contextualize -\u003e \"   \"\n\t\t{Text: \"func main() {}\", HeadingContext: \"a.go\"},\n\t}\n\treuse := []bool{false, false, false}\n\treuseEmb := make([]embed.Embedding, 3)\n\n\tpf := compactPrepared(\"a.go\", \"//\", chunks, reuse, reuseEmb)\n\n\trequire.Len(t, pf.chunks, 2, \"the whitespace-only chunk must be dropped\")\n\tn := len(pf.chunks)\n\trequire.Len(t, pf.contextualized, n)\n\trequire.Len(t, pf.embeddings, n)\n\trequire.Equal(t, []int{0, 1}, pf.embedIdx)\n\trequire.Equal(t, n, pf.remaining)\n\tfor _, c := range pf.contextualized {\n\t\trequire.NotEmpty(t, strings.TrimSpace(c), \"no empty text may survive compaction\")\n\t}\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestCompactPreparedDropsZeroSignalChunks",
+      "startLine": 733,
+      "startCol": 1,
+      "endLine": 757,
+      "endCol": 2
+    },
+    {
+      "text": "// failOnEmptyModel records every embedding input and fails if it is ever asked\n// to embed an empty or whitespace-only string, mirroring how Bedrock Cohere\n// rejects empty inputs.\ntype failOnEmptyModel struct{ *embed.MockModel }",
+      "contextualizedText": "// internal/index/manager_test.go \u003e type failOnEmptyModel\n\n// failOnEmptyModel records every embedding input and fails if it is ever asked\n// to embed an empty or whitespace-only string, mirroring how Bedrock Cohere\n// rejects empty inputs.\ntype failOnEmptyModel struct{ *embed.MockModel }",
+      "headingContext": "internal/index/manager_test.go \u003e type failOnEmptyModel",
+      "startLine": 759,
+      "startCol": 1,
+      "endLine": 762,
+      "endCol": 49
+    },
+    {
+      "text": "func (m *failOnEmptyModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {\n\tfor i, c := range chunks {\n\t\tif strings.TrimSpace(c) == \"\" {\n\t\t\treturn nil, fmt.Errorf(\"empty embed input at %d\", i)\n\t\t}\n\t}\n\treturn m.MockModel.EmbedChunks(chunks)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method EmbedChunks\n\nfunc (m *failOnEmptyModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {\n\tfor i, c := range chunks {\n\t\tif strings.TrimSpace(c) == \"\" {\n\t\t\treturn nil, fmt.Errorf(\"empty embed input at %d\", i)\n\t\t}\n\t}\n\treturn m.MockModel.EmbedChunks(chunks)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method EmbedChunks",
+      "startLine": 764,
+      "startCol": 1,
+      "endLine": 771,
+      "endCol": 2
+    },
+    {
+      "text": "func TestReindexNeverEmbedsEmptyString(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"b.go\", \"package b\\n\\nfunc B() {}\\n\")\n\th.write(\"only-heading.md\", \"# Title\\n\")\n\th.write(\"blanks.md\", \"# H\\n\\n\\n\\n\")\n\tsha := h.commit(\"init\")\n\tmodel := \u0026failOnEmptyModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, _ := h.opts(t, model)\n\tst, err := Reindex(o)\n\trequire.NoError(t, err, \"reindex must never send an empty string to the embedder\")\n\trequire.Equal(t, sha, st.Commit)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestReindexNeverEmbedsEmptyString\n\nfunc TestReindexNeverEmbedsEmptyString(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content\")\n\th.write(\"b.go\", \"package b\\n\\nfunc B() {}\\n\")\n\th.write(\"only-heading.md\", \"# Title\\n\")\n\th.write(\"blanks.md\", \"# H\\n\\n\\n\\n\")\n\tsha := h.commit(\"init\")\n\tmodel := \u0026failOnEmptyModel{MockModel: embed.NewMockModel(\"mock\", 3)}\n\to, _ := h.opts(t, model)\n\tst, err := Reindex(o)\n\trequire.NoError(t, err, \"reindex must never send an empty string to the embedder\")\n\trequire.Equal(t, sha, st.Commit)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestReindexNeverEmbedsEmptyString",
+      "startLine": 773,
+      "startCol": 1,
+      "endLine": 785,
+      "endCol": 2
+    },
+    {
+      "text": "// recordingContextModel wraps a mock model and records the documents passed to\n// EmbedDocument so tests can assert windowing and that the whole-document path\n// was taken.\ntype recordingContextModel struct {\n\t*embed.MockModel\n\tmu   sync.Mutex\n\tdocs []string\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e type recordingContextModel\n\n// recordingContextModel wraps a mock model and records the documents passed to\n// EmbedDocument so tests can assert windowing and that the whole-document path\n// was taken.\ntype recordingContextModel struct {\n\t*embed.MockModel\n\tmu   sync.Mutex\n\tdocs []string\n}",
+      "headingContext": "internal/index/manager_test.go \u003e type recordingContextModel",
+      "startLine": 787,
+      "startCol": 1,
+      "endLine": 794,
+      "endCol": 2
+    },
+    {
+      "text": "func (r *recordingContextModel) EmbedDocument(document string) ([]embed.ContextualChunk, error) {\n\tr.mu.Lock()\n\tr.docs = append(r.docs, document)\n\tr.mu.Unlock()\n\treturn r.MockModel.EmbedDocument(document)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method EmbedDocument\n\nfunc (r *recordingContextModel) EmbedDocument(document string) ([]embed.ContextualChunk, error) {\n\tr.mu.Lock()\n\tr.docs = append(r.docs, document)\n\tr.mu.Unlock()\n\treturn r.MockModel.EmbedDocument(document)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method EmbedDocument",
+      "startLine": 796,
+      "startCol": 1,
+      "endLine": 801,
+      "endCol": 2
+    },
+    {
+      "text": "func (r *recordingContextModel) documents() []string {\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\treturn append([]string(nil), r.docs...)\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e method documents\n\nfunc (r *recordingContextModel) documents() []string {\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\treturn append([]string(nil), r.docs...)\n}",
+      "headingContext": "internal/index/manager_test.go \u003e method documents",
+      "startLine": 803,
+      "startCol": 1,
+      "endLine": 807,
+      "endCol": 2
+    },
+    {
+      "text": "func TestContextualizeTextRoutesTextThroughEmbedDocument(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\trequire.Equal(t, 0, model.ChunkCalls(), \"text file must not go through the isolated EmbedChunks path\")\n\trequire.Equal(t, 1, model.DocumentCalls(), \"small text file is sent whole in one EmbedDocument call\")\n\n\tres, err := Search(o, \"paragraph\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, res)\n\tfor _, r := range res {\n\t\trequire.Equal(t, 0, r.StartLine, \"auto-chunk text chunks are file-tagged with no line range\")\n\t\trequire.Equal(t, 0, r.EndLine)\n\t}\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestContextualizeTextRoutesTextThroughEmbedDocument\n\nfunc TestContextualizeTextRoutesTextThroughEmbedDocument(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\trequire.Equal(t, 0, model.ChunkCalls(), \"text file must not go through the isolated EmbedChunks path\")\n\trequire.Equal(t, 1, model.DocumentCalls(), \"small text file is sent whole in one EmbedDocument call\")\n\n\tres, err := Search(o, \"paragraph\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, res)\n\tfor _, r := range res {\n\t\trequire.Equal(t, 0, r.StartLine, \"auto-chunk text chunks are file-tagged with no line range\")\n\t\trequire.Equal(t, 0, r.EndLine)\n\t}\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestContextualizeTextRoutesTextThroughEmbedDocument",
+      "startLine": 809,
+      "startCol": 1,
+      "endLine": 831,
+      "endCol": 2
+    },
+    {
+      "text": "func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {\n\th := newHarness(t)\n\tvar b strings.Builder\n\tfiller := strings.Repeat(\"x\", 2000)\n\tfor i := 0; b.Len() \u003c= autoChunkMaxWindowByte+autoChunkOverlapByte; i++ {\n\t\tfmt.Fprintf(\u0026b, \"paragraph number %06d %s\\n\\n\", i, filler)\n\t}\n\th.write(\"big.md\", b.String())\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\tdocs := model.documents()\n\trequire.Greater(t, len(docs), 1, \"an oversized file must be split into multiple windows\")\n\t// Consecutive windows overlap by autoChunkOverlapByte.\n\tprev := docs[0]\n\trequire.Equal(t, autoChunkMaxWindowByte, len(prev))\n\trequire.Equal(t, prev[len(prev)-autoChunkOverlapByte:], docs[1][:autoChunkOverlapByte],\n\t\t\"consecutive windows must share the configured overlap\")\n\n\tres, err := Search(o, \"paragraph\", 4096)\n\trequire.NoError(t, err)\n\tseen := map[string]struct{}{}\n\tfor _, r := range res {\n\t\t_, dup := seen[r.Text]\n\t\trequire.False(t, dup, \"overlap-induced duplicate chunks must be deduped before writing\")\n\t\tseen[r.Text] = struct{}{}\n\t}\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestContextualizeTextWindowsLargeFileAndDedups\n\nfunc TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {\n\th := newHarness(t)\n\tvar b strings.Builder\n\tfiller := strings.Repeat(\"x\", 2000)\n\tfor i := 0; b.Len() \u003c= autoChunkMaxWindowByte+autoChunkOverlapByte; i++ {\n\t\tfmt.Fprintf(\u0026b, \"paragraph number %06d %s\\n\\n\", i, filler)\n\t}\n\th.write(\"big.md\", b.String())\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\tdocs := model.documents()\n\trequire.Greater(t, len(docs), 1, \"an oversized file must be split into multiple windows\")\n\t// Consecutive windows overlap by autoChunkOverlapByte.\n\tprev := docs[0]\n\trequire.Equal(t, autoChunkMaxWindowByte, len(prev))\n\trequire.Equal(t, prev[len(prev)-autoChunkOverlapByte:], docs[1][:autoChunkOverlapByte],\n\t\t\"consecutive windows must share the configured overlap\")\n\n\tres, err := Search(o, \"paragraph\", 4096)\n\trequire.NoError(t, err)\n\tseen := map[string]struct{}{}\n\tfor _, r := range res {\n\t\t_, dup := seen[r.Text]\n\t\trequire.False(t, dup, \"overlap-induced duplicate chunks must be deduped before writing\")\n\t\tseen[r.Text] = struct{}{}\n\t}\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestContextualizeTextWindowsLargeFileAndDedups",
+      "startLine": 833,
+      "startCol": 1,
+      "endLine": 866,
+      "endCol": 2
+    },
+    {
+      "text": "func TestContextualizeTextLeavesCodeOnIsolatedPath(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\trequire.Equal(t, 0, model.DocumentCalls(), \"code files must never use the auto-chunk path\")\n\trequire.Greater(t, model.ChunkCalls(), 0, \"code files stay on the isolated EmbedChunks path\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestContextualizeTextLeavesCodeOnIsolatedPath\n\nfunc TestContextualizeTextLeavesCodeOnIsolatedPath(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\trequire.Equal(t, 0, model.DocumentCalls(), \"code files must never use the auto-chunk path\")\n\trequire.Greater(t, model.ChunkCalls(), 0, \"code files stay on the isolated EmbedChunks path\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestContextualizeTextLeavesCodeOnIsolatedPath",
+      "startLine": 868,
+      "startCol": 1,
+      "endLine": 882,
+      "endCol": 2
+    },
+    {
+      "text": "func TestContextualizeTextReembedsOnEditSkipsUnchanged(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, model.DocumentCalls())\n\n\t// Unchanged reindex is a blob_sha skip.\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, model.DocumentCalls(), \"unchanged file must not be re-embedded\")\n\n\t// Editing the file re-sends the whole document.\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph changed\")\n\th.commit(\"edit\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 2, model.DocumentCalls(), \"edited file must be re-embedded whole\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestContextualizeTextReembedsOnEditSkipsUnchanged\n\nfunc TestContextualizeTextReembedsOnEditSkipsUnchanged(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, model.DocumentCalls())\n\n\t// Unchanged reindex is a blob_sha skip.\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 1, model.DocumentCalls(), \"unchanged file must not be re-embedded\")\n\n\t// Editing the file re-sends the whole document.\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph changed\")\n\th.commit(\"edit\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 2, model.DocumentCalls(), \"edited file must be re-embedded whole\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestContextualizeTextReembedsOnEditSkipsUnchanged",
+      "startLine": 884,
+      "startCol": 1,
+      "endLine": 908,
+      "endCol": 2
+    },
+    {
+      "text": "func TestContextualizeTextSharesOneVecTable(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph about widgets\")\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\tfiles, err := st.IndexedFiles(model.ModelName())\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"doc.md\")\n\trequire.Contains(t, files, \"p.go\")\n\trequire.Len(t, files, 2, \"code and text share one vec table under one model id\")\n\n\tcodeHit, err := Search(o, \"func Alpha\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, codeHit, \"code hits come from the shared table\")\n\ttextHit, err := Search(o, \"widgets paragraph\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, textHit, \"text hits come from the shared table\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestContextualizeTextSharesOneVecTable\n\nfunc TestContextualizeTextSharesOneVecTable(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"doc.md\", \"# Top\\n\\nintro paragraph about widgets\")\n\th.write(\"p.go\", \"package p\\n\\nfunc Alpha() int {\\n\\treturn 1\\n}\\n\")\n\th.commit(\"init\")\n\n\tmodel := \u0026recordingContextModel{MockModel: embed.NewMockModel(\"mock\", 8)}\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\tfiles, err := st.IndexedFiles(model.ModelName())\n\trequire.NoError(t, err)\n\trequire.Contains(t, files, \"doc.md\")\n\trequire.Contains(t, files, \"p.go\")\n\trequire.Len(t, files, 2, \"code and text share one vec table under one model id\")\n\n\tcodeHit, err := Search(o, \"func Alpha\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, codeHit, \"code hits come from the shared table\")\n\ttextHit, err := Search(o, \"widgets paragraph\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, textHit, \"text hits come from the shared table\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestContextualizeTextSharesOneVecTable",
+      "startLine": 910,
+      "startCol": 1,
+      "endLine": 935,
+      "endCol": 2
+    },
+    {
+      "text": "// coldStore opens a brand-new, empty SQLite cache for the same repo, modeling a\n// fresh clone whose gitignored cache.db does not yet exist. Search must rebuild\n// it from the committed mirror tree.\nfunc coldStore(t *testing.T, o *Options) *Options {\n\tt.Helper()\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"cache.db\"))\n\trequire.NoError(t, err)\n\tt.Cleanup(func() { st.Close() })\n\treturn \u0026Options{Repo: o.Repo, Store: st, Model: o.Model, Ignore: NewIgnore(nil)}\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function coldStore\n\n// coldStore opens a brand-new, empty SQLite cache for the same repo, modeling a\n// fresh clone whose gitignored cache.db does not yet exist. Search must rebuild\n// it from the committed mirror tree.\nfunc coldStore(t *testing.T, o *Options) *Options {\n\tt.Helper()\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"cache.db\"))\n\trequire.NoError(t, err)\n\tt.Cleanup(func() { st.Close() })\n\treturn \u0026Options{Repo: o.Repo, Store: st, Model: o.Model, Ignore: NewIgnore(nil)}\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function coldStore",
+      "startLine": 937,
+      "startCol": 1,
+      "endLine": 946,
+      "endCol": 2
+    },
+    {
+      "text": "// TestSearchColdCacheMatchesWarm verifies the source-of-truth invariant: a\n// missing cache never changes results. A search against an empty cache rebuilds\n// it from the mirror tree and returns exactly what the warm cache returns.\nfunc TestSearchColdCacheMatchesWarm(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content about apples\")\n\th.write(\"b.go\", \"package b\\n\\nfunc Beta() int { return 2 }\\n\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\twarm, err := Search(o, \"alpha content\", 5)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, warm)\n\n\tcold, err := Search(coldStore(t, o), \"alpha content\", 5)\n\trequire.NoError(t, err)\n\trequire.Equal(t, warm, cold, \"cold cache must reproduce warm results exactly\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestSearchColdCacheMatchesWarm\n\n// TestSearchColdCacheMatchesWarm verifies the source-of-truth invariant: a\n// missing cache never changes results. A search against an empty cache rebuilds\n// it from the mirror tree and returns exactly what the warm cache returns.\nfunc TestSearchColdCacheMatchesWarm(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\nalpha content about apples\")\n\th.write(\"b.go\", \"package b\\n\\nfunc Beta() int { return 2 }\\n\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o)\n\trequire.NoError(t, err)\n\n\twarm, err := Search(o, \"alpha content\", 5)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, warm)\n\n\tcold, err := Search(coldStore(t, o), \"alpha content\", 5)\n\trequire.NoError(t, err)\n\trequire.Equal(t, warm, cold, \"cold cache must reproduce warm results exactly\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestSearchColdCacheMatchesWarm",
+      "startLine": 948,
+      "startCol": 1,
+      "endLine": 970,
+      "endCol": 2
+    },
+    {
+      "text": "// TestSearchEvictsRemovedArtifact verifies the read-path eviction invariant: an\n// artifact gone from the mirror tree is dropped from the cache on the next\n// search, even when the cache still holds its rows.\nfunc TestSearchEvictsRemovedArtifact(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"del.md\", \"# Del\\n\\ndelete this distinctive content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o) // warm cache holds both files\n\trequire.NoError(t, err)\n\n\t// Drop del.md's artifact directly from the tree (no reindex): the warm cache\n\t// still has its rows, so only the read-path sync can evict it.\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\trequire.NoError(t, tree.Delete(\"del.md\"))\n\n\tres, err := Search(o, \"delete this distinctive content\", 10)\n\trequire.NoError(t, err)\n\tfor _, r := range res {\n\t\trequire.NotEqual(t, \"del.md\", r.Path, \"removed artifact must not appear in results\")\n\t}\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestSearchEvictsRemovedArtifact\n\n// TestSearchEvictsRemovedArtifact verifies the read-path eviction invariant: an\n// artifact gone from the mirror tree is dropped from the cache on the next\n// search, even when the cache still holds its rows.\nfunc TestSearchEvictsRemovedArtifact(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"keep.md\", \"# Keep\\n\\nkeep content\")\n\th.write(\"del.md\", \"# Del\\n\\ndelete this distinctive content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o) // warm cache holds both files\n\trequire.NoError(t, err)\n\n\t// Drop del.md's artifact directly from the tree (no reindex): the warm cache\n\t// still has its rows, so only the read-path sync can evict it.\n\ttree := mirror.NewTree(paths.AbsPath(h.root))\n\trequire.NoError(t, tree.Delete(\"del.md\"))\n\n\tres, err := Search(o, \"delete this distinctive content\", 10)\n\trequire.NoError(t, err)\n\tfor _, r := range res {\n\t\trequire.NotEqual(t, \"del.md\", r.Path, \"removed artifact must not appear in results\")\n\t}\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestSearchEvictsRemovedArtifact",
+      "startLine": 972,
+      "startCol": 1,
+      "endLine": 997,
+      "endCol": 2
+    },
+    {
+      "text": "// TestSearchIncrementalReflectsEditedArtifact verifies incremental upsert on the\n// read path: after an artifact's content changes on disk, a warm cache re-parses\n// just that artifact and search reflects the new text.\nfunc TestSearchIncrementalReflectsEditedArtifact(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\noriginal alpha content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o) // warm cache\n\trequire.NoError(t, err)\n\n\t// Rewrite the source and refresh only the mirror tree (reindex writes the\n\t// tree and syncs, but the point is that a subsequent read-path sync is a\n\t// no-op cost-wise; here we assert the content is current).\n\th.write(\"a.md\", \"# A\\n\\nrewritten distinctive omega content\")\n\th.commit(\"edit\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\tres, err := Search(coldStore(t, o), \"omega content\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, res)\n\tvar joined string\n\tfor _, r := range res {\n\t\tjoined += r.Text\n\t}\n\trequire.Contains(t, joined, \"omega\", \"search reflects the edited artifact\")\n}",
+      "contextualizedText": "// internal/index/manager_test.go \u003e function TestSearchIncrementalReflectsEditedArtifact\n\n// TestSearchIncrementalReflectsEditedArtifact verifies incremental upsert on the\n// read path: after an artifact's content changes on disk, a warm cache re-parses\n// just that artifact and search reflects the new text.\nfunc TestSearchIncrementalReflectsEditedArtifact(t *testing.T) {\n\th := newHarness(t)\n\th.write(\"a.md\", \"# A\\n\\noriginal alpha content\")\n\th.commit(\"init\")\n\n\tmodel := embed.NewMockModel(\"mock\", 3)\n\to, st := h.opts(t, model)\n\tdefer st.Close()\n\t_, err := Reindex(o) // warm cache\n\trequire.NoError(t, err)\n\n\t// Rewrite the source and refresh only the mirror tree (reindex writes the\n\t// tree and syncs, but the point is that a subsequent read-path sync is a\n\t// no-op cost-wise; here we assert the content is current).\n\th.write(\"a.md\", \"# A\\n\\nrewritten distinctive omega content\")\n\th.commit(\"edit\")\n\t_, err = Reindex(o)\n\trequire.NoError(t, err)\n\n\tres, err := Search(coldStore(t, o), \"omega content\", 10)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, res)\n\tvar joined string\n\tfor _, r := range res {\n\t\tjoined += r.Text\n\t}\n\trequire.Contains(t, joined, \"omega\", \"search reflects the edited artifact\")\n}",
+      "headingContext": "internal/index/manager_test.go \u003e function TestSearchIncrementalReflectsEditedArtifact",
+      "startLine": 999,
+      "startCol": 1,
+      "endLine": 1029,
+      "endCol": 2
+    }
+  ]
+}

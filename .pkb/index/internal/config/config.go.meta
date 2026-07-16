@@ -1,0 +1,60 @@
+{
+  "blobSha": "045a096c0321fca4a0f520a1873f074c0e6741f8",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Package config loads the repo-root PKB configuration (pkb.toml or\n// .pkb/config.toml), which selects an embedding model and optional extension\n// routing overrides.\npackage config\n\nimport (\n\t\"os\"\n\t\"path/filepath\"\n\n\t\"github.com/BurntSushi/toml\"\n)",
+      "contextualizedText": "// internal/config/config.go\n\n// Package config loads the repo-root PKB configuration (pkb.toml or\n// .pkb/config.toml), which selects an embedding model and optional extension\n// routing overrides.\npackage config\n\nimport (\n\t\"os\"\n\t\"path/filepath\"\n\n\t\"github.com/BurntSushi/toml\"\n)",
+      "headingContext": "internal/config/config.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 11,
+      "endCol": 2
+    },
+    {
+      "text": "// ModelConfig selects an embedding model: the provider/model id plus the\n// embedding dimensionality. (Model construction lives in the embed package;\n// config only records the selection.)\ntype ModelConfig struct {\n\tProvider   string `toml:\"provider\"`\n\tModel      string `toml:\"model\"`\n\tDimensions int    `toml:\"dimensions\"`\n\t// BaseURL is the API base URL for the Voyage endpoint (defaults to Voyage's\n\t// public API when empty).\n\tBaseURL string `toml:\"baseurl\"`\n\t// APIKeyEnv names the environment variable holding the API key (defaults to\n\t// VOYAGE_API_KEY).\n\tAPIKeyEnv string `toml:\"apikeyenv\"`\n}",
+      "contextualizedText": "// internal/config/config.go \u003e type ModelConfig\n\n// ModelConfig selects an embedding model: the provider/model id plus the\n// embedding dimensionality. (Model construction lives in the embed package;\n// config only records the selection.)\ntype ModelConfig struct {\n\tProvider   string `toml:\"provider\"`\n\tModel      string `toml:\"model\"`\n\tDimensions int    `toml:\"dimensions\"`\n\t// BaseURL is the API base URL for the Voyage endpoint (defaults to Voyage's\n\t// public API when empty).\n\tBaseURL string `toml:\"baseurl\"`\n\t// APIKeyEnv names the environment variable holding the API key (defaults to\n\t// VOYAGE_API_KEY).\n\tAPIKeyEnv string `toml:\"apikeyenv\"`\n}",
+      "headingContext": "internal/config/config.go \u003e type ModelConfig",
+      "startLine": 13,
+      "startCol": 1,
+      "endLine": 26,
+      "endCol": 2
+    },
+    {
+      "text": "// Config is the parsed repo-root configuration.\ntype Config struct {\n\t// Embedding selects the model used to embed all files (code and text).\n\tEmbedding ModelConfig `toml:\"embedding\"`\n\t// ExtOverrides maps a file extension (including the leading dot) to a\n\t// file-type name (\"code\" or \"text\").\n\tExtOverrides map[string]string `toml:\"extOverrides\"`\n\t// Exclude lists paths to skip during indexing, matched by basename or path\n\t// prefix (see internal/index.Ignore).\n\tExclude []string `toml:\"exclude\"`\n\t// MaxReindexCost caps the projected dollar cost of a single reindex\n\t// run (it is a per-run cap, not a cumulative spend limit across runs).\n\t// Before any paid embedding work, Reindex estimates the run's cost\n\t// and aborts when it exceeds this budget, so an unexpectedly large/expensive\n\t// change set must be reindexed locally instead. Defaults to $5; a\n\t// non-positive value disables the gate.\n\tMaxReindexCost float64 `toml:\"maxReindexCost\"`\n}",
+      "contextualizedText": "// internal/config/config.go \u003e type Config\n\n// Config is the parsed repo-root configuration.\ntype Config struct {\n\t// Embedding selects the model used to embed all files (code and text).\n\tEmbedding ModelConfig `toml:\"embedding\"`\n\t// ExtOverrides maps a file extension (including the leading dot) to a\n\t// file-type name (\"code\" or \"text\").\n\tExtOverrides map[string]string `toml:\"extOverrides\"`\n\t// Exclude lists paths to skip during indexing, matched by basename or path\n\t// prefix (see internal/index.Ignore).\n\tExclude []string `toml:\"exclude\"`\n\t// MaxReindexCost caps the projected dollar cost of a single reindex\n\t// run (it is a per-run cap, not a cumulative spend limit across runs).\n\t// Before any paid embedding work, Reindex estimates the run's cost\n\t// and aborts when it exceeds this budget, so an unexpectedly large/expensive\n\t// change set must be reindexed locally instead. Defaults to $5; a\n\t// non-positive value disables the gate.\n\tMaxReindexCost float64 `toml:\"maxReindexCost\"`\n}",
+      "headingContext": "internal/config/config.go \u003e type Config",
+      "startLine": 28,
+      "startCol": 1,
+      "endLine": 45,
+      "endCol": 2
+    },
+    {
+      "text": "// Default returns the built-in configuration used when no config file exists.\nfunc Default() Config {\n\treturn Config{\n\t\tEmbedding: ModelConfig{\n\t\t\tProvider:   \"voyage\",\n\t\t\tModel:      \"voyage-context-3\",\n\t\t\tDimensions: 256,\n\t\t},\n\t\tMaxReindexCost: 5.0,\n\t}\n}",
+      "contextualizedText": "// internal/config/config.go \u003e function Default\n\n// Default returns the built-in configuration used when no config file exists.\nfunc Default() Config {\n\treturn Config{\n\t\tEmbedding: ModelConfig{\n\t\t\tProvider:   \"voyage\",\n\t\t\tModel:      \"voyage-context-3\",\n\t\t\tDimensions: 256,\n\t\t},\n\t\tMaxReindexCost: 5.0,\n\t}\n}",
+      "headingContext": "internal/config/config.go \u003e function Default",
+      "startLine": 47,
+      "startCol": 1,
+      "endLine": 57,
+      "endCol": 2
+    },
+    {
+      "text": "// configPaths returns the candidate config file locations, in priority order.\nfunc configPaths(repoRoot string) []string {\n\treturn []string{\n\t\tfilepath.Join(repoRoot, \"pkb.toml\"),\n\t\tfilepath.Join(repoRoot, \".pkb\", \"config.toml\"),\n\t}\n}",
+      "contextualizedText": "// internal/config/config.go \u003e function configPaths\n\n// configPaths returns the candidate config file locations, in priority order.\nfunc configPaths(repoRoot string) []string {\n\treturn []string{\n\t\tfilepath.Join(repoRoot, \"pkb.toml\"),\n\t\tfilepath.Join(repoRoot, \".pkb\", \"config.toml\"),\n\t}\n}",
+      "headingContext": "internal/config/config.go \u003e function configPaths",
+      "startLine": 59,
+      "startCol": 1,
+      "endLine": 65,
+      "endCol": 2
+    },
+    {
+      "text": "// Load reads the repo-root config, falling back to Default for any unset field.\n// A missing config file is not an error; defaults are returned.\nfunc Load(repoRoot string) (Config, error) {\n\tcfg := Default()\n\tfor _, p := range configPaths(repoRoot) {\n\t\tdata, err := os.ReadFile(p)\n\t\tif err != nil {\n\t\t\tif os.IsNotExist(err) {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\treturn cfg, err\n\t\t}\n\t\tif err := toml.Unmarshal(data, \u0026cfg); err != nil {\n\t\t\treturn cfg, err\n\t\t}\n\t\tbreak\n\t}\n\treturn cfg, nil\n}",
+      "contextualizedText": "// internal/config/config.go \u003e function Load\n\n// Load reads the repo-root config, falling back to Default for any unset field.\n// A missing config file is not an error; defaults are returned.\nfunc Load(repoRoot string) (Config, error) {\n\tcfg := Default()\n\tfor _, p := range configPaths(repoRoot) {\n\t\tdata, err := os.ReadFile(p)\n\t\tif err != nil {\n\t\t\tif os.IsNotExist(err) {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\treturn cfg, err\n\t\t}\n\t\tif err := toml.Unmarshal(data, \u0026cfg); err != nil {\n\t\t\treturn cfg, err\n\t\t}\n\t\tbreak\n\t}\n\treturn cfg, nil\n}",
+      "headingContext": "internal/config/config.go \u003e function Load",
+      "startLine": 67,
+      "startCol": 1,
+      "endLine": 85,
+      "endCol": 2
+    }
+  ]
+}

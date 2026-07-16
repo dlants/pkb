@@ -1,0 +1,60 @@
+{
+  "blobSha": "d6568184c9a1b252c5e4f26b463ec238ce518d65",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Package paths defines nominal path types so the compiler distinguishes a\n// path relative to the git repository root (as produced by git plumbing and\n// stored in the index) from an absolute filesystem path (used when touching the\n// working tree or reporting results to a user).\npackage paths\n\nimport \"path/filepath\"",
+      "contextualizedText": "// internal/paths/paths.go\n\n// Package paths defines nominal path types so the compiler distinguishes a\n// path relative to the git repository root (as produced by git plumbing and\n// stored in the index) from an absolute filesystem path (used when touching the\n// working tree or reporting results to a user).\npackage paths\n\nimport \"path/filepath\"",
+      "headingContext": "internal/paths/paths.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 7,
+      "endCol": 23
+    },
+    {
+      "text": "// GitRootRelativePath is a forward-slashed path relative to the git repository\n// root, exactly as emitted by `git ls-tree` / `git diff`. This is the canonical\n// identity stored in the index, so it is stable across checkouts and machines.\ntype GitRootRelativePath string",
+      "contextualizedText": "// internal/paths/paths.go \u003e type GitRootRelativePath\n\n// GitRootRelativePath is a forward-slashed path relative to the git repository\n// root, exactly as emitted by `git ls-tree` / `git diff`. This is the canonical\n// identity stored in the index, so it is stable across checkouts and machines.\ntype GitRootRelativePath string",
+      "headingContext": "internal/paths/paths.go \u003e type GitRootRelativePath",
+      "startLine": 9,
+      "startCol": 1,
+      "endLine": 12,
+      "endCol": 32
+    },
+    {
+      "text": "// AbsPath is an absolute filesystem path.\ntype AbsPath string",
+      "contextualizedText": "// internal/paths/paths.go \u003e type AbsPath\n\n// AbsPath is an absolute filesystem path.\ntype AbsPath string",
+      "headingContext": "internal/paths/paths.go \u003e type AbsPath",
+      "startLine": 14,
+      "startCol": 1,
+      "endLine": 15,
+      "endCol": 20
+    },
+    {
+      "text": "// Join resolves a root-relative path against an absolute repo root, producing\n// an absolute path suitable for filesystem access or for reporting to a client.\nfunc (root AbsPath) Join(rel GitRootRelativePath) AbsPath {\n\treturn AbsPath(filepath.Join(string(root), filepath.FromSlash(string(rel))))\n}",
+      "contextualizedText": "// internal/paths/paths.go \u003e method Join\n\n// Join resolves a root-relative path against an absolute repo root, producing\n// an absolute path suitable for filesystem access or for reporting to a client.\nfunc (root AbsPath) Join(rel GitRootRelativePath) AbsPath {\n\treturn AbsPath(filepath.Join(string(root), filepath.FromSlash(string(rel))))\n}",
+      "headingContext": "internal/paths/paths.go \u003e method Join",
+      "startLine": 17,
+      "startCol": 1,
+      "endLine": 21,
+      "endCol": 2
+    },
+    {
+      "text": "func (p GitRootRelativePath) String() string { return string(p) }",
+      "contextualizedText": "// internal/paths/paths.go \u003e method String\n\nfunc (p GitRootRelativePath) String() string { return string(p) }",
+      "headingContext": "internal/paths/paths.go \u003e method String",
+      "startLine": 23,
+      "startCol": 1,
+      "endLine": 23,
+      "endCol": 66
+    },
+    {
+      "text": "func (p AbsPath) String() string { return string(p) }",
+      "contextualizedText": "// internal/paths/paths.go \u003e method String\n\nfunc (p AbsPath) String() string { return string(p) }",
+      "headingContext": "internal/paths/paths.go \u003e method String",
+      "startLine": 25,
+      "startCol": 1,
+      "endLine": 25,
+      "endCol": 54
+    }
+  ]
+}

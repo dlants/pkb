@@ -1,0 +1,105 @@
+{
+  "blobSha": "9b1655bea4d0f9eb2813165d1651185f9caa0fde",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// Package mirror defines the on-disk mirror-artifact format: the committed,\n// per-source-file index record split across two sibling files. For a source\n// file `src/foo.ts` the artifact is `src/foo.ts.meta` (diffable text metadata)\n// and `src/foo.ts.vec` (packed embeddings). The encoding is deterministic so\n// re-embedding a file whose chunks are unchanged yields byte-identical\n// artifacts, and the vectors are loadable without decoding the metadata.\npackage mirror\n\nimport (\n\t\"encoding/binary\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"math\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)\n\n// MetaExt and VecExt are the suffixes appended to a source path to name its two\n// sibling mirror files.\nconst (\n\tMetaExt = \".meta\"\n\tVecExt  = \".vec\"\n)\n\n// vecMagic tags the .vec binary format; a version byte follows so the header is\n// self-describing and future format changes are detectable.\nvar vecMagic = [4]byte{'P', 'K', 'B', 'V'}\n\nconst vecFormatVersion uint32 = 1",
+      "contextualizedText": "// internal/mirror/mirror.go\n\n// Package mirror defines the on-disk mirror-artifact format: the committed,\n// per-source-file index record split across two sibling files. For a source\n// file `src/foo.ts` the artifact is `src/foo.ts.meta` (diffable text metadata)\n// and `src/foo.ts.vec` (packed embeddings). The encoding is deterministic so\n// re-embedding a file whose chunks are unchanged yields byte-identical\n// artifacts, and the vectors are loadable without decoding the metadata.\npackage mirror\n\nimport (\n\t\"encoding/binary\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"math\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/embed\"\n)\n\n// MetaExt and VecExt are the suffixes appended to a source path to name its two\n// sibling mirror files.\nconst (\n\tMetaExt = \".meta\"\n\tVecExt  = \".vec\"\n)\n\n// vecMagic tags the .vec binary format; a version byte follows so the header is\n// self-describing and future format changes are detectable.\nvar vecMagic = [4]byte{'P', 'K', 'B', 'V'}\n\nconst vecFormatVersion uint32 = 1",
+      "headingContext": "internal/mirror/mirror.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 30,
+      "endCol": 34
+    },
+    {
+      "text": "// Chunk is one chunk's full record within an artifact: its structural info, the\n// contextualized text actually embedded, and its embedding.\ntype Chunk struct {\n\tInfo               chunk.ChunkInfo\n\tContextualizedText string\n\tEmbedding          embed.Embedding\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e type Chunk\n\n// Chunk is one chunk's full record within an artifact: its structural info, the\n// contextualized text actually embedded, and its embedding.\ntype Chunk struct {\n\tInfo               chunk.ChunkInfo\n\tContextualizedText string\n\tEmbedding          embed.Embedding\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e type Chunk",
+      "startLine": 32,
+      "startCol": 1,
+      "endLine": 38,
+      "endCol": 2
+    },
+    {
+      "text": "// Artifact is the complete index record for a single source file.\ntype Artifact struct {\n\tBlobSha   string\n\tModelName string\n\tChunks    []Chunk\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e type Artifact\n\n// Artifact is the complete index record for a single source file.\ntype Artifact struct {\n\tBlobSha   string\n\tModelName string\n\tChunks    []Chunk\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e type Artifact",
+      "startLine": 40,
+      "startCol": 1,
+      "endLine": 45,
+      "endCol": 2
+    },
+    {
+      "text": "// metaFile is the canonical JSON shape of the .meta file. Field order is fixed\n// by the struct, and json.MarshalIndent is deterministic, so equal inputs\n// serialize to byte-identical output.\ntype metaFile struct {\n\tBlobSha   string      `json:\"blobSha\"`\n\tModelName string      `json:\"modelName\"`\n\tChunks    []metaChunk `json:\"chunks\"`\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e type metaFile\n\n// metaFile is the canonical JSON shape of the .meta file. Field order is fixed\n// by the struct, and json.MarshalIndent is deterministic, so equal inputs\n// serialize to byte-identical output.\ntype metaFile struct {\n\tBlobSha   string      `json:\"blobSha\"`\n\tModelName string      `json:\"modelName\"`\n\tChunks    []metaChunk `json:\"chunks\"`\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e type metaFile",
+      "startLine": 47,
+      "startCol": 1,
+      "endLine": 54,
+      "endCol": 2
+    },
+    {
+      "text": "type metaChunk struct {\n\tText               string `json:\"text\"`\n\tContextualizedText string `json:\"contextualizedText\"`\n\tHeadingContext     string `json:\"headingContext\"`\n\tStartLine          int    `json:\"startLine\"`\n\tStartCol           int    `json:\"startCol\"`\n\tEndLine            int    `json:\"endLine\"`\n\tEndCol             int    `json:\"endCol\"`\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e type metaChunk\n\ntype metaChunk struct {\n\tText               string `json:\"text\"`\n\tContextualizedText string `json:\"contextualizedText\"`\n\tHeadingContext     string `json:\"headingContext\"`\n\tStartLine          int    `json:\"startLine\"`\n\tStartCol           int    `json:\"startCol\"`\n\tEndLine            int    `json:\"endLine\"`\n\tEndCol             int    `json:\"endCol\"`\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e type metaChunk",
+      "startLine": 56,
+      "startCol": 1,
+      "endLine": 64,
+      "endCol": 2
+    },
+    {
+      "text": "// EncodeMeta serializes the artifact's file-level fields and per-chunk metadata\n// (everything except the embeddings) into the deterministic .meta bytes.\nfunc EncodeMeta(a Artifact) ([]byte, error) {\n\tm := metaFile{\n\t\tBlobSha:   a.BlobSha,\n\t\tModelName: a.ModelName,\n\t\tChunks:    make([]metaChunk, len(a.Chunks)),\n\t}\n\tfor i, c := range a.Chunks {\n\t\tm.Chunks[i] = metaChunk{\n\t\t\tText:               c.Info.Text,\n\t\t\tContextualizedText: c.ContextualizedText,\n\t\t\tHeadingContext:     c.Info.HeadingContext,\n\t\t\tStartLine:          c.Info.Start.Line,\n\t\t\tStartCol:           c.Info.Start.Col,\n\t\t\tEndLine:            c.Info.End.Line,\n\t\t\tEndCol:             c.Info.End.Col,\n\t\t}\n\t}\n\tb, err := json.MarshalIndent(m, \"\", \"  \")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn append(b, '\\n'), nil\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e function EncodeMeta\n\n// EncodeMeta serializes the artifact's file-level fields and per-chunk metadata\n// (everything except the embeddings) into the deterministic .meta bytes.\nfunc EncodeMeta(a Artifact) ([]byte, error) {\n\tm := metaFile{\n\t\tBlobSha:   a.BlobSha,\n\t\tModelName: a.ModelName,\n\t\tChunks:    make([]metaChunk, len(a.Chunks)),\n\t}\n\tfor i, c := range a.Chunks {\n\t\tm.Chunks[i] = metaChunk{\n\t\t\tText:               c.Info.Text,\n\t\t\tContextualizedText: c.ContextualizedText,\n\t\t\tHeadingContext:     c.Info.HeadingContext,\n\t\t\tStartLine:          c.Info.Start.Line,\n\t\t\tStartCol:           c.Info.Start.Col,\n\t\t\tEndLine:            c.Info.End.Line,\n\t\t\tEndCol:             c.Info.End.Col,\n\t\t}\n\t}\n\tb, err := json.MarshalIndent(m, \"\", \"  \")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn append(b, '\\n'), nil\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e function EncodeMeta",
+      "startLine": 66,
+      "startCol": 1,
+      "endLine": 90,
+      "endCol": 2
+    },
+    {
+      "text": "// EncodeVec packs the artifact's embeddings into the deterministic .vec bytes:\n// a fixed header (magic, format version, dimensions, chunk count) followed by\n// row-major little-endian float32 vectors in chunk-ordinal order. All vectors\n// must share one dimension count.\nfunc EncodeVec(a Artifact) ([]byte, error) {\n\tdims := 0\n\tif len(a.Chunks) \u003e 0 {\n\t\tdims = len(a.Chunks[0].Embedding)\n\t}\n\tfor i, c := range a.Chunks {\n\t\tif len(c.Embedding) != dims {\n\t\t\treturn nil, fmt.Errorf(\"mirror: chunk %d has %d dims, expected %d\", i, len(c.Embedding), dims)\n\t\t}\n\t}\n\tout := make([]byte, 0, 16+len(a.Chunks)*dims*4)\n\tout = append(out, vecMagic[:]...)\n\tvar hdr [12]byte\n\tbinary.LittleEndian.PutUint32(hdr[0:], vecFormatVersion)\n\tbinary.LittleEndian.PutUint32(hdr[4:], uint32(dims))\n\tbinary.LittleEndian.PutUint32(hdr[8:], uint32(len(a.Chunks)))\n\tout = append(out, hdr[:]...)\n\tvar buf [4]byte\n\tfor _, c := range a.Chunks {\n\t\tfor _, f := range c.Embedding {\n\t\t\tbinary.LittleEndian.PutUint32(buf[:], math.Float32bits(f))\n\t\t\tout = append(out, buf[:]...)\n\t\t}\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e function EncodeVec\n\n// EncodeVec packs the artifact's embeddings into the deterministic .vec bytes:\n// a fixed header (magic, format version, dimensions, chunk count) followed by\n// row-major little-endian float32 vectors in chunk-ordinal order. All vectors\n// must share one dimension count.\nfunc EncodeVec(a Artifact) ([]byte, error) {\n\tdims := 0\n\tif len(a.Chunks) \u003e 0 {\n\t\tdims = len(a.Chunks[0].Embedding)\n\t}\n\tfor i, c := range a.Chunks {\n\t\tif len(c.Embedding) != dims {\n\t\t\treturn nil, fmt.Errorf(\"mirror: chunk %d has %d dims, expected %d\", i, len(c.Embedding), dims)\n\t\t}\n\t}\n\tout := make([]byte, 0, 16+len(a.Chunks)*dims*4)\n\tout = append(out, vecMagic[:]...)\n\tvar hdr [12]byte\n\tbinary.LittleEndian.PutUint32(hdr[0:], vecFormatVersion)\n\tbinary.LittleEndian.PutUint32(hdr[4:], uint32(dims))\n\tbinary.LittleEndian.PutUint32(hdr[8:], uint32(len(a.Chunks)))\n\tout = append(out, hdr[:]...)\n\tvar buf [4]byte\n\tfor _, c := range a.Chunks {\n\t\tfor _, f := range c.Embedding {\n\t\t\tbinary.LittleEndian.PutUint32(buf[:], math.Float32bits(f))\n\t\t\tout = append(out, buf[:]...)\n\t\t}\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e function EncodeVec",
+      "startLine": 92,
+      "startCol": 1,
+      "endLine": 121,
+      "endCol": 2
+    },
+    {
+      "text": "// Encode serializes an artifact into its two sibling byte streams.\nfunc Encode(a Artifact) (meta, vec []byte, err error) {\n\tmeta, err = EncodeMeta(a)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tvec, err = EncodeVec(a)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\treturn meta, vec, nil\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e function Encode\n\n// Encode serializes an artifact into its two sibling byte streams.\nfunc Encode(a Artifact) (meta, vec []byte, err error) {\n\tmeta, err = EncodeMeta(a)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tvec, err = EncodeVec(a)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\treturn meta, vec, nil\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e function Encode",
+      "startLine": 123,
+      "startCol": 1,
+      "endLine": 134,
+      "endCol": 2
+    },
+    {
+      "text": "// DecodeVec parses the packed embeddings from .vec bytes without any dependence\n// on the metadata. The header is self-describing, so vectors load standalone.\nfunc DecodeVec(b []byte) ([]embed.Embedding, error) {\n\tif len(b) \u003c 16 {\n\t\treturn nil, fmt.Errorf(\"mirror: vec too short (%d bytes)\", len(b))\n\t}\n\tif [4]byte{b[0], b[1], b[2], b[3]} != vecMagic {\n\t\treturn nil, fmt.Errorf(\"mirror: bad vec magic\")\n\t}\n\tif v := binary.LittleEndian.Uint32(b[4:]); v != vecFormatVersion {\n\t\treturn nil, fmt.Errorf(\"mirror: unsupported vec format version %d\", v)\n\t}\n\tdims := int(binary.LittleEndian.Uint32(b[8:]))\n\tcount := int(binary.LittleEndian.Uint32(b[12:]))\n\tneed := 16 + count*dims*4\n\tif len(b) != need {\n\t\treturn nil, fmt.Errorf(\"mirror: vec length %d, expected %d\", len(b), need)\n\t}\n\tout := make([]embed.Embedding, count)\n\toff := 16\n\tfor i := range out {\n\t\te := make(embed.Embedding, dims)\n\t\tfor j := range e {\n\t\t\te[j] = math.Float32frombits(binary.LittleEndian.Uint32(b[off:]))\n\t\t\toff += 4\n\t\t}\n\t\tout[i] = e\n\t}\n\treturn out, nil\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e function DecodeVec\n\n// DecodeVec parses the packed embeddings from .vec bytes without any dependence\n// on the metadata. The header is self-describing, so vectors load standalone.\nfunc DecodeVec(b []byte) ([]embed.Embedding, error) {\n\tif len(b) \u003c 16 {\n\t\treturn nil, fmt.Errorf(\"mirror: vec too short (%d bytes)\", len(b))\n\t}\n\tif [4]byte{b[0], b[1], b[2], b[3]} != vecMagic {\n\t\treturn nil, fmt.Errorf(\"mirror: bad vec magic\")\n\t}\n\tif v := binary.LittleEndian.Uint32(b[4:]); v != vecFormatVersion {\n\t\treturn nil, fmt.Errorf(\"mirror: unsupported vec format version %d\", v)\n\t}\n\tdims := int(binary.LittleEndian.Uint32(b[8:]))\n\tcount := int(binary.LittleEndian.Uint32(b[12:]))\n\tneed := 16 + count*dims*4\n\tif len(b) != need {\n\t\treturn nil, fmt.Errorf(\"mirror: vec length %d, expected %d\", len(b), need)\n\t}\n\tout := make([]embed.Embedding, count)\n\toff := 16\n\tfor i := range out {\n\t\te := make(embed.Embedding, dims)\n\t\tfor j := range e {\n\t\t\te[j] = math.Float32frombits(binary.LittleEndian.Uint32(b[off:]))\n\t\t\toff += 4\n\t\t}\n\t\tout[i] = e\n\t}\n\treturn out, nil\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e function DecodeVec",
+      "startLine": 136,
+      "startCol": 1,
+      "endLine": 165,
+      "endCol": 2
+    },
+    {
+      "text": "// DecodeMeta parses the .meta bytes back into an artifact with no embeddings\n// populated (Chunk.Embedding is nil).\nfunc DecodeMeta(b []byte) (Artifact, error) {\n\tvar m metaFile\n\tif err := json.Unmarshal(b, \u0026m); err != nil {\n\t\treturn Artifact{}, err\n\t}\n\ta := Artifact{\n\t\tBlobSha:   m.BlobSha,\n\t\tModelName: m.ModelName,\n\t\tChunks:    make([]Chunk, len(m.Chunks)),\n\t}\n\tfor i, mc := range m.Chunks {\n\t\ta.Chunks[i] = Chunk{\n\t\t\tInfo: chunk.ChunkInfo{\n\t\t\t\tText:           mc.Text,\n\t\t\t\tHeadingContext: mc.HeadingContext,\n\t\t\t\tStart:          chunk.Position{Line: mc.StartLine, Col: mc.StartCol},\n\t\t\t\tEnd:            chunk.Position{Line: mc.EndLine, Col: mc.EndCol},\n\t\t\t},\n\t\t\tContextualizedText: mc.ContextualizedText,\n\t\t}\n\t}\n\treturn a, nil\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e function DecodeMeta\n\n// DecodeMeta parses the .meta bytes back into an artifact with no embeddings\n// populated (Chunk.Embedding is nil).\nfunc DecodeMeta(b []byte) (Artifact, error) {\n\tvar m metaFile\n\tif err := json.Unmarshal(b, \u0026m); err != nil {\n\t\treturn Artifact{}, err\n\t}\n\ta := Artifact{\n\t\tBlobSha:   m.BlobSha,\n\t\tModelName: m.ModelName,\n\t\tChunks:    make([]Chunk, len(m.Chunks)),\n\t}\n\tfor i, mc := range m.Chunks {\n\t\ta.Chunks[i] = Chunk{\n\t\t\tInfo: chunk.ChunkInfo{\n\t\t\t\tText:           mc.Text,\n\t\t\t\tHeadingContext: mc.HeadingContext,\n\t\t\t\tStart:          chunk.Position{Line: mc.StartLine, Col: mc.StartCol},\n\t\t\t\tEnd:            chunk.Position{Line: mc.EndLine, Col: mc.EndCol},\n\t\t\t},\n\t\t\tContextualizedText: mc.ContextualizedText,\n\t\t}\n\t}\n\treturn a, nil\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e function DecodeMeta",
+      "startLine": 167,
+      "startCol": 1,
+      "endLine": 191,
+      "endCol": 2
+    },
+    {
+      "text": "// Decode reconstructs a full artifact from its two sibling byte streams,\n// aligning each embedding to its metadata record by ordinal. It errors if the\n// counts disagree, which is how a torn write is caught.\nfunc Decode(meta, vec []byte) (Artifact, error) {\n\ta, err := DecodeMeta(meta)\n\tif err != nil {\n\t\treturn Artifact{}, err\n\t}\n\tembeddings, err := DecodeVec(vec)\n\tif err != nil {\n\t\treturn Artifact{}, err\n\t}\n\tif len(embeddings) != len(a.Chunks) {\n\t\treturn Artifact{}, fmt.Errorf(\"mirror: %d vectors but %d metadata chunks\", len(embeddings), len(a.Chunks))\n\t}\n\tfor i := range a.Chunks {\n\t\ta.Chunks[i].Embedding = embeddings[i]\n\t}\n\treturn a, nil\n}",
+      "contextualizedText": "// internal/mirror/mirror.go \u003e function Decode\n\n// Decode reconstructs a full artifact from its two sibling byte streams,\n// aligning each embedding to its metadata record by ordinal. It errors if the\n// counts disagree, which is how a torn write is caught.\nfunc Decode(meta, vec []byte) (Artifact, error) {\n\ta, err := DecodeMeta(meta)\n\tif err != nil {\n\t\treturn Artifact{}, err\n\t}\n\tembeddings, err := DecodeVec(vec)\n\tif err != nil {\n\t\treturn Artifact{}, err\n\t}\n\tif len(embeddings) != len(a.Chunks) {\n\t\treturn Artifact{}, fmt.Errorf(\"mirror: %d vectors but %d metadata chunks\", len(embeddings), len(a.Chunks))\n\t}\n\tfor i := range a.Chunks {\n\t\ta.Chunks[i].Embedding = embeddings[i]\n\t}\n\treturn a, nil\n}",
+      "headingContext": "internal/mirror/mirror.go \u003e function Decode",
+      "startLine": 193,
+      "startCol": 1,
+      "endLine": 212,
+      "endCol": 2
+    }
+  ]
+}

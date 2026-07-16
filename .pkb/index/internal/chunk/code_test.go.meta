@@ -1,0 +1,213 @@
+{
+  "blobSha": "a49c9064d444b9bcf1dbb722c821794065e548ab",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "package chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)",
+      "contextualizedText": "// internal/chunk/code_test.go\n\npackage chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)",
+      "headingContext": "internal/chunk/code_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 6,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeTwoFunctions(t *testing.T) {\n\tsrc := \"function foo() {\\n  return 1;\\n}\\n\\nfunction bar() {\\n  return 2;\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"a/b.ts\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 2 {\n\t\tt.Fatalf(\"expected 2 chunks, got %d: %+v\", len(chunks), chunks)\n\t}\n\tif !strings.Contains(chunks[0].Text, \"foo\") || chunks[0].HeadingContext != \"a/b.ts \u003e function foo\" {\n\t\tt.Fatalf(\"chunk0: %q ctx=%q\", chunks[0].Text, chunks[0].HeadingContext)\n\t}\n\tif chunks[1].HeadingContext != \"a/b.ts \u003e function bar\" {\n\t\tt.Fatalf(\"chunk1 ctx=%q\", chunks[1].HeadingContext)\n\t}\n\tif chunks[0].Start.Line != 1 || chunks[1].Start.Line != 5 {\n\t\tt.Fatalf(\"positions: %+v %+v\", chunks[0].Start, chunks[1].Start)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeTwoFunctions\n\nfunc TestChunkCodeTwoFunctions(t *testing.T) {\n\tsrc := \"function foo() {\\n  return 1;\\n}\\n\\nfunction bar() {\\n  return 2;\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"a/b.ts\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 2 {\n\t\tt.Fatalf(\"expected 2 chunks, got %d: %+v\", len(chunks), chunks)\n\t}\n\tif !strings.Contains(chunks[0].Text, \"foo\") || chunks[0].HeadingContext != \"a/b.ts \u003e function foo\" {\n\t\tt.Fatalf(\"chunk0: %q ctx=%q\", chunks[0].Text, chunks[0].HeadingContext)\n\t}\n\tif chunks[1].HeadingContext != \"a/b.ts \u003e function bar\" {\n\t\tt.Fatalf(\"chunk1 ctx=%q\", chunks[1].HeadingContext)\n\t}\n\tif chunks[0].Start.Line != 1 || chunks[1].Start.Line != 5 {\n\t\tt.Fatalf(\"positions: %+v %+v\", chunks[0].Start, chunks[1].Start)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeTwoFunctions",
+      "startLine": 8,
+      "startCol": 1,
+      "endLine": 26,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeTopLevelFiller(t *testing.T) {\n\tsrc := \"import { x } from \\\"y\\\";\\nimport { z } from \\\"w\\\";\\n\\nfunction foo() {\\n  return 1;\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"f.ts\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 2 {\n\t\tt.Fatalf(\"expected 2 chunks (filler + func), got %d: %+v\", len(chunks), chunks)\n\t}\n\tif !strings.Contains(chunks[0].Text, \"import\") || chunks[0].HeadingContext != \"f.ts\" {\n\t\tt.Fatalf(\"filler chunk: %q ctx=%q\", chunks[0].Text, chunks[0].HeadingContext)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeTopLevelFiller\n\nfunc TestChunkCodeTopLevelFiller(t *testing.T) {\n\tsrc := \"import { x } from \\\"y\\\";\\nimport { z } from \\\"w\\\";\\n\\nfunction foo() {\\n  return 1;\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"f.ts\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 2 {\n\t\tt.Fatalf(\"expected 2 chunks (filler + func), got %d: %+v\", len(chunks), chunks)\n\t}\n\tif !strings.Contains(chunks[0].Text, \"import\") || chunks[0].HeadingContext != \"f.ts\" {\n\t\tt.Fatalf(\"filler chunk: %q ctx=%q\", chunks[0].Text, chunks[0].HeadingContext)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeTopLevelFiller",
+      "startLine": 28,
+      "startCol": 1,
+      "endLine": 40,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeOversizedClassSplitsMethods(t *testing.T) {\n\tbody := strings.Repeat(\"    this.x += 1;\\n\", 80)\n\tsrc := \"class Foo {\\n  alpha() {\\n\" + body + \"  }\\n\\n  beta() {\\n\" + body + \"  }\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"c.ts\", 500)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar alpha, beta bool\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext == \"c.ts \u003e class Foo \u003e method alpha\" {\n\t\t\talpha = true\n\t\t}\n\t\tif c.HeadingContext == \"c.ts \u003e class Foo \u003e method beta\" {\n\t\t\tbeta = true\n\t\t}\n\t}\n\tif !alpha || !beta {\n\t\tt.Fatalf(\"expected per-method chunks, got: %+v\", breadcrumbs(chunks))\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeOversizedClassSplitsMethods\n\nfunc TestChunkCodeOversizedClassSplitsMethods(t *testing.T) {\n\tbody := strings.Repeat(\"    this.x += 1;\\n\", 80)\n\tsrc := \"class Foo {\\n  alpha() {\\n\" + body + \"  }\\n\\n  beta() {\\n\" + body + \"  }\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"c.ts\", 500)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar alpha, beta bool\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext == \"c.ts \u003e class Foo \u003e method alpha\" {\n\t\t\talpha = true\n\t\t}\n\t\tif c.HeadingContext == \"c.ts \u003e class Foo \u003e method beta\" {\n\t\t\tbeta = true\n\t\t}\n\t}\n\tif !alpha || !beta {\n\t\tt.Fatalf(\"expected per-method chunks, got: %+v\", breadcrumbs(chunks))\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeOversizedClassSplitsMethods",
+      "startLine": 42,
+      "startCol": 1,
+      "endLine": 61,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeOversizedClassEmitsHeaderChunk(t *testing.T) {\n\tbody := strings.Repeat(\"    this.x += 1;\\n\", 80)\n\tsrc := \"// Foo does things.\\nclass Foo {\\n  alpha() {\\n\" + body + \"  }\\n\\n  beta() {\\n\" + body + \"  }\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"c.ts\", 500)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar header *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"c.ts \u003e class Foo\" {\n\t\t\theader = \u0026chunks[i]\n\t\t}\n\t}\n\tif header == nil {\n\t\tt.Fatalf(\"expected a standalone class header chunk, got: %+v\", breadcrumbs(chunks))\n\t}\n\tif !strings.Contains(header.Text, \"// Foo does things.\") || !strings.Contains(header.Text, \"class Foo\") {\n\t\tt.Fatalf(\"header chunk missing doc/decl: %q\", header.Text)\n\t}\n\tif strings.Contains(header.Text, \"this.x\") {\n\t\tt.Fatalf(\"header chunk should not include method bodies: %q\", header.Text)\n\t}\n\tif header.Start.Line != 1 || header.Start.Col != 1 {\n\t\tt.Fatalf(\"header start = %+v, want line 1 col 1\", header.Start)\n\t}\n\tif header.End.Line != 2 {\n\t\tt.Fatalf(\"header end = %+v, want line 2 (end of `class Foo {`)\", header.End)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeOversizedClassEmitsHeaderChunk\n\nfunc TestChunkCodeOversizedClassEmitsHeaderChunk(t *testing.T) {\n\tbody := strings.Repeat(\"    this.x += 1;\\n\", 80)\n\tsrc := \"// Foo does things.\\nclass Foo {\\n  alpha() {\\n\" + body + \"  }\\n\\n  beta() {\\n\" + body + \"  }\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"c.ts\", 500)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar header *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"c.ts \u003e class Foo\" {\n\t\t\theader = \u0026chunks[i]\n\t\t}\n\t}\n\tif header == nil {\n\t\tt.Fatalf(\"expected a standalone class header chunk, got: %+v\", breadcrumbs(chunks))\n\t}\n\tif !strings.Contains(header.Text, \"// Foo does things.\") || !strings.Contains(header.Text, \"class Foo\") {\n\t\tt.Fatalf(\"header chunk missing doc/decl: %q\", header.Text)\n\t}\n\tif strings.Contains(header.Text, \"this.x\") {\n\t\tt.Fatalf(\"header chunk should not include method bodies: %q\", header.Text)\n\t}\n\tif header.Start.Line != 1 || header.Start.Col != 1 {\n\t\tt.Fatalf(\"header start = %+v, want line 1 col 1\", header.Start)\n\t}\n\tif header.End.Line != 2 {\n\t\tt.Fatalf(\"header end = %+v, want line 2 (end of `class Foo {`)\", header.End)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeOversizedClassEmitsHeaderChunk",
+      "startLine": 63,
+      "startCol": 1,
+      "endLine": 91,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeOversizedClassHeaderChunkNoDoc(t *testing.T) {\n\tbody := strings.Repeat(\"    this.x += 1;\\n\", 80)\n\tsrc := \"class Foo {\\n  alpha() {\\n\" + body + \"  }\\n\\n  beta() {\\n\" + body + \"  }\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"c.ts\", 500)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar header *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"c.ts \u003e class Foo\" {\n\t\t\theader = \u0026chunks[i]\n\t\t}\n\t}\n\tif header == nil {\n\t\tt.Fatalf(\"expected a standalone class header chunk, got: %+v\", breadcrumbs(chunks))\n\t}\n\tif !strings.Contains(header.Text, \"class Foo\") || strings.Contains(header.Text, \"//\") {\n\t\tt.Fatalf(\"no-doc header chunk = %q\", header.Text)\n\t}\n\tif strings.Contains(header.Text, \"this.x\") {\n\t\tt.Fatalf(\"header chunk should not include method bodies: %q\", header.Text)\n\t}\n\tif header.Start.Line != 1 || header.Start.Col != 1 {\n\t\tt.Fatalf(\"header start = %+v, want line 1 col 1\", header.Start)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeOversizedClassHeaderChunkNoDoc\n\nfunc TestChunkCodeOversizedClassHeaderChunkNoDoc(t *testing.T) {\n\tbody := strings.Repeat(\"    this.x += 1;\\n\", 80)\n\tsrc := \"class Foo {\\n  alpha() {\\n\" + body + \"  }\\n\\n  beta() {\\n\" + body + \"  }\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"c.ts\", 500)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar header *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"c.ts \u003e class Foo\" {\n\t\t\theader = \u0026chunks[i]\n\t\t}\n\t}\n\tif header == nil {\n\t\tt.Fatalf(\"expected a standalone class header chunk, got: %+v\", breadcrumbs(chunks))\n\t}\n\tif !strings.Contains(header.Text, \"class Foo\") || strings.Contains(header.Text, \"//\") {\n\t\tt.Fatalf(\"no-doc header chunk = %q\", header.Text)\n\t}\n\tif strings.Contains(header.Text, \"this.x\") {\n\t\tt.Fatalf(\"header chunk should not include method bodies: %q\", header.Text)\n\t}\n\tif header.Start.Line != 1 || header.Start.Col != 1 {\n\t\tt.Fatalf(\"header start = %+v, want line 1 col 1\", header.Start)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeOversizedClassHeaderChunkNoDoc",
+      "startLine": 93,
+      "startCol": 1,
+      "endLine": 118,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeOversizedFunctionLineSplit(t *testing.T) {\n\tbody := strings.Repeat(\"  doThing();\\n\", 100)\n\tsrc := \"function big() {\\n\" + body + \"}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"d.ts\", 300)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) \u003c 2 {\n\t\tt.Fatalf(\"expected line-split into multiple chunks, got %d\", len(chunks))\n\t}\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext != \"d.ts \u003e function big\" {\n\t\t\tt.Fatalf(\"unexpected ctx %q\", c.HeadingContext)\n\t\t}\n\t\tif len(c.Text) \u003e 300 {\n\t\t\tt.Fatalf(\"chunk over budget: %d\", len(c.Text))\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeOversizedFunctionLineSplit\n\nfunc TestChunkCodeOversizedFunctionLineSplit(t *testing.T) {\n\tbody := strings.Repeat(\"  doThing();\\n\", 100)\n\tsrc := \"function big() {\\n\" + body + \"}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"d.ts\", 300)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) \u003c 2 {\n\t\tt.Fatalf(\"expected line-split into multiple chunks, got %d\", len(chunks))\n\t}\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext != \"d.ts \u003e function big\" {\n\t\t\tt.Fatalf(\"unexpected ctx %q\", c.HeadingContext)\n\t\t}\n\t\tif len(c.Text) \u003e 300 {\n\t\t\tt.Fatalf(\"chunk over budget: %d\", len(c.Text))\n\t\t}\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeOversizedFunctionLineSplit",
+      "startLine": 120,
+      "startCol": 1,
+      "endLine": 138,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeParseErrorFallback(t *testing.T) {\n\tsrc := \"this is not valid code ((( \\n@@@ \u003c\u003c\u003c \\njust some text lines\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"e.ts\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) == 0 {\n\t\tt.Fatal(\"expected fallback chunks, got none\")\n\t}\n\tif chunks[0].HeadingContext != \"e.ts\" {\n\t\tt.Fatalf(\"expected file-path breadcrumb, got %q\", chunks[0].HeadingContext)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeParseErrorFallback\n\nfunc TestChunkCodeParseErrorFallback(t *testing.T) {\n\tsrc := \"this is not valid code ((( \\n@@@ \u003c\u003c\u003c \\njust some text lines\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"typescript\", \"e.ts\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) == 0 {\n\t\tt.Fatal(\"expected fallback chunks, got none\")\n\t}\n\tif chunks[0].HeadingContext != \"e.ts\" {\n\t\tt.Fatalf(\"expected file-path breadcrumb, got %q\", chunks[0].HeadingContext)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeParseErrorFallback",
+      "startLine": 140,
+      "startCol": 1,
+      "endLine": 152,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeUnknownGrammarFallback(t *testing.T) {\n\tsrc := \"some content\\nmore content\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"cobol\", \"x.cbl\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 || chunks[0].HeadingContext != \"x.cbl\" {\n\t\tt.Fatalf(\"expected single fallback chunk, got %+v\", chunks)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeUnknownGrammarFallback\n\nfunc TestChunkCodeUnknownGrammarFallback(t *testing.T) {\n\tsrc := \"some content\\nmore content\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"cobol\", \"x.cbl\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 || chunks[0].HeadingContext != \"x.cbl\" {\n\t\tt.Fatalf(\"expected single fallback chunk, got %+v\", chunks)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeUnknownGrammarFallback",
+      "startLine": 154,
+      "startCol": 1,
+      "endLine": 163,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeDocCommentAttachedToDecl(t *testing.T) {\n\tsrc := \"package p\\n\\n// Foo does a thing.\\nfunc Foo() int {\\n\\treturn 1\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fooChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"p.go \u003e function Foo\" {\n\t\t\tfooChunk = \u0026chunks[i]\n\t\t}\n\t\tif strings.Contains(chunks[i].HeadingContext, \"Foo\") == false \u0026\u0026\n\t\t\tstrings.Contains(chunks[i].Text, \"// Foo does a thing.\") {\n\t\t\tt.Fatalf(\"doc comment leaked into filler chunk: %q\", chunks[i].HeadingContext)\n\t\t}\n\t}\n\tif fooChunk == nil {\n\t\tt.Fatalf(\"no Foo chunk: %+v\", breadcrumbs(chunks))\n\t}\n\tif !strings.Contains(fooChunk.Text, \"// Foo does a thing.\") {\n\t\tt.Fatalf(\"expected doc comment in Foo chunk, got %q\", fooChunk.Text)\n\t}\n\tif fooChunk.Start.Line != 3 {\n\t\tt.Fatalf(\"expected Foo chunk to start at doc comment (line 3), got %d\", fooChunk.Start.Line)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeDocCommentAttachedToDecl\n\nfunc TestChunkCodeDocCommentAttachedToDecl(t *testing.T) {\n\tsrc := \"package p\\n\\n// Foo does a thing.\\nfunc Foo() int {\\n\\treturn 1\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fooChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"p.go \u003e function Foo\" {\n\t\t\tfooChunk = \u0026chunks[i]\n\t\t}\n\t\tif strings.Contains(chunks[i].HeadingContext, \"Foo\") == false \u0026\u0026\n\t\t\tstrings.Contains(chunks[i].Text, \"// Foo does a thing.\") {\n\t\t\tt.Fatalf(\"doc comment leaked into filler chunk: %q\", chunks[i].HeadingContext)\n\t\t}\n\t}\n\tif fooChunk == nil {\n\t\tt.Fatalf(\"no Foo chunk: %+v\", breadcrumbs(chunks))\n\t}\n\tif !strings.Contains(fooChunk.Text, \"// Foo does a thing.\") {\n\t\tt.Fatalf(\"expected doc comment in Foo chunk, got %q\", fooChunk.Text)\n\t}\n\tif fooChunk.Start.Line != 3 {\n\t\tt.Fatalf(\"expected Foo chunk to start at doc comment (line 3), got %d\", fooChunk.Start.Line)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeDocCommentAttachedToDecl",
+      "startLine": 165,
+      "startCol": 1,
+      "endLine": 190,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeDocCommentAttachedToTypeDecl(t *testing.T) {\n\t// A Go `type X struct` doc comment has no @doc capture (the comment is a\n\t// sibling of type_declaration, not the captured type_spec). It must still\n\t// land in the definition's chunk via sweep-driven attachment.\n\tsrc := \"package p\\n\\nconst x = 1\\n\\n// Foo holds things.\\ntype Foo struct {\\n\\tA int\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fooChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"p.go \u003e type Foo\" {\n\t\t\tfooChunk = \u0026chunks[i]\n\t\t}\n\t\tif chunks[i].HeadingContext == \"p.go\" \u0026\u0026 strings.Contains(chunks[i].Text, \"// Foo holds things.\") {\n\t\t\tt.Fatalf(\"doc comment leaked into filler chunk: %q\", chunks[i].Text)\n\t\t}\n\t}\n\tif fooChunk == nil {\n\t\tt.Fatalf(\"no Foo chunk: %v\", breadcrumbs(chunks))\n\t}\n\tif !strings.HasPrefix(strings.TrimSpace(fooChunk.Text), \"// Foo holds things.\") {\n\t\tt.Fatalf(\"expected doc comment leading Foo chunk, got %q\", fooChunk.Text)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeDocCommentAttachedToTypeDecl\n\nfunc TestChunkCodeDocCommentAttachedToTypeDecl(t *testing.T) {\n\t// A Go `type X struct` doc comment has no @doc capture (the comment is a\n\t// sibling of type_declaration, not the captured type_spec). It must still\n\t// land in the definition's chunk via sweep-driven attachment.\n\tsrc := \"package p\\n\\nconst x = 1\\n\\n// Foo holds things.\\ntype Foo struct {\\n\\tA int\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fooChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tif chunks[i].HeadingContext == \"p.go \u003e type Foo\" {\n\t\t\tfooChunk = \u0026chunks[i]\n\t\t}\n\t\tif chunks[i].HeadingContext == \"p.go\" \u0026\u0026 strings.Contains(chunks[i].Text, \"// Foo holds things.\") {\n\t\t\tt.Fatalf(\"doc comment leaked into filler chunk: %q\", chunks[i].Text)\n\t\t}\n\t}\n\tif fooChunk == nil {\n\t\tt.Fatalf(\"no Foo chunk: %v\", breadcrumbs(chunks))\n\t}\n\tif !strings.HasPrefix(strings.TrimSpace(fooChunk.Text), \"// Foo holds things.\") {\n\t\tt.Fatalf(\"expected doc comment leading Foo chunk, got %q\", fooChunk.Text)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeDocCommentAttachedToTypeDecl",
+      "startLine": 192,
+      "startCol": 1,
+      "endLine": 216,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeBlankLineBreaksDocAttachment(t *testing.T) {\n\t// A blank line between a banner comment and the definition keeps them apart.\n\tsrc := \"package p\\n\\n// banner\\n\\ntype Foo struct {\\n\\tA int\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext == \"p.go \u003e type Foo\" \u0026\u0026 strings.Contains(c.Text, \"// banner\") {\n\t\t\tt.Fatalf(\"banner pulled into Foo chunk: %q\", c.Text)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeBlankLineBreaksDocAttachment\n\nfunc TestChunkCodeBlankLineBreaksDocAttachment(t *testing.T) {\n\t// A blank line between a banner comment and the definition keeps them apart.\n\tsrc := \"package p\\n\\n// banner\\n\\ntype Foo struct {\\n\\tA int\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext == \"p.go \u003e type Foo\" \u0026\u0026 strings.Contains(c.Text, \"// banner\") {\n\t\t\tt.Fatalf(\"banner pulled into Foo chunk: %q\", c.Text)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeBlankLineBreaksDocAttachment",
+      "startLine": 218,
+      "startCol": 1,
+      "endLine": 230,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeCommentStaysWithPlainNodeAcrossFlush(t *testing.T) {\n\t// A comment leading a plain (non-def) statement stays with it across a\n\t// budget flush boundary.\n\tvar b strings.Builder\n\tb.WriteString(\"package p\\n\\nfunc f() {\\n\")\n\tfor i := 0; i \u003c 20; i++ {\n\t\tb.WriteString(\"\\tdoThing()\\n\")\n\t}\n\tb.WriteString(\"\\t// marker comment here\\n\\tlastThing()\\n}\\n\")\n\tchunks, err := ChunkCode([]byte(b.String()), \"go\", \"p.go\", 120)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar found bool\n\tfor _, c := range chunks {\n\t\tif strings.Contains(c.Text, \"// marker comment here\") {\n\t\t\tif !strings.Contains(c.Text, \"lastThing()\") {\n\t\t\t\tt.Fatalf(\"comment split from its statement: %q\", c.Text)\n\t\t\t}\n\t\t\tfound = true\n\t\t}\n\t}\n\tif !found {\n\t\tt.Fatalf(\"marker comment dropped: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeCommentStaysWithPlainNodeAcrossFlush\n\nfunc TestChunkCodeCommentStaysWithPlainNodeAcrossFlush(t *testing.T) {\n\t// A comment leading a plain (non-def) statement stays with it across a\n\t// budget flush boundary.\n\tvar b strings.Builder\n\tb.WriteString(\"package p\\n\\nfunc f() {\\n\")\n\tfor i := 0; i \u003c 20; i++ {\n\t\tb.WriteString(\"\\tdoThing()\\n\")\n\t}\n\tb.WriteString(\"\\t// marker comment here\\n\\tlastThing()\\n}\\n\")\n\tchunks, err := ChunkCode([]byte(b.String()), \"go\", \"p.go\", 120)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar found bool\n\tfor _, c := range chunks {\n\t\tif strings.Contains(c.Text, \"// marker comment here\") {\n\t\t\tif !strings.Contains(c.Text, \"lastThing()\") {\n\t\t\t\tt.Fatalf(\"comment split from its statement: %q\", c.Text)\n\t\t\t}\n\t\t\tfound = true\n\t\t}\n\t}\n\tif !found {\n\t\tt.Fatalf(\"marker comment dropped: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeCommentStaysWithPlainNodeAcrossFlush",
+      "startLine": 232,
+      "startCol": 1,
+      "endLine": 257,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeTrailingCommentEmitted(t *testing.T) {\n\t// A trailing comment with no following sibling is still emitted.\n\tsrc := \"package p\\n\\nconst x = 1\\n\\n// trailing note\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar found bool\n\tfor _, c := range chunks {\n\t\tif strings.Contains(c.Text, \"// trailing note\") {\n\t\t\tfound = true\n\t\t}\n\t}\n\tif !found {\n\t\tt.Fatalf(\"trailing comment dropped: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeTrailingCommentEmitted\n\nfunc TestChunkCodeTrailingCommentEmitted(t *testing.T) {\n\t// A trailing comment with no following sibling is still emitted.\n\tsrc := \"package p\\n\\nconst x = 1\\n\\n// trailing note\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"p.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar found bool\n\tfor _, c := range chunks {\n\t\tif strings.Contains(c.Text, \"// trailing note\") {\n\t\t\tfound = true\n\t\t}\n\t}\n\tif !found {\n\t\tt.Fatalf(\"trailing comment dropped: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeTrailingCommentEmitted",
+      "startLine": 259,
+      "startCol": 1,
+      "endLine": 275,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeHCLBlocks(t *testing.T) {\n\tsrc := \"region = \\\"us-east-1\\\"\\n\\n\" +\n\t\t\"resource \\\"aws_instance\\\" \\\"web\\\" {\\n  ami = \\\"abc\\\"\\n}\\n\\n\" +\n\t\t\"variable \\\"size\\\" {\\n  default = 1\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"hcl\", \"main.tf\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot := breadcrumbs(chunks)\n\tvar sawResource, sawVar, sawFiller bool\n\tfor i, c := range chunks {\n\t\tswitch got[i] {\n\t\tcase \"main.tf \u003e resource \\\"aws_instance\\\" \\\"web\\\"\":\n\t\t\tsawResource = true\n\t\tcase \"main.tf \u003e variable \\\"size\\\"\":\n\t\t\tsawVar = true\n\t\tcase \"main.tf\":\n\t\t\tif strings.Contains(c.Text, \"region\") {\n\t\t\t\tsawFiller = true\n\t\t\t}\n\t\t}\n\t}\n\tif !sawResource || !sawVar || !sawFiller {\n\t\tt.Fatalf(\"HCL chunking breadcrumbs = %v\", got)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeHCLBlocks\n\nfunc TestChunkCodeHCLBlocks(t *testing.T) {\n\tsrc := \"region = \\\"us-east-1\\\"\\n\\n\" +\n\t\t\"resource \\\"aws_instance\\\" \\\"web\\\" {\\n  ami = \\\"abc\\\"\\n}\\n\\n\" +\n\t\t\"variable \\\"size\\\" {\\n  default = 1\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"hcl\", \"main.tf\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot := breadcrumbs(chunks)\n\tvar sawResource, sawVar, sawFiller bool\n\tfor i, c := range chunks {\n\t\tswitch got[i] {\n\t\tcase \"main.tf \u003e resource \\\"aws_instance\\\" \\\"web\\\"\":\n\t\t\tsawResource = true\n\t\tcase \"main.tf \u003e variable \\\"size\\\"\":\n\t\t\tsawVar = true\n\t\tcase \"main.tf\":\n\t\t\tif strings.Contains(c.Text, \"region\") {\n\t\t\t\tsawFiller = true\n\t\t\t}\n\t\t}\n\t}\n\tif !sawResource || !sawVar || !sawFiller {\n\t\tt.Fatalf(\"HCL chunking breadcrumbs = %v\", got)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeHCLBlocks",
+      "startLine": 277,
+      "startCol": 1,
+      "endLine": 302,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeHCLOversizedBlockLineSplit(t *testing.T) {\n\tbody := strings.Repeat(\"  attr = \\\"value\\\"\\n\", 80)\n\tsrc := \"resource \\\"aws_instance\\\" \\\"web\\\" {\\n\" + body + \"}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"hcl\", \"main.tf\", 300)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) \u003c 2 {\n\t\tt.Fatalf(\"expected oversized block to line-split, got %d chunks\", len(chunks))\n\t}\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext != \"main.tf \u003e resource \\\"aws_instance\\\" \\\"web\\\"\" {\n\t\t\tt.Fatalf(\"unexpected breadcrumb %q\", c.HeadingContext)\n\t\t}\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeHCLOversizedBlockLineSplit\n\nfunc TestChunkCodeHCLOversizedBlockLineSplit(t *testing.T) {\n\tbody := strings.Repeat(\"  attr = \\\"value\\\"\\n\", 80)\n\tsrc := \"resource \\\"aws_instance\\\" \\\"web\\\" {\\n\" + body + \"}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"hcl\", \"main.tf\", 300)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) \u003c 2 {\n\t\tt.Fatalf(\"expected oversized block to line-split, got %d chunks\", len(chunks))\n\t}\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext != \"main.tf \u003e resource \\\"aws_instance\\\" \\\"web\\\"\" {\n\t\t\tt.Fatalf(\"unexpected breadcrumb %q\", c.HeadingContext)\n\t\t}\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeHCLOversizedBlockLineSplit",
+      "startLine": 304,
+      "startCol": 1,
+      "endLine": 319,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeGoTypeNotMergedWithImports(t *testing.T) {\n\tsrc := \"package p\\n\\nimport (\\n\\t\\\"fmt\\\"\\n)\\n\\ntype State struct {\\n\\tName string\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"m.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar stateChunk, importChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tswitch chunks[i].HeadingContext {\n\t\tcase \"m.go \u003e type State\":\n\t\t\tstateChunk = \u0026chunks[i]\n\t\tcase \"m.go\":\n\t\t\timportChunk = \u0026chunks[i]\n\t\t}\n\t}\n\tif stateChunk == nil {\n\t\tt.Fatalf(\"no `type State` chunk: %v\", breadcrumbs(chunks))\n\t}\n\tif !strings.HasPrefix(strings.TrimSpace(stateChunk.Text), \"type State struct\") {\n\t\tt.Fatalf(\"type chunk missing `type ` keyword: %q\", stateChunk.Text)\n\t}\n\tif strings.Contains(stateChunk.Text, \"import\") {\n\t\tt.Fatalf(\"type chunk merged with imports: %q\", stateChunk.Text)\n\t}\n\tif importChunk == nil || !strings.Contains(importChunk.Text, \"import\") {\n\t\tt.Fatalf(\"imports not in their own filler chunk: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeGoTypeNotMergedWithImports\n\nfunc TestChunkCodeGoTypeNotMergedWithImports(t *testing.T) {\n\tsrc := \"package p\\n\\nimport (\\n\\t\\\"fmt\\\"\\n)\\n\\ntype State struct {\\n\\tName string\\n}\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"m.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar stateChunk, importChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tswitch chunks[i].HeadingContext {\n\t\tcase \"m.go \u003e type State\":\n\t\t\tstateChunk = \u0026chunks[i]\n\t\tcase \"m.go\":\n\t\t\timportChunk = \u0026chunks[i]\n\t\t}\n\t}\n\tif stateChunk == nil {\n\t\tt.Fatalf(\"no `type State` chunk: %v\", breadcrumbs(chunks))\n\t}\n\tif !strings.HasPrefix(strings.TrimSpace(stateChunk.Text), \"type State struct\") {\n\t\tt.Fatalf(\"type chunk missing `type ` keyword: %q\", stateChunk.Text)\n\t}\n\tif strings.Contains(stateChunk.Text, \"import\") {\n\t\tt.Fatalf(\"type chunk merged with imports: %q\", stateChunk.Text)\n\t}\n\tif importChunk == nil || !strings.Contains(importChunk.Text, \"import\") {\n\t\tt.Fatalf(\"imports not in their own filler chunk: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeGoTypeNotMergedWithImports",
+      "startLine": 321,
+      "startCol": 1,
+      "endLine": 348,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeGoGroupedTypes(t *testing.T) {\n\tsrc := \"package p\\n\\ntype (\\n\\tA struct{}\\n\\tB struct{}\\n)\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"g.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar a, b bool\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext == \"g.go \u003e type A\" {\n\t\t\ta = true\n\t\t}\n\t\tif c.HeadingContext == \"g.go \u003e type B\" {\n\t\t\tb = true\n\t\t}\n\t}\n\tif !a || !b {\n\t\tt.Fatalf(\"expected separate chunks for grouped types A and B, got: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeGoGroupedTypes\n\nfunc TestChunkCodeGoGroupedTypes(t *testing.T) {\n\tsrc := \"package p\\n\\ntype (\\n\\tA struct{}\\n\\tB struct{}\\n)\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"go\", \"g.go\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar a, b bool\n\tfor _, c := range chunks {\n\t\tif c.HeadingContext == \"g.go \u003e type A\" {\n\t\t\ta = true\n\t\t}\n\t\tif c.HeadingContext == \"g.go \u003e type B\" {\n\t\t\tb = true\n\t\t}\n\t}\n\tif !a || !b {\n\t\tt.Fatalf(\"expected separate chunks for grouped types A and B, got: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeGoGroupedTypes",
+      "startLine": 350,
+      "startCol": 1,
+      "endLine": 368,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeCASTPacksSiblings(t *testing.T) {\n\tvar b strings.Builder\n\tb.WriteString(\"package p\\n\\nfunc f() {\\n\")\n\tfor i := 0; i \u003c 60; i++ {\n\t\tb.WriteString(\"\\tdoThing()\\n\")\n\t}\n\tb.WriteString(\"}\\n\")\n\tchunks, err := ChunkCode([]byte(b.String()), \"go\", \"p.go\", 200)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fnChunks int\n\tfor _, c := range chunks {\n\t\tif len(c.Text) \u003e 200 {\n\t\t\tt.Fatalf(\"chunk over budget (%d): %q\", len(c.Text), c.HeadingContext)\n\t\t}\n\t\tif c.HeadingContext != \"p.go \u003e function f\" {\n\t\t\tcontinue\n\t\t}\n\t\tfnChunks++\n\t\t// Each window should end on a node boundary (a full statement), not\n\t\t// mid-line.\n\t\tif strings.HasSuffix(c.Text, \"doThing(\") {\n\t\t\tt.Fatalf(\"chunk split mid-node: %q\", c.Text)\n\t\t}\n\t}\n\tif fnChunks \u003c 2 {\n\t\tt.Fatalf(\"expected oversized function to pack into multiple windows, got %d\", fnChunks)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeCASTPacksSiblings\n\nfunc TestChunkCodeCASTPacksSiblings(t *testing.T) {\n\tvar b strings.Builder\n\tb.WriteString(\"package p\\n\\nfunc f() {\\n\")\n\tfor i := 0; i \u003c 60; i++ {\n\t\tb.WriteString(\"\\tdoThing()\\n\")\n\t}\n\tb.WriteString(\"}\\n\")\n\tchunks, err := ChunkCode([]byte(b.String()), \"go\", \"p.go\", 200)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fnChunks int\n\tfor _, c := range chunks {\n\t\tif len(c.Text) \u003e 200 {\n\t\t\tt.Fatalf(\"chunk over budget (%d): %q\", len(c.Text), c.HeadingContext)\n\t\t}\n\t\tif c.HeadingContext != \"p.go \u003e function f\" {\n\t\t\tcontinue\n\t\t}\n\t\tfnChunks++\n\t\t// Each window should end on a node boundary (a full statement), not\n\t\t// mid-line.\n\t\tif strings.HasSuffix(c.Text, \"doThing(\") {\n\t\t\tt.Fatalf(\"chunk split mid-node: %q\", c.Text)\n\t\t}\n\t}\n\tif fnChunks \u003c 2 {\n\t\tt.Fatalf(\"expected oversized function to pack into multiple windows, got %d\", fnChunks)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeCASTPacksSiblings",
+      "startLine": 370,
+      "startCol": 1,
+      "endLine": 399,
+      "endCol": 2
+    },
+    {
+      "text": "// TestChunkCodePythonDecoratorIsFiller documents the first-cut decorator\n// behavior: the python tags.scm captures `function_definition`, whose span\n// excludes the `decorated_definition` wrapper, so leading decorators land in\n// the preceding filler chunk rather than inside the function chunk. This is an\n// accepted limitation; pulling decorators into the function span is noted as\n// per-language tuning follow-up in the plan.\nfunc TestChunkCodePythonDecoratorIsFiller(t *testing.T) {\n\tsrc := \"@decorator\\ndef f():\\n    return 1\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"python\", \"a.py\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fnChunk, fillerChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tswitch chunks[i].HeadingContext {\n\t\tcase \"a.py \u003e function f\":\n\t\t\tfnChunk = \u0026chunks[i]\n\t\tcase \"a.py\":\n\t\t\tfillerChunk = \u0026chunks[i]\n\t\t}\n\t}\n\tif fnChunk == nil {\n\t\tt.Fatalf(\"no function chunk: %v\", breadcrumbs(chunks))\n\t}\n\tif strings.Contains(fnChunk.Text, \"@decorator\") {\n\t\tt.Fatalf(\"decorator unexpectedly inside function chunk: %q\", fnChunk.Text)\n\t}\n\tif fillerChunk == nil || !strings.Contains(fillerChunk.Text, \"@decorator\") {\n\t\tt.Fatalf(\"expected decorator in a preceding filler chunk, got: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodePythonDecoratorIsFiller\n\n// TestChunkCodePythonDecoratorIsFiller documents the first-cut decorator\n// behavior: the python tags.scm captures `function_definition`, whose span\n// excludes the `decorated_definition` wrapper, so leading decorators land in\n// the preceding filler chunk rather than inside the function chunk. This is an\n// accepted limitation; pulling decorators into the function span is noted as\n// per-language tuning follow-up in the plan.\nfunc TestChunkCodePythonDecoratorIsFiller(t *testing.T) {\n\tsrc := \"@decorator\\ndef f():\\n    return 1\\n\"\n\tchunks, err := ChunkCode([]byte(src), \"python\", \"a.py\", TargetChunkSize)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tvar fnChunk, fillerChunk *ChunkInfo\n\tfor i := range chunks {\n\t\tswitch chunks[i].HeadingContext {\n\t\tcase \"a.py \u003e function f\":\n\t\t\tfnChunk = \u0026chunks[i]\n\t\tcase \"a.py\":\n\t\t\tfillerChunk = \u0026chunks[i]\n\t\t}\n\t}\n\tif fnChunk == nil {\n\t\tt.Fatalf(\"no function chunk: %v\", breadcrumbs(chunks))\n\t}\n\tif strings.Contains(fnChunk.Text, \"@decorator\") {\n\t\tt.Fatalf(\"decorator unexpectedly inside function chunk: %q\", fnChunk.Text)\n\t}\n\tif fillerChunk == nil || !strings.Contains(fillerChunk.Text, \"@decorator\") {\n\t\tt.Fatalf(\"expected decorator in a preceding filler chunk, got: %v\", breadcrumbs(chunks))\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodePythonDecoratorIsFiller",
+      "startLine": 401,
+      "startCol": 1,
+      "endLine": 431,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeLongLineTrimmedToSingleChunk(t *testing.T) {\n\tlong := \"const x = \\\"\" + strings.Repeat(\"a\", 1000) + \"\\\";\"\n\tchunks, err := ChunkCode([]byte(long+\"\\n\"), \"typescript\", \"f.ts\", 200)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 {\n\t\tt.Fatalf(\"expected 1 chunk, got %d: %v\", len(chunks), breadcrumbs(chunks))\n\t}\n\tif len(chunks[0].Text) \u003e 200 {\n\t\tt.Fatalf(\"chunk not trimmed to budget: len=%d\", len(chunks[0].Text))\n\t}\n\tif chunks[0].HeadingContext != \"f.ts\" {\n\t\tt.Fatalf(\"expected bare path breadcrumb, got %q\", chunks[0].HeadingContext)\n\t}\n\tif !strings.HasPrefix(long, chunks[0].Text) {\n\t\tt.Fatalf(\"trimmed chunk is not a prefix of the line: %q\", chunks[0].Text)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeLongLineTrimmedToSingleChunk\n\nfunc TestChunkCodeLongLineTrimmedToSingleChunk(t *testing.T) {\n\tlong := \"const x = \\\"\" + strings.Repeat(\"a\", 1000) + \"\\\";\"\n\tchunks, err := ChunkCode([]byte(long+\"\\n\"), \"typescript\", \"f.ts\", 200)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 {\n\t\tt.Fatalf(\"expected 1 chunk, got %d: %v\", len(chunks), breadcrumbs(chunks))\n\t}\n\tif len(chunks[0].Text) \u003e 200 {\n\t\tt.Fatalf(\"chunk not trimmed to budget: len=%d\", len(chunks[0].Text))\n\t}\n\tif chunks[0].HeadingContext != \"f.ts\" {\n\t\tt.Fatalf(\"expected bare path breadcrumb, got %q\", chunks[0].HeadingContext)\n\t}\n\tif !strings.HasPrefix(long, chunks[0].Text) {\n\t\tt.Fatalf(\"trimmed chunk is not a prefix of the line: %q\", chunks[0].Text)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeLongLineTrimmedToSingleChunk",
+      "startLine": 433,
+      "startCol": 1,
+      "endLine": 451,
+      "endCol": 2
+    },
+    {
+      "text": "func TestChunkCodeMultipleDefnsInOneLongLine(t *testing.T) {\n\tvar b strings.Builder\n\tfor i := 0; i \u003c 50; i++ {\n\t\tb.WriteString(\"function f\")\n\t\tb.WriteByte(byte('0' + i%10))\n\t\tb.WriteString(\"(){return 1;}\")\n\t}\n\tsrc := b.String()\n\tchunks, err := ChunkCode([]byte(src+\"\\n\"), \"typescript\", \"g.ts\", 200)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 {\n\t\tt.Fatalf(\"expected 1 chunk for many defns on one long line, got %d: %v\", len(chunks), breadcrumbs(chunks))\n\t}\n\tif len(chunks[0].Text) \u003e 200 {\n\t\tt.Fatalf(\"chunk not trimmed to budget: len=%d\", len(chunks[0].Text))\n\t}\n\tif chunks[0].HeadingContext != \"g.ts\" {\n\t\tt.Fatalf(\"expected bare path breadcrumb, got %q\", chunks[0].HeadingContext)\n\t}\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function TestChunkCodeMultipleDefnsInOneLongLine\n\nfunc TestChunkCodeMultipleDefnsInOneLongLine(t *testing.T) {\n\tvar b strings.Builder\n\tfor i := 0; i \u003c 50; i++ {\n\t\tb.WriteString(\"function f\")\n\t\tb.WriteByte(byte('0' + i%10))\n\t\tb.WriteString(\"(){return 1;}\")\n\t}\n\tsrc := b.String()\n\tchunks, err := ChunkCode([]byte(src+\"\\n\"), \"typescript\", \"g.ts\", 200)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != 1 {\n\t\tt.Fatalf(\"expected 1 chunk for many defns on one long line, got %d: %v\", len(chunks), breadcrumbs(chunks))\n\t}\n\tif len(chunks[0].Text) \u003e 200 {\n\t\tt.Fatalf(\"chunk not trimmed to budget: len=%d\", len(chunks[0].Text))\n\t}\n\tif chunks[0].HeadingContext != \"g.ts\" {\n\t\tt.Fatalf(\"expected bare path breadcrumb, got %q\", chunks[0].HeadingContext)\n\t}\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function TestChunkCodeMultipleDefnsInOneLongLine",
+      "startLine": 453,
+      "startCol": 1,
+      "endLine": 474,
+      "endCol": 2
+    },
+    {
+      "text": "func breadcrumbs(chunks []ChunkInfo) []string {\n\tout := make([]string, len(chunks))\n\tfor i, c := range chunks {\n\t\tout[i] = c.HeadingContext\n\t}\n\treturn out\n}",
+      "contextualizedText": "// internal/chunk/code_test.go \u003e function breadcrumbs\n\nfunc breadcrumbs(chunks []ChunkInfo) []string {\n\tout := make([]string, len(chunks))\n\tfor i, c := range chunks {\n\t\tout[i] = c.HeadingContext\n\t}\n\treturn out\n}",
+      "headingContext": "internal/chunk/code_test.go \u003e function breadcrumbs",
+      "startLine": 476,
+      "startCol": 1,
+      "endLine": 482,
+      "endCol": 2
+    }
+  ]
+}

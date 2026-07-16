@@ -1,0 +1,33 @@
+{
+  "blobSha": "b67f731512ec669391398cd9078b63320bb15db4",
+  "modelName": "voyage-context-4@256",
+  "chunks": [
+    {
+      "text": "// This file adds an offline end-to-end test of the index + search pipeline\n// driven entirely by mock providers (no network, no credentials). It exercises\n// the same Build paths the pkb CLI uses, verifying that provider selection is\n// config-driven and that augmentation, indexing, and search work together\n// without any real backend.\npackage smoke\n\nimport (\n\t\"os\"\n\t\"os/exec\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/index\"\n\t\"github.com/dlants/pkb/internal/store\"\n\t\"github.com/stretchr/testify/require\"\n)",
+      "contextualizedText": "// internal/smoke/e2e_test.go\n\n// This file adds an offline end-to-end test of the index + search pipeline\n// driven entirely by mock providers (no network, no credentials). It exercises\n// the same Build paths the pkb CLI uses, verifying that provider selection is\n// config-driven and that augmentation, indexing, and search work together\n// without any real backend.\npackage smoke\n\nimport (\n\t\"os\"\n\t\"os/exec\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/index\"\n\t\"github.com/dlants/pkb/internal/store\"\n\t\"github.com/stretchr/testify/require\"\n)",
+      "headingContext": "internal/smoke/e2e_test.go",
+      "startLine": 1,
+      "startCol": 1,
+      "endLine": 19,
+      "endCol": 2
+    },
+    {
+      "text": "func TestEndToEndWithMockProviders(t *testing.T) {\n\troot := t.TempDir()\n\trunGit := func(args ...string) {\n\t\tt.Helper()\n\t\tcmd := exec.Command(\"git\", args...)\n\t\tcmd.Dir = root\n\t\tout, err := cmd.CombinedOutput()\n\t\trequire.NoErrorf(t, err, \"git %v: %s\", args, out)\n\t}\n\trunGit(\"init\")\n\trunGit(\"config\", \"user.email\", \"test@example.com\")\n\trunGit(\"config\", \"user.name\", \"Test\")\n\trunGit(\"config\", \"commit.gpgsign\", \"false\")\n\trunGit(\"checkout\", \"-b\", \"master\")\n\n\twrite := func(rel, content string) {\n\t\tfull := filepath.Join(root, rel)\n\t\trequire.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))\n\t\trequire.NoError(t, os.WriteFile(full, []byte(content), 0o644))\n\t}\n\twrite(\"docs/intro.md\", \"# Intro\\n\\nThe quick brown fox jumps over the lazy dog.\")\n\twrite(\"main.go\", \"package main\\n\\nfunc main() { println(\\\"hello world\\\") }\\n\")\n\trunGit(\"add\", \"-A\")\n\trunGit(\"commit\", \"-m\", \"init\")\n\n\t// Build both models exactly as the pkb CLI does, via the provider factories,\n\t// selecting the deterministic mock providers.\n\t\tmodel, err := embed.Build(\"mock\", \"mock-embed\", 8, \"\", \"\")\n\trequire.NoError(t, err)\n\n\trepo, err := git.Open(root)\n\trequire.NoError(t, err)\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\tdefer st.Close()\n\n\topts := \u0026index.Options{\n\t\tRepo:   repo,\n\t\tStore:  st,\n\t\tModel:  model,\n\t\tIgnore: index.NewIgnore(nil),\n\t}\n\n\tstate, err := index.Reindex(opts)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 2, state.FileCount)\n\trequire.Greater(t, state.ChunkCount, 0)\n\n\tresults, err := index.Search(opts, \"quick brown fox\", 5)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, results)\n}",
+      "contextualizedText": "// internal/smoke/e2e_test.go \u003e function TestEndToEndWithMockProviders\n\nfunc TestEndToEndWithMockProviders(t *testing.T) {\n\troot := t.TempDir()\n\trunGit := func(args ...string) {\n\t\tt.Helper()\n\t\tcmd := exec.Command(\"git\", args...)\n\t\tcmd.Dir = root\n\t\tout, err := cmd.CombinedOutput()\n\t\trequire.NoErrorf(t, err, \"git %v: %s\", args, out)\n\t}\n\trunGit(\"init\")\n\trunGit(\"config\", \"user.email\", \"test@example.com\")\n\trunGit(\"config\", \"user.name\", \"Test\")\n\trunGit(\"config\", \"commit.gpgsign\", \"false\")\n\trunGit(\"checkout\", \"-b\", \"master\")\n\n\twrite := func(rel, content string) {\n\t\tfull := filepath.Join(root, rel)\n\t\trequire.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))\n\t\trequire.NoError(t, os.WriteFile(full, []byte(content), 0o644))\n\t}\n\twrite(\"docs/intro.md\", \"# Intro\\n\\nThe quick brown fox jumps over the lazy dog.\")\n\twrite(\"main.go\", \"package main\\n\\nfunc main() { println(\\\"hello world\\\") }\\n\")\n\trunGit(\"add\", \"-A\")\n\trunGit(\"commit\", \"-m\", \"init\")\n\n\t// Build both models exactly as the pkb CLI does, via the provider factories,\n\t// selecting the deterministic mock providers.\n\t\tmodel, err := embed.Build(\"mock\", \"mock-embed\", 8, \"\", \"\")\n\trequire.NoError(t, err)\n\n\trepo, err := git.Open(root)\n\trequire.NoError(t, err)\n\tst, err := store.Open(filepath.Join(t.TempDir(), \"pkb.db\"))\n\trequire.NoError(t, err)\n\tdefer st.Close()\n\n\topts := \u0026index.Options{\n\t\tRepo:   repo,\n\t\tStore:  st,\n\t\tModel:  model,\n\t\tIgnore: index.NewIgnore(nil),\n\t}\n\n\tstate, err := index.Reindex(opts)\n\trequire.NoError(t, err)\n\trequire.Equal(t, 2, state.FileCount)\n\trequire.Greater(t, state.ChunkCount, 0)\n\n\tresults, err := index.Search(opts, \"quick brown fox\", 5)\n\trequire.NoError(t, err)\n\trequire.NotEmpty(t, results)\n}",
+      "headingContext": "internal/smoke/e2e_test.go \u003e function TestEndToEndWithMockProviders",
+      "startLine": 21,
+      "startCol": 1,
+      "endLine": 72,
+      "endCol": 2
+    },
+    {
+      "text": "// TestBuildRejectsUnknownProviders ensures config-driven selection surfaces\n// actionable errors for misconfigured providers.\nfunc TestBuildRejectsUnknownProviders(t *testing.T) {\n\t_, err := embed.Build(\"nope\", \"m\", 8, \"\", \"\")\n\trequire.Error(t, err)\n}",
+      "contextualizedText": "// internal/smoke/e2e_test.go \u003e function TestBuildRejectsUnknownProviders\n\n// TestBuildRejectsUnknownProviders ensures config-driven selection surfaces\n// actionable errors for misconfigured providers.\nfunc TestBuildRejectsUnknownProviders(t *testing.T) {\n\t_, err := embed.Build(\"nope\", \"m\", 8, \"\", \"\")\n\trequire.Error(t, err)\n}",
+      "headingContext": "internal/smoke/e2e_test.go \u003e function TestBuildRejectsUnknownProviders",
+      "startLine": 74,
+      "startCol": 1,
+      "endLine": 79,
+      "endCol": 2
+    }
+  ]
+}
