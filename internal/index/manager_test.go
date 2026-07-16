@@ -12,6 +12,8 @@ import (
 	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
+	"github.com/dlants/pkb/internal/mirror"
+	"github.com/dlants/pkb/internal/paths"
 	"github.com/dlants/pkb/internal/store"
 	"github.com/stretchr/testify/require"
 )
@@ -615,6 +617,119 @@ func TestBudgetGateDoesNotChargeReuse(t *testing.T) {
 	require.NoError(t, err, "reuse hits must not be charged against the budget")
 }
 
+func TestReindexWritesMirrorTree(t *testing.T) {
+	h := newHarness(t)
+	h.write("a.md", "# A\n\nalpha content")
+	h.write("pkg/p.go", "package pkg\n\nfunc Alpha() int {\n\treturn 1\n}\n")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	// No monolithic DB is written at the repo root; the mirror tree is the
+	// source of truth.
+	_, statErr := os.Stat(filepath.Join(h.root, "pkb.db"))
+	require.True(t, os.IsNotExist(statErr), "reindex must not write pkb.db at the repo root")
+
+	tree := mirror.NewTree(paths.AbsPath(h.root))
+	entries, err := tree.List()
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	require.Contains(t, entries, paths.GitRootRelativePath("a.md"))
+	require.Contains(t, entries, paths.GitRootRelativePath("pkg/p.go"))
+
+	// Both sibling files exist for each artifact and decode to aligned chunks.
+	for rel := range entries {
+		require.FileExists(t, filepath.Join(h.root, mirror.IndexDir, string(rel)+mirror.MetaExt))
+		require.FileExists(t, filepath.Join(h.root, mirror.IndexDir, string(rel)+mirror.VecExt))
+		a, ok, err := tree.TryRead(rel)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.NotEmpty(t, a.Chunks)
+		for _, c := range a.Chunks {
+			require.Len(t, c.Embedding, 3, "each chunk carries its vector")
+		}
+	}
+}
+
+func TestReindexReusesChunkKeepsArtifactBytes(t *testing.T) {
+	h := newHarness(t)
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 2\n}\n")
+	h.commit("init")
+
+	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, st := h.opts(t, rec)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+	firstEmbeds := len(rec.inputs())
+
+	// Capture the Alpha chunk's bytes: its meta+vec must be untouched after an
+	// edit to a different chunk. We locate it by decoding the artifact.
+	tree := mirror.NewTree(paths.AbsPath(h.root))
+	before, ok, err := tree.TryRead("p.go")
+	require.NoError(t, err)
+	require.True(t, ok)
+	alphaBefore := findChunk(t, before, "return 1")
+
+	// Edit only Beta's body.
+	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 22\n}\n")
+	h.commit("edit beta")
+
+	_, err = Reindex(o)
+	require.NoError(t, err)
+	require.Equal(t, firstEmbeds+1, len(rec.inputs()), "only the changed chunk re-embeds")
+
+	after, ok, err := tree.TryRead("p.go")
+	require.NoError(t, err)
+	require.True(t, ok)
+	alphaAfter := findChunk(t, after, "return 1")
+	require.Equal(t, alphaBefore.Embedding, alphaAfter.Embedding, "reused chunk keeps its vector")
+}
+
+func findChunk(t *testing.T, a mirror.Artifact, needle string) mirror.Chunk {
+	t.Helper()
+	for _, c := range a.Chunks {
+		if strings.Contains(c.Info.Text, needle) {
+			return c
+		}
+	}
+	t.Fatalf("no chunk containing %q", needle)
+	return mirror.Chunk{}
+}
+
+func TestReindexDeleteRemovesArtifact(t *testing.T) {
+	h := newHarness(t)
+	h.write("keep.md", "# Keep\n\nkeep content")
+	h.write("del.md", "# Del\n\ndelete me")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	h.remove("del.md")
+	h.commit("remove del")
+	_, err = Reindex(o)
+	require.NoError(t, err)
+
+	tree := mirror.NewTree(paths.AbsPath(h.root))
+	entries, err := tree.List()
+	require.NoError(t, err)
+	require.Contains(t, entries, paths.GitRootRelativePath("keep.md"))
+	require.NotContains(t, entries, paths.GitRootRelativePath("del.md"))
+	require.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, "del.md"+mirror.MetaExt))
+	require.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, "del.md"+mirror.VecExt))
+}
+
 func TestCompactPreparedDropsZeroSignalChunks(t *testing.T) {
 	// A chunk whose contextualized text is whitespace-only carries no
 	// embeddable content; embedding it would send an empty string to the
@@ -818,4 +933,3 @@ func TestContextualizeTextSharesOneVecTable(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, textHit, "text hits come from the shared table")
 }
-

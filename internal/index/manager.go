@@ -19,6 +19,7 @@ import (
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
+	"github.com/dlants/pkb/internal/mirror"
 	"github.com/dlants/pkb/internal/paths"
 	"github.com/dlants/pkb/internal/store"
 )
@@ -218,16 +219,10 @@ func Reindex(o *Options) (State, error) {
 	}
 
 	// indexed maps each already-indexed path to the model that embedded it and
-	// its stored blob sha.
-	indexed := map[paths.GitRootRelativePath]indexedEntry{}
-	for _, m := range models {
-		files, err := o.Store.IndexedFiles(m.ModelName())
-		if err != nil {
-			return State{}, err
-		}
-		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
-		}
+	// its stored blob sha, read from the mirror tree (the source of truth).
+	indexed, err := o.treeIndexed(models)
+	if err != nil {
+		return State{}, err
 	}
 
 	treeFiles, err := o.Repo.LsTree(treeRef)
@@ -342,13 +337,9 @@ func Reindex(o *Options) (State, error) {
 			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 				continue
 			}
-			// If a different model previously embedded this path (e.g. routing
-			// changed), purge the stale rows first.
-			if wasIndexed && prevEntry.model != model.ModelName() {
-				if err := o.Store.DeleteFile(string(path), prevEntry.model); err != nil {
-					return State{}, err
-				}
-			}
+			// A different model previously embedded this path (e.g. routing
+			// changed): writing the new artifact below overwrites the old one, so
+			// no explicit purge is needed here (syncCache reconciles the cache).
 			if cm, ok := o.contextualModel(); ok && o.isContextual(path) {
 				pf, err := o.prepareContextualFile(path, blobSha, cm)
 				if err != nil {
@@ -385,13 +376,19 @@ func Reindex(o *Options) (State, error) {
 			}
 		} else {
 			if wasIndexed {
-				if err := o.Store.DeleteFile(string(path), prevEntry.model); err != nil {
+				if err := o.mirrorTree().Delete(path); err != nil {
 					return State{}, err
 				}
 			}
 		}
 	}
 	if err := flush(); err != nil {
+		return State{}, err
+	}
+
+	// The mirror tree is now the up-to-date source of truth; refresh the derived
+	// SQLite cache from it so stats/state counts and queries stay correct.
+	if err := o.syncCache(models); err != nil {
 		return State{}, err
 	}
 
@@ -443,15 +440,9 @@ func Estimate(o *Options, full bool) (CostEstimate, error) {
 		}
 	}
 
-	indexed := map[paths.GitRootRelativePath]indexedEntry{}
-	for _, m := range models {
-		files, err := o.Store.IndexedFiles(m.ModelName())
-		if err != nil {
-			return CostEstimate{}, err
-		}
-		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
-		}
+	indexed, err := o.treeIndexed(models)
+	if err != nil {
+		return CostEstimate{}, err
 	}
 
 	treeFiles, err := o.Repo.LsTree(ref)
@@ -572,7 +563,7 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 		// from-scratch projection ignores reuse entirely and charges every chunk.
 		var existing map[string]embed.Embedding
 		if !fromScratch {
-			existing, err = o.Store.ChunkEmbeddings(string(path), model.ModelName())
+			existing, err = o.reuseMap(path, model.ModelName())
 			if err != nil {
 				return costEstimate{}, err
 			}
@@ -629,6 +620,117 @@ func (o *Options) chunkFile(path paths.GitRootRelativePath, content []byte) ([]c
 	return chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize), nil
 }
 
+// mirrorTree returns the on-disk mirror tree rooted at the repo root. The tree
+// is the source of truth for the index; the store is a derived cache.
+func (o *Options) mirrorTree() *mirror.Tree {
+	return mirror.NewTree(o.Repo.Root)
+}
+
+// treeIndexed enumerates the mirror tree as the set of already-indexed paths,
+// mapping each to the model that embedded it and its recorded blob sha. It
+// replaces Store.IndexedFiles as the reindex/estimate/healthcheck source of
+// truth.
+func (o *Options) treeIndexed(models []embed.EmbeddingModel) (map[paths.GitRootRelativePath]indexedEntry, error) {
+	active := map[string]struct{}{}
+	for _, m := range models {
+		active[m.ModelName()] = struct{}{}
+	}
+	entries, err := o.mirrorTree().List()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[paths.GitRootRelativePath]indexedEntry, len(entries))
+	for path, e := range entries {
+		// Only artifacts embedded by an active model count as "indexed"; an
+		// artifact left by a since-swapped model reads as absent, so the path is
+		// treated as new and re-embedded under the active model.
+		if _, ok := active[e.ModelName]; !ok {
+			continue
+		}
+		out[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha}
+	}
+	return out, nil
+}
+
+// reuseMap builds the per-chunk reuse map (ChunkKey -> embedding) for a path
+// from its existing mirror artifact, replacing Store.ChunkEmbeddings. An
+// artifact embedded by a different model, or a missing/torn artifact, yields an
+// empty map so every chunk is re-embedded.
+func (o *Options) reuseMap(path paths.GitRootRelativePath, modelName string) (map[string]embed.Embedding, error) {
+	a, ok, err := o.mirrorTree().TryRead(path)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || a.ModelName != modelName {
+		return map[string]embed.Embedding{}, nil
+	}
+	out := make(map[string]embed.Embedding, len(a.Chunks))
+	for _, c := range a.Chunks {
+		out[store.ChunkKey(c.Info.HeadingContext, c.Info.Text)] = c.Embedding
+	}
+	return out, nil
+}
+
+// syncCache reconciles the derived SQLite store against the mirror tree: it
+// (re)writes any artifact whose blob sha or model differs from the cache and
+// evicts cache rows for artifacts no longer in the tree. It is the single load
+// path the reindex writer and (later) the query readers share.
+func (o *Options) syncCache(models []embed.EmbeddingModel) error {
+	entries, err := o.mirrorTree().List()
+	if err != nil {
+		return err
+	}
+	cached := map[paths.GitRootRelativePath]indexedEntry{}
+	for _, m := range models {
+		files, err := o.Store.IndexedFiles(m.ModelName())
+		if err != nil {
+			return err
+		}
+		for path, meta := range files {
+			cached[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
+		}
+	}
+
+	for path, e := range entries {
+		cur, ok := cached[path]
+		if ok && cur.model == e.ModelName && cur.sha == e.BlobSha {
+			continue
+		}
+		if ok && cur.model != e.ModelName {
+			if err := o.Store.DeleteFile(string(path), cur.model); err != nil {
+				return err
+			}
+		}
+		a, present, err := o.mirrorTree().TryRead(path)
+		if err != nil {
+			return err
+		}
+		if !present {
+			continue
+		}
+		chunks := make([]chunk.ChunkInfo, len(a.Chunks))
+		contextualized := make([]string, len(a.Chunks))
+		embeddings := make([]embed.Embedding, len(a.Chunks))
+		for i, c := range a.Chunks {
+			chunks[i] = c.Info
+			contextualized[i] = c.ContextualizedText
+			embeddings[i] = c.Embedding
+		}
+		if err := o.Store.PutFile(string(path), a.ModelName, a.BlobSha, chunks, contextualized, embeddings); err != nil {
+			return err
+		}
+	}
+
+	for path, cur := range cached {
+		if _, ok := entries[path]; !ok {
+			if err := o.Store.DeleteFile(string(path), cur.model); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // prepareFile does all per-file work except the embedding call and the database
 // write: it chunks the file, resolves reuse, and builds the contextualized text
 // for every chunk. The returned preparedFile carries reused vectors already in
@@ -647,9 +749,9 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, mo
 	comment := filetype.LineComment(string(path))
 
 	// Load the committed-generation reuse map keyed on ChunkKey (heading
-	// breadcrumb + raw text), so an unchanged chunk keeps its embedding even
-	// when the file changed elsewhere.
-	existing, err := o.Store.ChunkEmbeddings(string(path), model.ModelName())
+	// breadcrumb + raw text) from the file's existing mirror artifact, so an
+	// unchanged chunk keeps its embedding even when the file changed elsewhere.
+	existing, err := o.reuseMap(path, model.ModelName())
 	if err != nil {
 		return nil, err
 	}
@@ -784,7 +886,19 @@ func compactPrepared(path paths.GitRootRelativePath, comment string, chunks []ch
 // simply reindexed on the next run (reusing unchanged chunks via
 // ChunkEmbeddings).
 func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error {
-	return o.Store.PutFile(string(pf.path), model.ModelName(), pf.blobSha, pf.chunks, pf.contextualized, pf.embeddings)
+	a := mirror.Artifact{
+		BlobSha:   pf.blobSha,
+		ModelName: model.ModelName(),
+		Chunks:    make([]mirror.Chunk, len(pf.chunks)),
+	}
+	for i := range pf.chunks {
+		a.Chunks[i] = mirror.Chunk{
+			Info:               pf.chunks[i],
+			ContextualizedText: pf.contextualized[i],
+			Embedding:          pf.embeddings[i],
+		}
+	}
+	return o.mirrorTree().Write(pf.path, a)
 }
 
 // Contextualize builds the text actually embedded for a chunk: the raw chunk
@@ -886,21 +1000,22 @@ func Healthcheck(o *Options) (HealthReport, error) {
 	}
 	rep.ExpectedFiles = len(expected)
 
-	indexed := map[paths.GitRootRelativePath]indexedEntry{}
+	treeEntries, err := o.mirrorTree().List()
+	if err != nil {
+		return rep, err
+	}
+	active := map[string]struct{}{}
 	for _, m := range o.activeModels() {
-		files, err := o.Store.IndexedFiles(m.ModelName())
-		if err != nil {
-			return rep, err
+		active[m.ModelName()] = struct{}{}
+	}
+	indexed := make(map[paths.GitRootRelativePath]indexedEntry, len(treeEntries))
+	for path, e := range treeEntries {
+		if _, ok := active[e.ModelName]; !ok {
+			continue
 		}
-		for path, meta := range files {
-			indexed[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}
-		}
-		s, err := o.Store.Stats(m.ModelName())
-		if err != nil {
-			return rep, err
-		}
-		rep.IndexedFiles += s.Files
-		rep.IndexedChunks += s.Chunks
+		indexed[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha}
+		rep.IndexedFiles++
+		rep.IndexedChunks += e.Chunks
 	}
 
 	for path, sha := range expected {
