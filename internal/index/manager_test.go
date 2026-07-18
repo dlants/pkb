@@ -820,11 +820,13 @@ func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {
 
 	docs := model.documents()
 	require.Greater(t, len(docs), 1, "an oversized file must be split into multiple windows")
-	// Consecutive windows overlap by autoChunkOverlapByte.
+	// The first window is the full budget with no prefix; the second window's
+	// verbatim body still carries the configured overlap with the first (it now
+	// appears after the synthetic context prefix rather than at offset 0).
 	prev := docs[0]
 	require.Equal(t, autoChunkMaxWindowByte, len(prev))
-	require.Equal(t, prev[len(prev)-autoChunkOverlapByte:], docs[1][:autoChunkOverlapByte],
-		"consecutive windows must share the configured overlap")
+	require.Contains(t, docs[1], prev[len(prev)-autoChunkOverlapByte:],
+		"consecutive window bodies must share the configured overlap")
 
 	res, err := Search(o, "paragraph", 4096)
 	require.NoError(t, err)
@@ -838,7 +840,8 @@ func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {
 
 func TestAutoChunkWindowsSmallDocument(t *testing.T) {
 	doc := "the whole document fits in one window"
-	windows := autoChunkWindows(doc)
+	windows, err := autoChunkWindows("doc.txt", doc)
+	require.NoError(t, err)
 	require.Len(t, windows, 1)
 	require.Equal(t, doc, windows[0].input)
 	require.Equal(t, InputOffset(0), windows[0].prefixLen)
@@ -846,25 +849,81 @@ func TestAutoChunkWindowsSmallDocument(t *testing.T) {
 }
 
 func TestAutoChunkWindowsLargeDocumentBodiesCoverBlob(t *testing.T) {
-	doc := strings.Repeat("abcdefghij", (autoChunkMaxWindowByte+autoChunkOverlapByte)/10)
-	windows := autoChunkWindows(doc)
+	doc := strings.Repeat("abcdefghij", (2*autoChunkMaxWindowByte)/10)
+	windows, err := autoChunkWindows("doc.txt", doc)
+	require.NoError(t, err)
 	require.Greater(t, len(windows), 1)
 
-	step := autoChunkMaxWindowByte - autoChunkOverlapByte
-	for i, w := range windows {
-		// Each window's body is a verbatim contiguous copy of the raw blob.
-		require.Equal(t, InputOffset(0), w.prefixLen)
-		require.Equal(t, mirror.RawOffset(i*step), w.bodyStart)
-		require.Equal(t, doc[int(w.bodyStart):int(w.bodyStart)+len(w.input)], w.input)
+	// The first window carries no prefix and covers the head verbatim.
+	require.Equal(t, InputOffset(0), windows[0].prefixLen)
+	require.Equal(t, mirror.RawOffset(0), windows[0].bodyStart)
+	require.Equal(t, doc[:autoChunkMaxWindowByte], windows[0].input)
+
+	// Every window's body maps back to a verbatim contiguous copy of the blob.
+	for _, w := range windows {
+		body := w.input[int(w.prefixLen):]
+		require.Equal(t, doc[int(w.bodyStart):int(w.bodyStart)+len(body)], body)
 	}
-	// Consecutive bodies overlap by autoChunkOverlapByte, so no content is lost.
+	// Later windows carry a nonzero context prefix within the fixed reserve.
+	for _, w := range windows[1:] {
+		require.Greater(t, int(w.prefixLen), 0)
+		require.LessOrEqual(t, int(w.prefixLen), autoChunkPrefixReserveByte)
+	}
+	// Consecutive bodies overlap by at least autoChunkOverlapByte, so no chunk
+	// boundary is lost between bodies.
 	for i := 1; i < len(windows); i++ {
-		prevEnd := int(windows[i-1].bodyStart) + len(windows[i-1].input)
+		prevBody := windows[i-1].input[int(windows[i-1].prefixLen):]
+		prevEnd := int(windows[i-1].bodyStart) + len(prevBody)
 		require.GreaterOrEqual(t, prevEnd-int(windows[i].bodyStart), autoChunkOverlapByte)
 	}
 	// The last body reaches the end of the blob.
 	last := windows[len(windows)-1]
-	require.Equal(t, len(doc), int(last.bodyStart)+len(last.input))
+	lastBody := last.input[int(last.prefixLen):]
+	require.Equal(t, len(doc), int(last.bodyStart)+len(lastBody))
+}
+
+func TestAutoChunkWindowsCodePrefixHasHeadAndBreadcrumb(t *testing.T) {
+	// A large Go file: a head (package + imports) then many functions.
+	var b strings.Builder
+	b.WriteString("package big\n\nimport \"fmt\"\n\n")
+	head := b.String()
+	for i := 0; b.Len() <= autoChunkMaxWindowByte+autoChunkBodyBudget; i++ {
+		fmt.Fprintf(&b, "func Fn%06d() {\n\tfmt.Println(%d)\n}\n\n", i, i)
+	}
+	doc := b.String()
+
+	windows, err := autoChunkWindows("big.go", doc)
+	require.NoError(t, err)
+	require.Greater(t, len(windows), 1)
+
+	w := windows[1]
+	require.True(t, strings.HasPrefix(w.input, head),
+		"later window must begin with the file head section")
+	prefix := w.input[:int(w.prefixLen)]
+	require.Contains(t, prefix, "// ",
+		"prefix must render the structural breadcrumb as comment lines")
+	body := w.input[int(w.prefixLen):]
+	require.Equal(t, doc[int(w.bodyStart):int(w.bodyStart)+len(body)], body)
+}
+
+func TestAutoChunkWindowsMarkdownPrefixCarriesHeaderHierarchy(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("# Title\n\nintro\n\n")
+	filler := strings.Repeat("word ", 400)
+	for i := 0; b.Len() <= autoChunkMaxWindowByte+autoChunkBodyBudget; i++ {
+		fmt.Fprintf(&b, "## Section %06d\n\n%s\n\n", i, filler)
+	}
+	doc := b.String()
+
+	windows, err := autoChunkWindows("big.md", doc)
+	require.NoError(t, err)
+	require.Greater(t, len(windows), 1)
+
+	w := windows[1]
+	prefix := w.input[:int(w.prefixLen)]
+	require.Contains(t, prefix, "<context>",
+		"markdown prefix must render the header hierarchy as a context block")
+	require.LessOrEqual(t, int(w.prefixLen), autoChunkPrefixReserveByte)
 }
 
 func TestAutoChunkWindowToRaw(t *testing.T) {

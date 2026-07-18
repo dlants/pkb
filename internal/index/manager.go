@@ -658,6 +658,24 @@ const (
 	autoChunkOverlapTokens = 10000
 	autoChunkMaxWindowByte = autoChunkTokenLimit * charsPerAutoChunkToken
 	autoChunkOverlapByte   = autoChunkOverlapTokens * charsPerAutoChunkToken
+
+	// autoChunkHeadTokens is the size of the head-of-file section prepended to
+	// every window after the first, so the file's preamble (imports, module
+	// docstring, frontmatter, top-level headings) contextualizes every body.
+	autoChunkHeadTokens = 4000
+	autoChunkHeadByte   = autoChunkHeadTokens * charsPerAutoChunkToken
+	// autoChunkBreadcrumbReserveByte is the fixed allowance for the structural
+	// breadcrumb part of the prefix. Head + breadcrumb reserve is subtracted from
+	// the window cap to size later-window bodies, so body extents are
+	// deterministic and independent of how long a given breadcrumb turns out to
+	// be. A breadcrumb that overflows the reserve is a hard failure.
+	autoChunkBreadcrumbReserveByte = 2000
+	autoChunkPrefixReserveByte     = autoChunkHeadByte + autoChunkBreadcrumbReserveByte
+	// autoChunkBodyBudget is the verbatim-body size for windows after the first;
+	// the first window's body is the full autoChunkMaxWindowByte (it carries the
+	// head already, so no prefix). Reserving a fixed prefix budget keeps the whole
+	// transformed input under the per-request cap.
+	autoChunkBodyBudget = autoChunkMaxWindowByte - autoChunkPrefixReserveByte
 )
 
 // prepareFile builds a preparedFile for any file — code or text — via the
@@ -678,7 +696,10 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm
 	if err != nil {
 		return nil, err
 	}
-	windows := autoChunkWindows(string(content))
+	windows, err := autoChunkWindows(path, string(content))
+	if err != nil {
+		return nil, err
+	}
 	pf := &preparedFile{path: path, blobSha: blobSha}
 	seen := map[string]struct{}{}
 	for _, w := range windows {
@@ -689,6 +710,17 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm
 		for _, c := range chunks {
 			text := strings.TrimSpace(c.Text)
 			if text == "" {
+				continue
+			}
+			// Drop chunks that a later window's synthetic context prefix (the
+			// structural breadcrumb) contributed: they have no verbatim preimage
+			// in the blob, so they cannot be resolved to a raw span. Head-section
+			// chunks are verbatim file bytes and survive as text duplicates of
+			// the first window's chunks. The guard is scoped to prefixed windows
+			// so the first/only window keeps the unlocatable-chunk hard-fail.
+			// Stage 3 replaces this text-based guard with exact
+			// InputOffset->RawOffset classification.
+			if w.prefixLen > 0 && !bytes.Contains(content, []byte(text)) {
 				continue
 			}
 			if _, dup := seen[text]; dup {
@@ -708,30 +740,84 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm
 	return pf, nil
 }
 
-// autoChunkWindows splits a document into byte windows for whole-document
-// embedding. A document at or under the window size is returned as a single
-// window; larger documents are split into windows of autoChunkMaxWindowByte
-// that overlap by autoChunkOverlapByte so no content falls between two windows.
-func autoChunkWindows(document string) []autoChunkWindow {
+// autoChunkWindows splits a document into whole-document embedding windows. A
+// document at or under the window size is one prefix-less window. A larger
+// document is split into windows whose bodies are verbatim, contiguous copies of
+// the raw blob overlapping by autoChunkOverlapByte (so no chunk boundary is
+// lost). The first window's body spans the head, so it carries no prefix and
+// gets the full autoChunkMaxWindowByte budget. Every later window prepends a
+// synthetic context prefix (the file's head section plus a structural
+// breadcrumb locating the body in the file) and uses the reduced
+// autoChunkBodyBudget; the prefix has no raw preimage and is dropped after
+// embedding. The whole transformed input stays under the per-request cap because
+// bodies are sized against the fixed autoChunkPrefixReserveByte and each real
+// prefix is asserted to fit within that reserve.
+func autoChunkWindows(path paths.GitRootRelativePath, document string) ([]autoChunkWindow, error) {
 	if len(document) <= autoChunkMaxWindowByte {
-		return []autoChunkWindow{{input: document}}
+		return []autoChunkWindow{{input: document}}, nil
 	}
-	var windows []autoChunkWindow
-	step := autoChunkMaxWindowByte - autoChunkOverlapByte
-	for start := 0; start < len(document); start += step {
-		end := start + autoChunkMaxWindowByte
-		if end > len(document) {
-			end = len(document)
+
+	route := filetype.RoutePath(string(path))
+	comment := filetype.LineComment(string(path))
+	isCode := route.Type == filetype.Code
+	var coder *chunk.CodeBreadcrumber
+	if isCode {
+		var err error
+		coder, err = chunk.NewCodeBreadcrumber([]byte(document), route.Grammar, string(path))
+		if err != nil {
+			return nil, fmt.Errorf("index: window %s: %w", path, err)
+		}
+	}
+
+	head := headSection(document)
+
+	// First window: full budget, no prefix (its body already contains the head).
+	windows := []autoChunkWindow{{input: document[:autoChunkMaxWindowByte]}}
+
+	step := autoChunkBodyBudget - autoChunkOverlapByte
+	for bodyStart := autoChunkMaxWindowByte - autoChunkOverlapByte; bodyStart < len(document); bodyStart += step {
+		bodyEnd := bodyStart + autoChunkBodyBudget
+		if bodyEnd > len(document) {
+			bodyEnd = len(document)
+		}
+		var breadcrumb string
+		if isCode {
+			breadcrumb = coder.Breadcrumb(bodyStart, bodyStart)
+		} else {
+			breadcrumb = chunk.MarkdownBreadcrumb(document, string(path), bodyStart)
+		}
+		prefix := head
+		if breadcrumb != "" {
+			prefix += "\n" + metaBlock(comment, breadcrumb)
+		}
+		prefix += "\n\n"
+		if InputOffset(len(prefix)) > autoChunkPrefixReserveByte {
+			return nil, fmt.Errorf("index: window %s: context prefix of %d bytes exceeds reserve %d", path, len(prefix), autoChunkPrefixReserveByte)
 		}
 		windows = append(windows, autoChunkWindow{
-			input:     document[start:end],
-			bodyStart: mirror.RawOffset(start),
+			input:     prefix + document[bodyStart:bodyEnd],
+			prefixLen: InputOffset(len(prefix)),
+			bodyStart: mirror.RawOffset(bodyStart),
 		})
-		if end == len(document) {
+		if bodyEnd == len(document) {
 			break
 		}
 	}
-	return windows
+	return windows, nil
+}
+
+// headSection returns the file's leading bytes (at most autoChunkHeadByte),
+// trimmed back to the last line boundary so it ends on a whole line. It is the
+// preamble prepended to later windows to contextualize their bodies.
+func headSection(document string) string {
+	head := document
+	if len(head) > autoChunkHeadByte {
+		head = head[:autoChunkHeadByte]
+	}
+	if idx := strings.LastIndexByte(head, '\n'); idx >= 0 {
+		head = head[:idx+1]
+	}
+	return head
 }
 
 // InputOffset is a byte offset into a window's transformed input string (the

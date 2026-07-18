@@ -281,6 +281,40 @@ in returned order) makes "already covered" well-defined.
     `(_, false)`. The two coordinate types are distinct enough that a
     raw↔input mixup fails to compile (documents the nominal-typing guarantee).
 
+## Stage 2 progress (DONE)
+
+- Implemented in `internal/index/manager.go`: constants `autoChunkHeadTokens`
+  (4000), `autoChunkHeadByte`, `autoChunkBreadcrumbReserveByte` (2000),
+  `autoChunkPrefixReserveByte`, `autoChunkBodyBudget`. New `headSection` helper
+  returns the file's leading bytes (<= headBudget) trimmed back to the last line
+  boundary.
+- `autoChunkWindows` now takes `(path, document)` and returns
+  `([]autoChunkWindow, error)`. The first/only window is unchanged (full budget,
+  no prefix). Every later window prepends a prefix = head section + (optional)
+  structural breadcrumb rendered via `metaBlock`/`Contextualize` (code:
+  `CodeBreadcrumber.Breadcrumb(bodyStart,bodyStart)` as comments; markdown/text:
+  `MarkdownBreadcrumb` as a `<context>` block) + a blank-line separator. Bodies
+  are sized to `autoChunkBodyBudget` and stepped by `bodyBudget - overlapByte`,
+  so consecutive bodies overlap by `autoChunkOverlapByte`. After building each
+  real prefix we assert `prefixLen <= autoChunkPrefixReserveByte` (hard fail on
+  overflow).
+- Deviation: `prepareFile` still uses the Stage-1 `resolveSpans` + text-dedup
+  path (its rewrite is Stage 3). To keep the whole suite green with prefixed
+  windows, `prepareFile` drops a returned chunk whose text is absent from the
+  blob **only for prefixed windows** (`w.prefixLen > 0`); this discards synthetic
+  breadcrumb-block chunks while head-section chunks (verbatim file bytes) survive
+  as text-dedup duplicates of the first window's chunks. The single/first window
+  keeps the unlocatable-chunk hard-fail. Marked clearly as interim; Stage 3
+  replaces it with exact `InputOffset`->`RawOffset` classification.
+- Tests (manager_test.go): updated `TestAutoChunkWindowsSmallDocument` and
+  `TestAutoChunkWindowsLargeDocumentBodiesCoverBlob` for the new signature/model;
+  added `TestAutoChunkWindowsCodePrefixHasHeadAndBreadcrumb` and
+  `TestAutoChunkWindowsMarkdownPrefixCarriesHeaderHierarchy`. Updated the overlap
+  assertion in `TestContextualizeTextWindowsLargeFileAndDedups` to check body
+  overlap (overlap now follows the prefix, not at offset 0).
+- Full suite green (`go build/vet/test ./...`); remaining golangci-lint errcheck
+  findings are pre-existing `defer st.Close()` in untouched test setup.
+
 ## structured context prefix
 
 - Goal: build the head-of-file section (trimmed to a line boundary, budgeted by
