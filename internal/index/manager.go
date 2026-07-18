@@ -646,8 +646,15 @@ func (o *Options) syncCache(models []embed.EmbeddingModel) error {
 // whole in one EmbedDocument call; larger files are split into overlapping
 // windows so no chunk boundary is lost across a split.
 const (
-	charsPerAutoChunkToken = 5
-	autoChunkTokenLimit    = 120000
+	// charsPerAutoChunkToken deliberately underestimates real chars-per-token
+	// (English prose is ~4-5, dense code can be ~3.5) so the byte-sized window
+	// stays comfortably under the endpoint's token cap. Underestimating makes
+	// windows smaller and safer; the only cost is more requests for huge files.
+	charsPerAutoChunkToken = 3
+	// autoChunkTokenLimit is the per-window token budget. It sits below Voyage's
+	// hard 120000-tokens-per-batch limit so a window never trips the cap even
+	// when a window tokenizes denser than charsPerAutoChunkToken assumes.
+	autoChunkTokenLimit    = 100000
 	autoChunkOverlapTokens = 10000
 	autoChunkMaxWindowByte = autoChunkTokenLimit * charsPerAutoChunkToken
 	autoChunkOverlapByte   = autoChunkOverlapTokens * charsPerAutoChunkToken
