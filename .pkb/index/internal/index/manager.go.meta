@@ -1,384 +1,91 @@
 {
   "blobSha": "ea890c6b4c57b7a1caae97716d43a7adda069493",
   "modelName": "voyage-context-4@256",
+  "version": 9,
   "chunks": [
     {
-      "text": "// Package index implements the reindex flow: it lists the target tree (HEAD by\n// default) and compares each file's git blob sha against the blob shas already\n// recorded in the store, then indexes/updates/deletes only the files that\n// differ. There is no watcher; reindex runs to completion and exits.\npackage index\n\nimport (\n\t\"bytes\"\n\t\"fmt\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"sort\"\n\t\"strings\"\n\t\"time\"\n\n\t\"github.com/BurntSushi/toml\"\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/cost\"\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/mirror\"\n\t\"github.com/dlants/pkb/internal/paths\"\n\t\"github.com/dlants/pkb/internal/store\"\n)",
-      "contextualizedText": "// internal/index/manager.go\n\n// Package index implements the reindex flow: it lists the target tree (HEAD by\n// default) and compares each file's git blob sha against the blob shas already\n// recorded in the store, then indexes/updates/deletes only the files that\n// differ. There is no watcher; reindex runs to completion and exits.\npackage index\n\nimport (\n\t\"bytes\"\n\t\"fmt\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"sort\"\n\t\"strings\"\n\t\"time\"\n\n\t\"github.com/BurntSushi/toml\"\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/cost\"\n\t\"github.com/dlants/pkb/internal/embed\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/git\"\n\t\"github.com/dlants/pkb/internal/mirror\"\n\t\"github.com/dlants/pkb/internal/paths\"\n\t\"github.com/dlants/pkb/internal/store\"\n)",
-      "headingContext": "internal/index/manager.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 25,
-      "endCol": 2
+      "start": 0,
+      "end": 1968
     },
     {
-      "text": "// State is the persisted marker recording how far indexing has progressed.\ntype State struct {\n\tCommit     string `toml:\"commit\"`\n\tFileCount  int    `toml:\"fileCount\"`\n\tChunkCount int    `toml:\"chunkCount\"`\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type State\n\n// State is the persisted marker recording how far indexing has progressed.\ntype State struct {\n\tCommit     string `toml:\"commit\"`\n\tFileCount  int    `toml:\"fileCount\"`\n\tChunkCount int    `toml:\"chunkCount\"`\n}",
-      "headingContext": "internal/index/manager.go \u003e type State",
-      "startLine": 27,
-      "startCol": 1,
-      "endLine": 32,
-      "endCol": 2
+      "start": 1970,
+      "end": 3904
     },
     {
-      "text": "const statePath = \"pkb-state.toml\"",
-      "contextualizedText": "// internal/index/manager.go\n\nconst statePath = \"pkb-state.toml\"",
-      "headingContext": "internal/index/manager.go",
-      "startLine": 34,
-      "startCol": 1,
-      "endLine": 34,
-      "endCol": 35
+      "start": 3906,
+      "end": 5619
     },
     {
-      "text": "// Ignore matches paths against the configured exclude globs using simple\n// segment/prefix matching (full gitignore semantics are out of scope for v1).\ntype Ignore struct {\n\tpatterns []string\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type Ignore\n\n// Ignore matches paths against the configured exclude globs using simple\n// segment/prefix matching (full gitignore semantics are out of scope for v1).\ntype Ignore struct {\n\tpatterns []string\n}",
-      "headingContext": "internal/index/manager.go \u003e type Ignore",
-      "startLine": 36,
-      "startCol": 1,
-      "endLine": 40,
-      "endCol": 2
+      "start": 5622,
+      "end": 7029
     },
     {
-      "text": "// NewIgnore builds an Ignore from the configured exclude patterns. Blank lines\n// and leading/trailing whitespace or trailing slashes are normalized away.\nfunc NewIgnore(patterns []string) *Ignore {\n\tvar cleaned []string\n\tfor _, p := range patterns {\n\t\tp = strings.TrimSpace(p)\n\t\tif p == \"\" || strings.HasPrefix(p, \"#\") {\n\t\t\tcontinue\n\t\t}\n\t\tcleaned = append(cleaned, strings.TrimRight(p, \"/\"))\n\t}\n\treturn \u0026Ignore{patterns: cleaned}\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function NewIgnore\n\n// NewIgnore builds an Ignore from the configured exclude patterns. Blank lines\n// and leading/trailing whitespace or trailing slashes are normalized away.\nfunc NewIgnore(patterns []string) *Ignore {\n\tvar cleaned []string\n\tfor _, p := range patterns {\n\t\tp = strings.TrimSpace(p)\n\t\tif p == \"\" || strings.HasPrefix(p, \"#\") {\n\t\t\tcontinue\n\t\t}\n\t\tcleaned = append(cleaned, strings.TrimRight(p, \"/\"))\n\t}\n\treturn \u0026Ignore{patterns: cleaned}\n}",
-      "headingContext": "internal/index/manager.go \u003e function NewIgnore",
-      "startLine": 42,
-      "startCol": 1,
-      "endLine": 54,
-      "endCol": 2
+      "start": 7032,
+      "end": 8952
     },
     {
-      "text": "// Match reports whether relPath is excluded by any pattern.\nfunc (i *Ignore) Match(rel paths.GitRootRelativePath) bool {\n\trelPath := string(rel)\n\tbase := filepath.Base(relPath)\n\tfor _, p := range i.patterns {\n\t\tif base == p {\n\t\t\treturn true\n\t\t}\n\t\tif relPath == p || strings.HasPrefix(relPath, p+\"/\") {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method Match\n\n// Match reports whether relPath is excluded by any pattern.\nfunc (i *Ignore) Match(rel paths.GitRootRelativePath) bool {\n\trelPath := string(rel)\n\tbase := filepath.Base(relPath)\n\tfor _, p := range i.patterns {\n\t\tif base == p {\n\t\t\treturn true\n\t\t}\n\t\tif relPath == p || strings.HasPrefix(relPath, p+\"/\") {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}",
-      "headingContext": "internal/index/manager.go \u003e method Match",
-      "startLine": 56,
-      "startCol": 1,
-      "endLine": 69,
-      "endCol": 2
+      "start": 8956,
+      "end": 9269
     },
     {
-      "text": "// Options configures a reindex run.\ntype Options struct {\n\tRepo  *git.Repo\n\tStore *store.Store\n\t// Model embeds all files (code and text).\n\tModel  embed.EmbeddingModel\n\tIgnore *Ignore\n\t// ExtOverrides forces a file extension to a file type (\"code\"/\"text\").\n\tExtOverrides map[string]string\n\t// MaxReindexCost caps the projected dollar cost of a single run (a\n\t// per-run cap, not a cumulative spend limit). Reindex estimates the cost\n\t// before any paid work and aborts when it exceeds MaxReindexCost. A\n\t// non-positive value disables the gate.\n\tMaxReindexCost float64\n\t// Staged, when true, indexes the staging area (git write-tree) rather than\n\t// HEAD, so a pre-commit hook can index not-yet-committed content. The staged\n\t// blob shas equal the blob shas the commit will contain, so a subsequent\n\t// post-commit reindex is a no-op.\n\tStaged bool\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type Options\n\n// Options configures a reindex run.\ntype Options struct {\n\tRepo  *git.Repo\n\tStore *store.Store\n\t// Model embeds all files (code and text).\n\tModel  embed.EmbeddingModel\n\tIgnore *Ignore\n\t// ExtOverrides forces a file extension to a file type (\"code\"/\"text\").\n\tExtOverrides map[string]string\n\t// MaxReindexCost caps the projected dollar cost of a single run (a\n\t// per-run cap, not a cumulative spend limit). Reindex estimates the cost\n\t// before any paid work and aborts when it exceeds MaxReindexCost. A\n\t// non-positive value disables the gate.\n\tMaxReindexCost float64\n\t// Staged, when true, indexes the staging area (git write-tree) rather than\n\t// HEAD, so a pre-commit hook can index not-yet-committed content. The staged\n\t// blob shas equal the blob shas the commit will contain, so a subsequent\n\t// post-commit reindex is a no-op.\n\tStaged bool\n}",
-      "headingContext": "internal/index/manager.go \u003e type Options",
-      "startLine": 71,
-      "startCol": 1,
-      "endLine": 90,
-      "endCol": 2
+      "start": 9272,
+      "end": 10996
     },
     {
-      "text": "// contextualModel returns the embedding model as a ContextualEmbeddingModel.\n// The second result reports whether the model supports the contextual\n// whole-document auto-chunk path (every file — code and text — uses it).\nfunc (o *Options) contextualModel() (embed.ContextualEmbeddingModel, bool) {\n\tcm, ok := o.Model.(embed.ContextualEmbeddingModel)\n\treturn cm, ok\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method contextualModel\n\n// contextualModel returns the embedding model as a ContextualEmbeddingModel.\n// The second result reports whether the model supports the contextual\n// whole-document auto-chunk path (every file — code and text — uses it).\nfunc (o *Options) contextualModel() (embed.ContextualEmbeddingModel, bool) {\n\tcm, ok := o.Model.(embed.ContextualEmbeddingModel)\n\treturn cm, ok\n}",
-      "headingContext": "internal/index/manager.go \u003e method contextualModel",
-      "startLine": 92,
-      "startCol": 1,
-      "endLine": 98,
-      "endCol": 2
+      "start": 10999,
+      "end": 12833
     },
     {
-      "text": "// activeModels returns the embedding models in use.\nfunc (o *Options) activeModels() []embed.EmbeddingModel {\n\treturn []embed.EmbeddingModel{o.Model}\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method activeModels\n\n// activeModels returns the embedding models in use.\nfunc (o *Options) activeModels() []embed.EmbeddingModel {\n\treturn []embed.EmbeddingModel{o.Model}\n}",
-      "headingContext": "internal/index/manager.go \u003e method activeModels",
-      "startLine": 100,
-      "startCol": 1,
-      "endLine": 103,
-      "endCol": 2
+      "start": 12836,
+      "end": 13375
     },
     {
-      "text": "// route returns the file type for a path, applying any extension overrides.\nfunc (o *Options) route(path paths.GitRootRelativePath) filetype.FileType {\n\text := strings.ToLower(filepath.Ext(string(path)))\n\tif o.ExtOverrides != nil {\n\t\tif t, ok := o.ExtOverrides[ext]; ok {\n\t\t\tif t == \"code\" {\n\t\t\t\treturn filetype.Code\n\t\t\t}\n\t\t\treturn filetype.Text\n\t\t}\n\t}\n\treturn filetype.RoutePath(string(path)).Type\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method route\n\n// route returns the file type for a path, applying any extension overrides.\nfunc (o *Options) route(path paths.GitRootRelativePath) filetype.FileType {\n\text := strings.ToLower(filepath.Ext(string(path)))\n\tif o.ExtOverrides != nil {\n\t\tif t, ok := o.ExtOverrides[ext]; ok {\n\t\t\tif t == \"code\" {\n\t\t\t\treturn filetype.Code\n\t\t\t}\n\t\t\treturn filetype.Text\n\t\t}\n\t}\n\treturn filetype.RoutePath(string(path)).Type\n}",
-      "headingContext": "internal/index/manager.go \u003e method route",
-      "startLine": 105,
-      "startCol": 1,
-      "endLine": 117,
-      "endCol": 2
+      "start": 13377,
+      "end": 15098
     },
     {
-      "text": "// textExts is the allowlist of indexable text extensions.\nvar textExts = map[string]struct{}{\n\t\".md\":       {},\n\t\".markdown\": {},\n\t\".txt\":      {},\n}",
-      "contextualizedText": "// internal/index/manager.go\n\n// textExts is the allowlist of indexable text extensions.\nvar textExts = map[string]struct{}{\n\t\".md\":       {},\n\t\".markdown\": {},\n\t\".txt\":      {},\n}",
-      "headingContext": "internal/index/manager.go",
-      "startLine": 119,
-      "startCol": 1,
-      "endLine": 124,
-      "endCol": 2
+      "start": 15100,
+      "end": 15579
     },
     {
-      "text": "// candidate reports whether a path should be indexed: a recognized code file,\n// or an allowlisted text file; never the .pkb state dir; not ignored.\nfunc (o *Options) candidate(path paths.GitRootRelativePath) bool {\n\tif strings.HasPrefix(string(path), \".pkb/\") {\n\t\treturn false\n\t}\n\tif string(path) == statePath {\n\t\treturn false\n\t}\n\tif o.Ignore != nil \u0026\u0026 o.Ignore.Match(path) {\n\t\treturn false\n\t}\n\tif o.route(path) == filetype.Code {\n\t\treturn true\n\t}\n\t_, ok := textExts[strings.ToLower(filepath.Ext(string(path)))]\n\treturn ok\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method candidate\n\n// candidate reports whether a path should be indexed: a recognized code file,\n// or an allowlisted text file; never the .pkb state dir; not ignored.\nfunc (o *Options) candidate(path paths.GitRootRelativePath) bool {\n\tif strings.HasPrefix(string(path), \".pkb/\") {\n\t\treturn false\n\t}\n\tif string(path) == statePath {\n\t\treturn false\n\t}\n\tif o.Ignore != nil \u0026\u0026 o.Ignore.Match(path) {\n\t\treturn false\n\t}\n\tif o.route(path) == filetype.Code {\n\t\treturn true\n\t}\n\t_, ok := textExts[strings.ToLower(filepath.Ext(string(path)))]\n\treturn ok\n}",
-      "headingContext": "internal/index/manager.go \u003e method candidate",
-      "startLine": 126,
-      "startCol": 1,
-      "endLine": 143,
-      "endCol": 2
+      "start": 15581,
+      "end": 17038
     },
     {
-      "text": "func readState(repoRoot string) (*State, error) {\n\tdata, err := os.ReadFile(filepath.Join(repoRoot, statePath))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn nil, nil\n\t\t}\n\t\treturn nil, err\n\t}\n\tvar s State\n\tif err := toml.Unmarshal(data, \u0026s); err != nil {\n\t\treturn nil, err\n\t}\n\treturn \u0026s, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function readState\n\nfunc readState(repoRoot string) (*State, error) {\n\tdata, err := os.ReadFile(filepath.Join(repoRoot, statePath))\n\tif err != nil {\n\t\tif os.IsNotExist(err) {\n\t\t\treturn nil, nil\n\t\t}\n\t\treturn nil, err\n\t}\n\tvar s State\n\tif err := toml.Unmarshal(data, \u0026s); err != nil {\n\t\treturn nil, err\n\t}\n\treturn \u0026s, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e function readState",
-      "startLine": 145,
-      "startCol": 1,
-      "endLine": 158,
-      "endCol": 2
+      "start": 17040,
+      "end": 18701
     },
     {
-      "text": "func writeState(repoRoot string, s State) error {\n\tvar buf bytes.Buffer\n\tif err := toml.NewEncoder(\u0026buf).Encode(s); err != nil {\n\t\treturn err\n\t}\n\treturn os.WriteFile(filepath.Join(repoRoot, statePath), buf.Bytes(), 0o644)\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function writeState\n\nfunc writeState(repoRoot string, s State) error {\n\tvar buf bytes.Buffer\n\tif err := toml.NewEncoder(\u0026buf).Encode(s); err != nil {\n\t\treturn err\n\t}\n\treturn os.WriteFile(filepath.Join(repoRoot, statePath), buf.Bytes(), 0o644)\n}",
-      "headingContext": "internal/index/manager.go \u003e function writeState",
-      "startLine": 160,
-      "startCol": 1,
-      "endLine": 166,
-      "endCol": 2
+      "start": 18703,
+      "end": 20456
     },
     {
-      "text": "// Reindex brings the index in sync with HEAD and, only on success, advances\n// the marker.\nfunc Reindex(o *Options) (State, error) {\n\trepoRoot := string(o.Repo.Root)\n\n\ttreeRef := \"HEAD\"\n\tif o.Staged {\n\t\ttreeSha, err := o.Repo.WriteTree()\n\t\tif err != nil {\n\t\t\treturn State{}, err\n\t\t}\n\t\ttreeRef = treeSha\n\t}\n\n\t// targetSha is recorded in the state marker for human-facing output only;\n\t// correctness comes from the per-file blob shas. For a staged run it is the\n\t// parent HEAD commit (or empty when indexing the very first commit).\n\ttargetSha, err := o.Repo.ResolveRef(\"HEAD\")\n\tif err != nil {\n\t\tif !o.Staged {\n\t\t\treturn State{}, err\n\t\t}\n\t\ttargetSha = \"\"\n\t}\n\n\tmodels := o.activeModels()\n\tfor _, m := range models {\n\t\tif err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\t\treturn State{}, err\n\t\t}\n\t}\n\tactiveNames := make([]string, len(models))\n\tfor i, m := range models {\n\t\tactiveNames[i] = m.ModelName()\n\t}\n\tif err := o.Store.CleanupOrphans(activeNames); err != nil {\n\t\treturn State{}, err\n\t}\n\n\t// indexed maps each already-indexed path to the model that embedded it and\n\t// its stored blob sha, read from the mirror tree (the source of truth).\n\tindexed, err := o.treeIndexed(models)\n\tif err != nil {\n\t\treturn State{}, err\n\t}\n\n\ttreeFiles, err := o.Repo.LsTree(treeRef)\n\tif err != nil {\n\t\treturn State{}, err\n\t}\n\ttreeMap := make(map[paths.GitRootRelativePath]string, len(treeFiles))\n\tfor _, f := range treeFiles {\n\t\ttreeMap[f.Path] = f.BlobSha\n\t}\n\n\ttouched := o.touchedPaths(treeMap, indexed)\n\n\test, err := o.estimate(touched, treeMap, indexed, false)\n\tif err != nil {\n\t\treturn State{}, err\n\t}\n\tfmt.Fprintf(os.Stderr, \"estimated reindex cost: $%.2f (%d files, %d chunks, ~%d embed tokens)\\n\",\n\t\test.dollars, est.files, est.chunks, est.embedTokens)",
-      "contextualizedText": "// internal/index/manager.go \u003e function Reindex\n\n// Reindex brings the index in sync with HEAD and, only on success, advances\n// the marker.\nfunc Reindex(o *Options) (State, error) {\n\trepoRoot := string(o.Repo.Root)\n\n\ttreeRef := \"HEAD\"\n\tif o.Staged {\n\t\ttreeSha, err := o.Repo.WriteTree()\n\t\tif err != nil {\n\t\t\treturn State{}, err\n\t\t}\n\t\ttreeRef = treeSha\n\t}\n\n\t// targetSha is recorded in the state marker for human-facing output only;\n\t// correctness comes from the per-file blob shas. For a staged run it is the\n\t// parent HEAD commit (or empty when indexing the very first commit).\n\ttargetSha, err := o.Repo.ResolveRef(\"HEAD\")\n\tif err != nil {\n\t\tif !o.Staged {\n\t\t\treturn State{}, err\n\t\t}\n\t\ttargetSha = \"\"\n\t}\n\n\tmodels := o.activeModels()\n\tfor _, m := range models {\n\t\tif err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\t\treturn State{}, err\n\t\t}\n\t}\n\tactiveNames := make([]string, len(models))\n\tfor i, m := range models {\n\t\tactiveNames[i] = m.ModelName()\n\t}\n\tif err := o.Store.CleanupOrphans(activeNames); err != nil {\n\t\treturn State{}, err\n\t}\n\n\t// indexed maps each already-indexed path to the model that embedded it and\n\t// its stored blob sha, read from the mirror tree (the source of truth).\n\tindexed, err := o.treeIndexed(models)\n\tif err != nil {\n\t\treturn State{}, err\n\t}\n\n\ttreeFiles, err := o.Repo.LsTree(treeRef)\n\tif err != nil {\n\t\treturn State{}, err\n\t}\n\ttreeMap := make(map[paths.GitRootRelativePath]string, len(treeFiles))\n\tfor _, f := range treeFiles {\n\t\ttreeMap[f.Path] = f.BlobSha\n\t}\n\n\ttouched := o.touchedPaths(treeMap, indexed)\n\n\test, err := o.estimate(touched, treeMap, indexed, false)\n\tif err != nil {\n\t\treturn State{}, err\n\t}\n\tfmt.Fprintf(os.Stderr, \"estimated reindex cost: $%.2f (%d files, %d chunks, ~%d embed tokens)\\n\",\n\t\test.dollars, est.files, est.chunks, est.embedTokens)",
-      "headingContext": "internal/index/manager.go \u003e function Reindex",
-      "startLine": 168,
-      "startCol": 1,
-      "endLine": 230,
-      "endCol": 55
+      "start": 20459,
+      "end": 21937
     },
     {
-      "text": "if o.MaxReindexCost \u003e 0 \u0026\u0026 est.dollars \u003e o.MaxReindexCost {\n\t\treturn State{}, fmt.Errorf(\"estimated reindex cost $%.2f exceeds max reindex cost $%.2f (%d files, %d chunks, ~%d embed tokens); reindex locally instead\",\n\t\t\test.dollars, o.MaxReindexCost, est.files, est.chunks, est.embedTokens)\n\t}\n\n\tvar (\n\t\tfilesIndexed  int\n\t\tchunksIndexed int\n\t\tindexStart    = time.Now()\n\t\tlastProgress  = time.Now()\n\t)\n\tconst (\n\t\tverboseFileLimit = 50\n\t\tprogressInterval = time.Minute\n\t)\n\treport := func(pf *preparedFile) {\n\t\tfilesIndexed++\n\t\tchunksIndexed += len(pf.chunks)\n\t\telapsed := time.Since(indexStart).Seconds()\n\t\tif filesIndexed \u003c= verboseFileLimit {\n\t\t\tfmt.Fprintf(os.Stderr, \"indexed %s (%d chunks) | %d files, %d chunks, %.1f chunks/sec\\n\",\n\t\t\t\tpf.path, len(pf.chunks), filesIndexed, chunksIndexed, float64(chunksIndexed)/elapsed)\n\t\t\tif filesIndexed == verboseFileLimit {\n\t\t\t\tfmt.Fprintf(os.Stderr, \"... suppressing per-file output; reporting high-level progress every %s\\n\", progressInterval)\n\t\t\t}\n\t\t} else if time.Since(lastProgress) \u003e= progressInterval {\n\t\t\tlastProgress = time.Now()\n\t\t\tfmt.Fprintf(os.Stderr, \"progress: %d/%d files indexed, %d chunks, %.1f chunks/sec\\n\",\n\t\t\t\tfilesIndexed, est.files, chunksIndexed, float64(chunksIndexed)/elapsed)\n\t\t}\n\t}",
-      "contextualizedText": "// internal/index/manager.go \u003e function Reindex\n\nif o.MaxReindexCost \u003e 0 \u0026\u0026 est.dollars \u003e o.MaxReindexCost {\n\t\treturn State{}, fmt.Errorf(\"estimated reindex cost $%.2f exceeds max reindex cost $%.2f (%d files, %d chunks, ~%d embed tokens); reindex locally instead\",\n\t\t\test.dollars, o.MaxReindexCost, est.files, est.chunks, est.embedTokens)\n\t}\n\n\tvar (\n\t\tfilesIndexed  int\n\t\tchunksIndexed int\n\t\tindexStart    = time.Now()\n\t\tlastProgress  = time.Now()\n\t)\n\tconst (\n\t\tverboseFileLimit = 50\n\t\tprogressInterval = time.Minute\n\t)\n\treport := func(pf *preparedFile) {\n\t\tfilesIndexed++\n\t\tchunksIndexed += len(pf.chunks)\n\t\telapsed := time.Since(indexStart).Seconds()\n\t\tif filesIndexed \u003c= verboseFileLimit {\n\t\t\tfmt.Fprintf(os.Stderr, \"indexed %s (%d chunks) | %d files, %d chunks, %.1f chunks/sec\\n\",\n\t\t\t\tpf.path, len(pf.chunks), filesIndexed, chunksIndexed, float64(chunksIndexed)/elapsed)\n\t\t\tif filesIndexed == verboseFileLimit {\n\t\t\t\tfmt.Fprintf(os.Stderr, \"... suppressing per-file output; reporting high-level progress every %s\\n\", progressInterval)\n\t\t\t}\n\t\t} else if time.Since(lastProgress) \u003e= progressInterval {\n\t\t\tlastProgress = time.Now()\n\t\t\tfmt.Fprintf(os.Stderr, \"progress: %d/%d files indexed, %d chunks, %.1f chunks/sec\\n\",\n\t\t\t\tfilesIndexed, est.files, chunksIndexed, float64(chunksIndexed)/elapsed)\n\t\t}\n\t}",
-      "headingContext": "internal/index/manager.go \u003e function Reindex",
-      "startLine": 231,
-      "startCol": 2,
-      "endLine": 261,
-      "endCol": 3
+      "start": 21939,
+      "end": 23806
     },
     {
-      "text": "for path := range touched {\n\t\tblobSha, inTree := treeMap[path]\n\t\tprevEntry, wasIndexed := indexed[path]\n\t\tif inTree \u0026\u0026 o.candidate(path) {\n\t\t\tmodel := o.Model\n\t\t\t// Skip a file only when it was indexed by the same embedding model\n\t\t\t// against the same blob. Because each file is written in a single\n\t\t\t// transaction, a recorded file row always reflects a fully indexed\n\t\t\t// file.\n\t\t\tif wasIndexed \u0026\u0026 prevEntry.model == model.ModelName() \u0026\u0026 prevEntry.sha == blobSha \u0026\u0026 prevEntry.version == store.MajorVersion {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\t// Every file — code and text alike — is embedded via the model's\n\t\t\t// whole-document auto-chunk endpoint; a different model previously\n\t\t\t// embedding this path is handled by overwriting the artifact below\n\t\t\t// (syncCache reconciles the cache).\n\t\t\tcm, ok := o.contextualModel()\n\t\t\tif !ok {\n\t\t\t\treturn State{}, fmt.Errorf(\"model %q does not support document auto-chunking required for indexing\", model.ModelName())\n\t\t\t}\n\t\t\tpf, err := o.prepareFile(path, blobSha, cm)\n\t\t\tif err != nil {\n\t\t\t\treturn State{}, err\n\t\t\t}\n\t\t\tif err := o.writeFile(pf, model); err != nil {\n\t\t\t\treturn State{}, err\n\t\t\t}\n\t\t\treport(pf)\n\t\t} else {\n\t\t\tif wasIndexed {\n\t\t\t\tif err := o.mirrorTree().Delete(path); err != nil {\n\t\t\t\t\treturn State{}, err\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t// The mirror tree is now the up-to-date source of truth; refresh the derived\n\t// SQLite cache from it so stats/state counts and queries stay correct.\n\tif err := o.syncCache(models); err != nil {\n\t\treturn State{}, err\n\t}\n\n\tvar stats store.Stats\n\tfor _, m := range models {\n\t\ts, err := o.Store.Stats(m.ModelName())\n\t\tif err != nil {\n\t\t\treturn State{}, err\n\t\t}\n\t\tstats.Files += s.Files\n\t\tstats.Chunks += s.Chunks\n\t}\n\tst := State{\n\t\tCommit:     targetSha,\n\t\tFileCount:  stats.Files,\n\t\tChunkCount: stats.Chunks,\n\t}\n\tif err := writeState(repoRoot, st); err != nil {\n\t\treturn State{}, err\n\t}\n\tif err := o.Store.Vacuum(); err != nil {\n\t\treturn State{}, err\n\t}\n\treturn st, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function Reindex\n\nfor path := range touched {\n\t\tblobSha, inTree := treeMap[path]\n\t\tprevEntry, wasIndexed := indexed[path]\n\t\tif inTree \u0026\u0026 o.candidate(path) {\n\t\t\tmodel := o.Model\n\t\t\t// Skip a file only when it was indexed by the same embedding model\n\t\t\t// against the same blob. Because each file is written in a single\n\t\t\t// transaction, a recorded file row always reflects a fully indexed\n\t\t\t// file.\n\t\t\tif wasIndexed \u0026\u0026 prevEntry.model == model.ModelName() \u0026\u0026 prevEntry.sha == blobSha \u0026\u0026 prevEntry.version == store.MajorVersion {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\t// Every file — code and text alike — is embedded via the model's\n\t\t\t// whole-document auto-chunk endpoint; a different model previously\n\t\t\t// embedding this path is handled by overwriting the artifact below\n\t\t\t// (syncCache reconciles the cache).\n\t\t\tcm, ok := o.contextualModel()\n\t\t\tif !ok {\n\t\t\t\treturn State{}, fmt.Errorf(\"model %q does not support document auto-chunking required for indexing\", model.ModelName())\n\t\t\t}\n\t\t\tpf, err := o.prepareFile(path, blobSha, cm)\n\t\t\tif err != nil {\n\t\t\t\treturn State{}, err\n\t\t\t}\n\t\t\tif err := o.writeFile(pf, model); err != nil {\n\t\t\t\treturn State{}, err\n\t\t\t}\n\t\t\treport(pf)\n\t\t} else {\n\t\t\tif wasIndexed {\n\t\t\t\tif err := o.mirrorTree().Delete(path); err != nil {\n\t\t\t\t\treturn State{}, err\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t// The mirror tree is now the up-to-date source of truth; refresh the derived\n\t// SQLite cache from it so stats/state counts and queries stay correct.\n\tif err := o.syncCache(models); err != nil {\n\t\treturn State{}, err\n\t}\n\n\tvar stats store.Stats\n\tfor _, m := range models {\n\t\ts, err := o.Store.Stats(m.ModelName())\n\t\tif err != nil {\n\t\t\treturn State{}, err\n\t\t}\n\t\tstats.Files += s.Files\n\t\tstats.Chunks += s.Chunks\n\t}\n\tst := State{\n\t\tCommit:     targetSha,\n\t\tFileCount:  stats.Files,\n\t\tChunkCount: stats.Chunks,\n\t}\n\tif err := writeState(repoRoot, st); err != nil {\n\t\treturn State{}, err\n\t}\n\tif err := o.Store.Vacuum(); err != nil {\n\t\treturn State{}, err\n\t}\n\treturn st, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e function Reindex",
-      "startLine": 262,
-      "startCol": 2,
-      "endLine": 326,
-      "endCol": 2
+      "start": 23808,
+      "end": 25349
     },
     {
-      "text": "// CostEstimate is a read-only projection of a reindex run's cost: how many\n// files/chunks need fresh work and the token/dollar totals that work is\n// expected to incur. It is the public form of the internal costEstimate.\ntype CostEstimate struct {\n\tFiles       int\n\tChunks      int\n\tEmbedTokens int\n\tDollars     float64\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type CostEstimate\n\n// CostEstimate is a read-only projection of a reindex run's cost: how many\n// files/chunks need fresh work and the token/dollar totals that work is\n// expected to incur. It is the public form of the internal costEstimate.\ntype CostEstimate struct {\n\tFiles       int\n\tChunks      int\n\tEmbedTokens int\n\tDollars     float64\n}",
-      "headingContext": "internal/index/manager.go \u003e type CostEstimate",
-      "startLine": 328,
-      "startCol": 1,
-      "endLine": 336,
-      "endCol": 2
+      "start": 25351,
+      "end": 27466
     },
     {
-      "text": "// Estimate projects the dollar cost of a reindex without performing any paid\n// embedding/inference work or mutating index data. When full is true it\n// projects a from-scratch reindex of the entire repository, ignoring per-chunk\n// reuse so every chunk is charged; otherwise it projects the next incremental\n// reindex against HEAD, mirroring Reindex's skip and reuse decisions exactly.\nfunc Estimate(o *Options, full bool) (CostEstimate, error) {\n\tref := \"HEAD\"\n\n\tmodels := o.activeModels()\n\tfor _, m := range models {\n\t\tif err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\t\treturn CostEstimate{}, err\n\t\t}\n\t}\n\n\tindexed, err := o.treeIndexed(models)\n\tif err != nil {\n\t\treturn CostEstimate{}, err\n\t}\n\n\ttreeFiles, err := o.Repo.LsTree(ref)\n\tif err != nil {\n\t\treturn CostEstimate{}, err\n\t}\n\ttreeMap := make(map[paths.GitRootRelativePath]string, len(treeFiles))\n\tfor _, f := range treeFiles {\n\t\ttreeMap[f.Path] = f.BlobSha\n\t}\n\n\tvar touched map[paths.GitRootRelativePath]struct{}\n\tif full {\n\t\ttouched = map[paths.GitRootRelativePath]struct{}{}\n\t\tfor path := range treeMap {\n\t\t\tif o.candidate(path) {\n\t\t\t\ttouched[path] = struct{}{}\n\t\t\t}\n\t\t}\n\t} else {\n\t\ttouched = o.touchedPaths(treeMap, indexed)\n\t}\n\n\test, err := o.estimate(touched, treeMap, indexed, full)\n\tif err != nil {\n\t\treturn CostEstimate{}, err\n\t}\n\treturn CostEstimate{\n\t\tFiles:       est.files,\n\t\tChunks:      est.chunks,\n\t\tEmbedTokens: est.embedTokens,\n\t\tDollars:     est.dollars,\n\t}, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function Estimate\n\n// Estimate projects the dollar cost of a reindex without performing any paid\n// embedding/inference work or mutating index data. When full is true it\n// projects a from-scratch reindex of the entire repository, ignoring per-chunk\n// reuse so every chunk is charged; otherwise it projects the next incremental\n// reindex against HEAD, mirroring Reindex's skip and reuse decisions exactly.\nfunc Estimate(o *Options, full bool) (CostEstimate, error) {\n\tref := \"HEAD\"\n\n\tmodels := o.activeModels()\n\tfor _, m := range models {\n\t\tif err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\t\treturn CostEstimate{}, err\n\t\t}\n\t}\n\n\tindexed, err := o.treeIndexed(models)\n\tif err != nil {\n\t\treturn CostEstimate{}, err\n\t}\n\n\ttreeFiles, err := o.Repo.LsTree(ref)\n\tif err != nil {\n\t\treturn CostEstimate{}, err\n\t}\n\ttreeMap := make(map[paths.GitRootRelativePath]string, len(treeFiles))\n\tfor _, f := range treeFiles {\n\t\ttreeMap[f.Path] = f.BlobSha\n\t}\n\n\tvar touched map[paths.GitRootRelativePath]struct{}\n\tif full {\n\t\ttouched = map[paths.GitRootRelativePath]struct{}{}\n\t\tfor path := range treeMap {\n\t\t\tif o.candidate(path) {\n\t\t\t\ttouched[path] = struct{}{}\n\t\t\t}\n\t\t}\n\t} else {\n\t\ttouched = o.touchedPaths(treeMap, indexed)\n\t}\n\n\test, err := o.estimate(touched, treeMap, indexed, full)\n\tif err != nil {\n\t\treturn CostEstimate{}, err\n\t}\n\treturn CostEstimate{\n\t\tFiles:       est.files,\n\t\tChunks:      est.chunks,\n\t\tEmbedTokens: est.embedTokens,\n\t\tDollars:     est.dollars,\n\t}, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e function Estimate",
-      "startLine": 338,
-      "startCol": 1,
-      "endLine": 389,
-      "endCol": 2
+      "start": 27468,
+      "end": 28913
     },
     {
-      "text": "// touchedPaths computes the set of paths that might need work by comparing the\n// target tree's blob shas against the blob shas already recorded in the store.\n// A path is touched when it is a new/modified candidate (absent from the index\n// or with a differing blob sha) or a deletion (indexed but no longer in the\n// tree). This is derived purely from the\n// tree and the stored blob shas, so it is correct regardless of commit history\n// shape and needs no commit inputs. A same-content embedding-model swap falls\n// out naturally: the new model has no stored blob shas, so every tree candidate\n// differs and is re-embedded.\nfunc (o *Options) touchedPaths(treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) map[paths.GitRootRelativePath]struct{} {\n\ttouched := map[paths.GitRootRelativePath]struct{}{}\n\n\tfor path, blobSha := range treeMap {\n\t\tif !o.candidate(path) {\n\t\t\tcontinue\n\t\t}\n\t\tentry, wasIndexed := indexed[path]\n\t\tif !wasIndexed || entry.sha != blobSha || entry.version != store.MajorVersion {\n\t\t\ttouched[path] = struct{}{}\n\t\t}\n\t}\n\n\t// Deletions: a path recorded in the store but absent from the target tree.\n\tfor path := range indexed {\n\t\tif _, inTree := treeMap[path]; !inTree {\n\t\t\ttouched[path] = struct{}{}\n\t\t}\n\t}\n\n\treturn touched\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method touchedPaths\n\n// touchedPaths computes the set of paths that might need work by comparing the\n// target tree's blob shas against the blob shas already recorded in the store.\n// A path is touched when it is a new/modified candidate (absent from the index\n// or with a differing blob sha) or a deletion (indexed but no longer in the\n// tree). This is derived purely from the\n// tree and the stored blob shas, so it is correct regardless of commit history\n// shape and needs no commit inputs. A same-content embedding-model swap falls\n// out naturally: the new model has no stored blob shas, so every tree candidate\n// differs and is re-embedded.\nfunc (o *Options) touchedPaths(treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry) map[paths.GitRootRelativePath]struct{} {\n\ttouched := map[paths.GitRootRelativePath]struct{}{}\n\n\tfor path, blobSha := range treeMap {\n\t\tif !o.candidate(path) {\n\t\t\tcontinue\n\t\t}\n\t\tentry, wasIndexed := indexed[path]\n\t\tif !wasIndexed || entry.sha != blobSha || entry.version != store.MajorVersion {\n\t\t\ttouched[path] = struct{}{}\n\t\t}\n\t}\n\n\t// Deletions: a path recorded in the store but absent from the target tree.\n\tfor path := range indexed {\n\t\tif _, inTree := treeMap[path]; !inTree {\n\t\t\ttouched[path] = struct{}{}\n\t\t}\n\t}\n\n\treturn touched\n}",
-      "headingContext": "internal/index/manager.go \u003e method touchedPaths",
-      "startLine": 391,
-      "startCol": 1,
-      "endLine": 421,
-      "endCol": 2
+      "start": 28916,
+      "end": 30536
     },
     {
-      "text": "// costEstimate summarizes a projected reindex run: how many files/chunks need\n// fresh work and the token/dollar totals that work is expected to cost. It is\n// computed with no API calls and no DB mutation.\ntype costEstimate struct {\n\tfiles        int\n\tchunks       int\n\tembedTokens  int\n\tembedDollars float64\n\tdollars      float64\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type costEstimate\n\n// costEstimate summarizes a projected reindex run: how many files/chunks need\n// fresh work and the token/dollar totals that work is expected to cost. It is\n// computed with no API calls and no DB mutation.\ntype costEstimate struct {\n\tfiles        int\n\tchunks       int\n\tembedTokens  int\n\tembedDollars float64\n\tdollars      float64\n}",
-      "headingContext": "internal/index/manager.go \u003e type costEstimate",
-      "startLine": 423,
-      "startCol": 1,
-      "endLine": 432,
-      "endCol": 2
-    },
-    {
-      "text": "// estimate projects the dollar cost of indexing the touched set, counting only\n// work that will actually be paid for. It mirrors Reindex's skip decision and\n// per-chunk reuse so reuse hits are never charged: a file fully indexed by the\n// same model against the same blob is skipped, and within a reindexed file only\n// reuse-miss chunks contribute embedding tokens. No network or DB writes occur.\nfunc (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry, fromScratch bool) (costEstimate, error) {\n\tvar est costEstimate\n\tmodel := o.Model\n\tfor path := range touched {\n\t\tblobSha, inTree := treeMap[path]\n\t\tif !inTree || !o.candidate(path) {\n\t\t\tcontinue\n\t\t}\n\t\tprevEntry, wasIndexed := indexed[path]\n\t\tif !fromScratch \u0026\u0026 wasIndexed \u0026\u0026 prevEntry.model == model.ModelName() \u0026\u0026 prevEntry.sha == blobSha \u0026\u0026 prevEntry.version == store.MajorVersion {\n\t\t\tcontinue\n\t\t}\n\t\t// Every file — code and text — is sent whole to the contextual\n\t\t// auto-chunk endpoint, so project its embedding tokens from the\n\t\t// whole-file length. Per-chunk reuse no longer applies; a file is either\n\t\t// skipped wholesale (same blob, above) or re-embedded whole. Size the\n\t\t// projection from the recorded blob (not the working tree) so the\n\t\t// estimate matches the content that will actually be embedded.\n\t\tcontent, err := o.Repo.CatBlob(blobSha)\n\t\tif err != nil {\n\t\t\treturn costEstimate{}, err\n\t\t}\n\t\test.files++\n\t\test.chunks++\n\t\test.embedTokens += len(content) / cost.CharsPerToken\n\t}\n\test.embedDollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())\n\test.dollars = est.embedDollars\n\treturn est, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method estimate\n\n// estimate projects the dollar cost of indexing the touched set, counting only\n// work that will actually be paid for. It mirrors Reindex's skip decision and\n// per-chunk reuse so reuse hits are never charged: a file fully indexed by the\n// same model against the same blob is skipped, and within a reindexed file only\n// reuse-miss chunks contribute embedding tokens. No network or DB writes occur.\nfunc (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeMap map[paths.GitRootRelativePath]string, indexed map[paths.GitRootRelativePath]indexedEntry, fromScratch bool) (costEstimate, error) {\n\tvar est costEstimate\n\tmodel := o.Model\n\tfor path := range touched {\n\t\tblobSha, inTree := treeMap[path]\n\t\tif !inTree || !o.candidate(path) {\n\t\t\tcontinue\n\t\t}\n\t\tprevEntry, wasIndexed := indexed[path]\n\t\tif !fromScratch \u0026\u0026 wasIndexed \u0026\u0026 prevEntry.model == model.ModelName() \u0026\u0026 prevEntry.sha == blobSha \u0026\u0026 prevEntry.version == store.MajorVersion {\n\t\t\tcontinue\n\t\t}\n\t\t// Every file — code and text — is sent whole to the contextual\n\t\t// auto-chunk endpoint, so project its embedding tokens from the\n\t\t// whole-file length. Per-chunk reuse no longer applies; a file is either\n\t\t// skipped wholesale (same blob, above) or re-embedded whole. Size the\n\t\t// projection from the recorded blob (not the working tree) so the\n\t\t// estimate matches the content that will actually be embedded.\n\t\tcontent, err := o.Repo.CatBlob(blobSha)\n\t\tif err != nil {\n\t\t\treturn costEstimate{}, err\n\t\t}\n\t\test.files++\n\t\test.chunks++\n\t\test.embedTokens += len(content) / cost.CharsPerToken\n\t}\n\test.embedDollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())\n\test.dollars = est.embedDollars\n\treturn est, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e method estimate",
-      "startLine": 434,
-      "startCol": 1,
-      "endLine": 468,
-      "endCol": 2
-    },
-    {
-      "text": "// preparedFile holds everything needed to persist one file: the auto-chunk\n// output already embedded, plus each chunk's verbatim byte span in the source.\ntype preparedFile struct {\n\tpath       paths.GitRootRelativePath\n\tblobSha    string\n\tchunks     []chunk.ChunkInfo\n\tembeddings []embed.Embedding\n\tchars      int\n\t// spans[i] is the [start,end) byte offset of chunk i within blobSha's\n\t// content, recovered by locating the chunk text verbatim in the source.\n\tspans [][2]int\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type preparedFile\n\n// preparedFile holds everything needed to persist one file: the auto-chunk\n// output already embedded, plus each chunk's verbatim byte span in the source.\ntype preparedFile struct {\n\tpath       paths.GitRootRelativePath\n\tblobSha    string\n\tchunks     []chunk.ChunkInfo\n\tembeddings []embed.Embedding\n\tchars      int\n\t// spans[i] is the [start,end) byte offset of chunk i within blobSha's\n\t// content, recovered by locating the chunk text verbatim in the source.\n\tspans [][2]int\n}",
-      "headingContext": "internal/index/manager.go \u003e type preparedFile",
-      "startLine": 470,
-      "startCol": 1,
-      "endLine": 481,
-      "endCol": 2
-    },
-    {
-      "text": "// resolveSpans locates each chunk's text verbatim within content, returning the\n// [start,end) byte span of every chunk. It scans forward from a moving cursor so\n// non-overlapping chunks resolve to precise, ordered offsets. A chunk whose text\n// is not found at/after the cursor is a hard failure: offsets are load-bearing\n// (the chunk text is reconstructed from them at sync), so a miss must surface\n// immediately rather than persist a wrong span.\nfunc resolveSpans(path paths.GitRootRelativePath, content []byte, chunks []chunk.ChunkInfo) ([][2]int, error) {\n\tspans := make([][2]int, len(chunks))\n\tcursor := 0\n\tfor i, c := range chunks {\n\t\tstart := -1\n\t\t// Prefer a match at/after the cursor so repeated chunk texts (e.g.\n\t\t// identical code lines) resolve to distinct, ordered spans.\n\t\tif rel := bytes.Index(content[cursor:], []byte(c.Text)); rel \u003e= 0 {\n\t\t\tstart = cursor + rel\n\t\t\tcursor = start + len(c.Text)\n\t\t} else if abs := bytes.Index(content, []byte(c.Text)); abs \u003e= 0 {\n\t\t\t// Auto-chunk windowing can emit a chunk from an overlapping window\n\t\t\t// out of file order; fall back to a whole-file search without moving\n\t\t\t// the cursor backward.\n\t\t\tstart = abs\n\t\t}\n\t\tif start \u003c 0 {\n\t\t\tpreview := c.Text\n\t\t\tif len(preview) \u003e 80 {\n\t\t\t\tpreview = preview[:80]\n\t\t\t}\n\t\t\treturn nil, fmt.Errorf(\"index: cannot locate chunk %d of %s as a verbatim substring: %q\", i, path, preview)\n\t\t}\n\t\tspans[i] = [2]int{start, start + len(c.Text)}\n\t}\n\treturn spans, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function resolveSpans\n\n// resolveSpans locates each chunk's text verbatim within content, returning the\n// [start,end) byte span of every chunk. It scans forward from a moving cursor so\n// non-overlapping chunks resolve to precise, ordered offsets. A chunk whose text\n// is not found at/after the cursor is a hard failure: offsets are load-bearing\n// (the chunk text is reconstructed from them at sync), so a miss must surface\n// immediately rather than persist a wrong span.\nfunc resolveSpans(path paths.GitRootRelativePath, content []byte, chunks []chunk.ChunkInfo) ([][2]int, error) {\n\tspans := make([][2]int, len(chunks))\n\tcursor := 0\n\tfor i, c := range chunks {\n\t\tstart := -1\n\t\t// Prefer a match at/after the cursor so repeated chunk texts (e.g.\n\t\t// identical code lines) resolve to distinct, ordered spans.\n\t\tif rel := bytes.Index(content[cursor:], []byte(c.Text)); rel \u003e= 0 {\n\t\t\tstart = cursor + rel\n\t\t\tcursor = start + len(c.Text)\n\t\t} else if abs := bytes.Index(content, []byte(c.Text)); abs \u003e= 0 {\n\t\t\t// Auto-chunk windowing can emit a chunk from an overlapping window\n\t\t\t// out of file order; fall back to a whole-file search without moving\n\t\t\t// the cursor backward.\n\t\t\tstart = abs\n\t\t}\n\t\tif start \u003c 0 {\n\t\t\tpreview := c.Text\n\t\t\tif len(preview) \u003e 80 {\n\t\t\t\tpreview = preview[:80]\n\t\t\t}\n\t\t\treturn nil, fmt.Errorf(\"index: cannot locate chunk %d of %s as a verbatim substring: %q\", i, path, preview)\n\t\t}\n\t\tspans[i] = [2]int{start, start + len(c.Text)}\n\t}\n\treturn spans, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e function resolveSpans",
-      "startLine": 483,
-      "startCol": 1,
-      "endLine": 515,
-      "endCol": 2
-    },
-    {
-      "text": "// reconstructArtifact rebuilds the per-chunk cache rows (text, contextualized\n// text, heading breadcrumb, and line/col positions) for an artifact from its\n// stored byte offsets. It loads the artifact's exact blob from git (never the\n// working tree) so offsets resolve against the content they were generated from,\n// slices each chunk's text, and re-derives its contextualized form. Positions\n// are computed for code (offset -\u003e line/col) and left file-tagged (zero) for the\n// auto-chunked text path, matching how each path was originally stored.\nfunc (o *Options) reconstructArtifact(path paths.GitRootRelativePath, a mirror.Artifact) ([]chunk.ChunkInfo, []string, error) {\n\tcontent, err := o.Repo.CatBlob(a.BlobSha)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tspans := make([]byteSpan, len(a.Chunks))\n\tfor i, c := range a.Chunks {\n\t\tspans[i] = byteSpan{Start: c.Start, End: c.End}\n\t}\n\trecons, err := Reconstruct(path, content, spans)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tchunks := make([]chunk.ChunkInfo, len(recons))\n\tcontextualized := make([]string, len(recons))\n\tfor i, rc := range recons {\n\t\tchunks[i] = chunk.ChunkInfo{\n\t\t\tText:           rc.Text,\n\t\t\tHeadingContext: rc.HeadingContext,\n\t\t\tStart:          rc.Start,\n\t\t\tEnd:            rc.End,\n\t\t}\n\t\tcontextualized[i] = rc.Contextualized\n\t}\n\treturn chunks, contextualized, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method reconstructArtifact\n\n// reconstructArtifact rebuilds the per-chunk cache rows (text, contextualized\n// text, heading breadcrumb, and line/col positions) for an artifact from its\n// stored byte offsets. It loads the artifact's exact blob from git (never the\n// working tree) so offsets resolve against the content they were generated from,\n// slices each chunk's text, and re-derives its contextualized form. Positions\n// are computed for code (offset -\u003e line/col) and left file-tagged (zero) for the\n// auto-chunked text path, matching how each path was originally stored.\nfunc (o *Options) reconstructArtifact(path paths.GitRootRelativePath, a mirror.Artifact) ([]chunk.ChunkInfo, []string, error) {\n\tcontent, err := o.Repo.CatBlob(a.BlobSha)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tspans := make([]byteSpan, len(a.Chunks))\n\tfor i, c := range a.Chunks {\n\t\tspans[i] = byteSpan{Start: c.Start, End: c.End}\n\t}\n\trecons, err := Reconstruct(path, content, spans)\n\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n\tchunks := make([]chunk.ChunkInfo, len(recons))\n\tcontextualized := make([]string, len(recons))\n\tfor i, rc := range recons {\n\t\tchunks[i] = chunk.ChunkInfo{\n\t\t\tText:           rc.Text,\n\t\t\tHeadingContext: rc.HeadingContext,\n\t\t\tStart:          rc.Start,\n\t\t\tEnd:            rc.End,\n\t\t}\n\t\tcontextualized[i] = rc.Contextualized\n\t}\n\treturn chunks, contextualized, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e method reconstructArtifact",
-      "startLine": 517,
-      "startCol": 1,
-      "endLine": 549,
-      "endCol": 2
-    },
-    {
-      "text": "// mirrorTree returns the on-disk mirror tree rooted at the repo root. The tree\n// mirrorTree returns the on-disk mirror tree rooted at the repo root. The tree\n// is the source of truth for the index; the store is a derived cache.\nfunc (o *Options) mirrorTree() *mirror.Tree {\n\treturn mirror.NewTree(o.Repo.Root)\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method mirrorTree\n\n// mirrorTree returns the on-disk mirror tree rooted at the repo root. The tree\n// mirrorTree returns the on-disk mirror tree rooted at the repo root. The tree\n// is the source of truth for the index; the store is a derived cache.\nfunc (o *Options) mirrorTree() *mirror.Tree {\n\treturn mirror.NewTree(o.Repo.Root)\n}",
-      "headingContext": "internal/index/manager.go \u003e method mirrorTree",
-      "startLine": 551,
-      "startCol": 1,
-      "endLine": 556,
-      "endCol": 2
-    },
-    {
-      "text": "// treeIndexed enumerates the mirror tree as the set of already-indexed paths,\n// mapping each to the model that embedded it and its recorded blob sha. It\n// replaces Store.IndexedFiles as the reindex/estimate/healthcheck source of\n// truth.\nfunc (o *Options) treeIndexed(models []embed.EmbeddingModel) (map[paths.GitRootRelativePath]indexedEntry, error) {\n\tactive := map[string]struct{}{}\n\tfor _, m := range models {\n\t\tactive[m.ModelName()] = struct{}{}\n\t}\n\tentries, err := o.mirrorTree().List()\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tout := make(map[paths.GitRootRelativePath]indexedEntry, len(entries))\n\tfor path, e := range entries {\n\t\t// Only artifacts embedded by an active model count as \"indexed\"; an\n\t\t// artifact left by a since-swapped model reads as absent, so the path is\n\t\t// treated as new and re-embedded under the active model.\n\t\tif _, ok := active[e.ModelName]; !ok {\n\t\t\tcontinue\n\t\t}\n\t\tout[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha, version: e.Version}\n\t}\n\treturn out, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method treeIndexed\n\n// treeIndexed enumerates the mirror tree as the set of already-indexed paths,\n// mapping each to the model that embedded it and its recorded blob sha. It\n// replaces Store.IndexedFiles as the reindex/estimate/healthcheck source of\n// truth.\nfunc (o *Options) treeIndexed(models []embed.EmbeddingModel) (map[paths.GitRootRelativePath]indexedEntry, error) {\n\tactive := map[string]struct{}{}\n\tfor _, m := range models {\n\t\tactive[m.ModelName()] = struct{}{}\n\t}\n\tentries, err := o.mirrorTree().List()\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tout := make(map[paths.GitRootRelativePath]indexedEntry, len(entries))\n\tfor path, e := range entries {\n\t\t// Only artifacts embedded by an active model count as \"indexed\"; an\n\t\t// artifact left by a since-swapped model reads as absent, so the path is\n\t\t// treated as new and re-embedded under the active model.\n\t\tif _, ok := active[e.ModelName]; !ok {\n\t\t\tcontinue\n\t\t}\n\t\tout[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha, version: e.Version}\n\t}\n\treturn out, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e method treeIndexed",
-      "startLine": 558,
-      "startCol": 1,
-      "endLine": 582,
-      "endCol": 2
-    },
-    {
-      "text": "// syncCache reconciles the derived SQLite store against the mirror tree: it\n// (re)writes any artifact whose blob sha or model differs from the cache and\n// evicts cache rows for artifacts no longer in the tree. It is the single load\n// path the reindex writer and (later) the query readers share.\nfunc (o *Options) syncCache(models []embed.EmbeddingModel) error {\n\tentries, err := o.mirrorTree().List()\n\tif err != nil {\n\t\treturn err\n\t}\n\tcached := map[paths.GitRootRelativePath]indexedEntry{}\n\tfor _, m := range models {\n\t\tfiles, err := o.Store.IndexedFiles(m.ModelName())\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tfor path, meta := range files {\n\t\t\tcached[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}\n\t\t}\n\t}\n\n\tfor path, e := range entries {\n\t\tcur, ok := cached[path]\n\t\tif ok \u0026\u0026 cur.model == e.ModelName \u0026\u0026 cur.sha == e.BlobSha {\n\t\t\tcontinue\n\t\t}\n\t\tif ok \u0026\u0026 cur.model != e.ModelName {\n\t\t\tif err := o.Store.DeleteFile(string(path), cur.model); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t}\n\t\ta, present, err := o.mirrorTree().TryRead(path)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tif !present {\n\t\t\tcontinue\n\t\t}\n\t\tchunks, contextualized, err := o.reconstructArtifact(path, a)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tembeddings := make([]embed.Embedding, len(a.Chunks))\n\t\tfor i, c := range a.Chunks {\n\t\t\tembeddings[i] = c.Embedding\n\t\t}\n\t\tif err := o.Store.PutFile(string(path), a.ModelName, a.BlobSha, chunks, contextualized, embeddings); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\n\tfor path, cur := range cached {\n\t\tif _, ok := entries[path]; !ok {\n\t\t\tif err := o.Store.DeleteFile(string(path), cur.model); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t}\n\t}\n\treturn nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method syncCache\n\n// syncCache reconciles the derived SQLite store against the mirror tree: it\n// (re)writes any artifact whose blob sha or model differs from the cache and\n// evicts cache rows for artifacts no longer in the tree. It is the single load\n// path the reindex writer and (later) the query readers share.\nfunc (o *Options) syncCache(models []embed.EmbeddingModel) error {\n\tentries, err := o.mirrorTree().List()\n\tif err != nil {\n\t\treturn err\n\t}\n\tcached := map[paths.GitRootRelativePath]indexedEntry{}\n\tfor _, m := range models {\n\t\tfiles, err := o.Store.IndexedFiles(m.ModelName())\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tfor path, meta := range files {\n\t\t\tcached[paths.GitRootRelativePath(path)] = indexedEntry{model: m.ModelName(), sha: meta.Sha}\n\t\t}\n\t}\n\n\tfor path, e := range entries {\n\t\tcur, ok := cached[path]\n\t\tif ok \u0026\u0026 cur.model == e.ModelName \u0026\u0026 cur.sha == e.BlobSha {\n\t\t\tcontinue\n\t\t}\n\t\tif ok \u0026\u0026 cur.model != e.ModelName {\n\t\t\tif err := o.Store.DeleteFile(string(path), cur.model); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t}\n\t\ta, present, err := o.mirrorTree().TryRead(path)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tif !present {\n\t\t\tcontinue\n\t\t}\n\t\tchunks, contextualized, err := o.reconstructArtifact(path, a)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tembeddings := make([]embed.Embedding, len(a.Chunks))\n\t\tfor i, c := range a.Chunks {\n\t\t\tembeddings[i] = c.Embedding\n\t\t}\n\t\tif err := o.Store.PutFile(string(path), a.ModelName, a.BlobSha, chunks, contextualized, embeddings); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\n\tfor path, cur := range cached {\n\t\tif _, ok := entries[path]; !ok {\n\t\t\tif err := o.Store.DeleteFile(string(path), cur.model); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t}\n\t}\n\treturn nil\n}",
-      "headingContext": "internal/index/manager.go \u003e method syncCache",
-      "startLine": 584,
-      "startCol": 1,
-      "endLine": 642,
-      "endCol": 2
-    },
-    {
-      "text": "// Auto-chunk windowing: a text file's estimated token count (chars/charsPerAutoChunkToken)\n// is compared against autoChunkTokenLimit. Files at or under the limit are sent\n// whole in one EmbedDocument call; larger files are split into overlapping\n// windows so no chunk boundary is lost across a split.\nconst (\n\tcharsPerAutoChunkToken = 5\n\tautoChunkTokenLimit    = 120000\n\tautoChunkOverlapTokens = 10000\n\tautoChunkMaxWindowByte = autoChunkTokenLimit * charsPerAutoChunkToken\n\tautoChunkOverlapByte   = autoChunkOverlapTokens * charsPerAutoChunkToken\n)",
-      "contextualizedText": "// internal/index/manager.go\n\n// Auto-chunk windowing: a text file's estimated token count (chars/charsPerAutoChunkToken)\n// is compared against autoChunkTokenLimit. Files at or under the limit are sent\n// whole in one EmbedDocument call; larger files are split into overlapping\n// windows so no chunk boundary is lost across a split.\nconst (\n\tcharsPerAutoChunkToken = 5\n\tautoChunkTokenLimit    = 120000\n\tautoChunkOverlapTokens = 10000\n\tautoChunkMaxWindowByte = autoChunkTokenLimit * charsPerAutoChunkToken\n\tautoChunkOverlapByte   = autoChunkOverlapTokens * charsPerAutoChunkToken\n)",
-      "headingContext": "internal/index/manager.go",
-      "startLine": 644,
-      "startCol": 1,
-      "endLine": 654,
-      "endCol": 2
-    },
-    {
-      "text": "// prepareFile builds a preparedFile for any file — code or text — via the\n// model's whole-document auto-chunking endpoint. PKB does not chunk the file;\n// the model returns its own chunks, each with a contextualized vector, and each\n// returned chunk is resolved to a verbatim byte span in the source (resolveSpans\n// hard-fails if a chunk is not found). Chunks carry only offsets; text, line/col\n// and breadcrumbs are reconstructed at sync. Large files are sent in overlapping\n// windows and the resulting chunks are deduped by text identity. Per-chunk reuse\n// does not apply; unchanged files are skipped wholesale by the caller's blob_sha\n// check.\nfunc (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {\n\t// Embed and resolve spans against the exact blob recorded for this file,\n\t// never the working tree. The stored offsets are sliced back out of this\n\t// same blob at reconstruction time, so embedding a dirty working-tree copy\n\t// would produce offsets that are out of range for the committed blob.\n\tcontent, err := o.Repo.CatBlob(blobSha)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\twindows := autoChunkWindows(string(content))\n\tpf := \u0026preparedFile{path: path, blobSha: blobSha}\n\tseen := map[string]struct{}{}\n\tfor _, w := range windows {\n\t\tchunks, err := cm.EmbedDocument(w)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, c := range chunks {\n\t\t\ttext := strings.TrimSpace(c.Text)\n\t\t\tif text == \"\" {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif _, dup := seen[text]; dup {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tseen[text] = struct{}{}\n\t\t\tpf.chunks = append(pf.chunks, chunk.ChunkInfo{Text: text})\n\t\t\tpf.embeddings = append(pf.embeddings, c.Embedding)\n\t\t\tpf.chars += len(text)\n\t\t}\n\t}\n\tspans, err := resolveSpans(path, content, pf.chunks)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tpf.spans = spans\n\treturn pf, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method prepareFile\n\n// prepareFile builds a preparedFile for any file — code or text — via the\n// model's whole-document auto-chunking endpoint. PKB does not chunk the file;\n// the model returns its own chunks, each with a contextualized vector, and each\n// returned chunk is resolved to a verbatim byte span in the source (resolveSpans\n// hard-fails if a chunk is not found). Chunks carry only offsets; text, line/col\n// and breadcrumbs are reconstructed at sync. Large files are sent in overlapping\n// windows and the resulting chunks are deduped by text identity. Per-chunk reuse\n// does not apply; unchanged files are skipped wholesale by the caller's blob_sha\n// check.\nfunc (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {\n\t// Embed and resolve spans against the exact blob recorded for this file,\n\t// never the working tree. The stored offsets are sliced back out of this\n\t// same blob at reconstruction time, so embedding a dirty working-tree copy\n\t// would produce offsets that are out of range for the committed blob.\n\tcontent, err := o.Repo.CatBlob(blobSha)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\twindows := autoChunkWindows(string(content))\n\tpf := \u0026preparedFile{path: path, blobSha: blobSha}\n\tseen := map[string]struct{}{}\n\tfor _, w := range windows {\n\t\tchunks, err := cm.EmbedDocument(w)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tfor _, c := range chunks {\n\t\t\ttext := strings.TrimSpace(c.Text)\n\t\t\tif text == \"\" {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif _, dup := seen[text]; dup {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tseen[text] = struct{}{}\n\t\t\tpf.chunks = append(pf.chunks, chunk.ChunkInfo{Text: text})\n\t\t\tpf.embeddings = append(pf.embeddings, c.Embedding)\n\t\t\tpf.chars += len(text)\n\t\t}\n\t}\n\tspans, err := resolveSpans(path, content, pf.chunks)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tpf.spans = spans\n\treturn pf, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e method prepareFile",
-      "startLine": 656,
-      "startCol": 1,
-      "endLine": 702,
-      "endCol": 2
-    },
-    {
-      "text": "// autoChunkWindows splits a document into byte windows for whole-document\n// embedding. A document at or under the window size is returned as a single\n// window; larger documents are split into windows of autoChunkMaxWindowByte\n// that overlap by autoChunkOverlapByte so no content falls between two windows.\nfunc autoChunkWindows(document string) []string {\n\tif len(document) \u003c= autoChunkMaxWindowByte {\n\t\treturn []string{document}\n\t}\n\tvar windows []string\n\tstep := autoChunkMaxWindowByte - autoChunkOverlapByte\n\tfor start := 0; start \u003c len(document); start += step {\n\t\tend := start + autoChunkMaxWindowByte\n\t\tif end \u003e len(document) {\n\t\t\tend = len(document)\n\t\t}\n\t\twindows = append(windows, document[start:end])\n\t\tif end == len(document) {\n\t\t\tbreak\n\t\t}\n\t}\n\treturn windows\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function autoChunkWindows\n\n// autoChunkWindows splits a document into byte windows for whole-document\n// embedding. A document at or under the window size is returned as a single\n// window; larger documents are split into windows of autoChunkMaxWindowByte\n// that overlap by autoChunkOverlapByte so no content falls between two windows.\nfunc autoChunkWindows(document string) []string {\n\tif len(document) \u003c= autoChunkMaxWindowByte {\n\t\treturn []string{document}\n\t}\n\tvar windows []string\n\tstep := autoChunkMaxWindowByte - autoChunkOverlapByte\n\tfor start := 0; start \u003c len(document); start += step {\n\t\tend := start + autoChunkMaxWindowByte\n\t\tif end \u003e len(document) {\n\t\t\tend = len(document)\n\t\t}\n\t\twindows = append(windows, document[start:end])\n\t\tif end == len(document) {\n\t\t\tbreak\n\t\t}\n\t}\n\treturn windows\n}",
-      "headingContext": "internal/index/manager.go \u003e function autoChunkWindows",
-      "startLine": 704,
-      "startCol": 1,
-      "endLine": 725,
-      "endCol": 2
-    },
-    {
-      "text": "// writeFile persists a fully embedded file in a single transaction. The\n// expensive embedding work is already done, so the write is quick. A crash\n// before it commits leaves the previously indexed state intact, and the file is\n// simply reindexed on the next run (reusing unchanged chunks via\n// ChunkEmbeddings).\nfunc (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error {\n\ta := mirror.Artifact{\n\t\tBlobSha:   pf.blobSha,\n\t\tModelName: model.ModelName(),\n\t\tVersion:   store.MajorVersion,\n\t\tChunks:    make([]mirror.Chunk, len(pf.chunks)),\n\t}\n\tfor i := range pf.chunks {\n\t\ta.Chunks[i] = mirror.Chunk{\n\t\t\tStart:     pf.spans[i][0],\n\t\t\tEnd:       pf.spans[i][1],\n\t\t\tEmbedding: pf.embeddings[i],\n\t\t}\n\t}\n\treturn o.mirrorTree().Write(pf.path, a)\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method writeFile\n\n// writeFile persists a fully embedded file in a single transaction. The\n// expensive embedding work is already done, so the write is quick. A crash\n// before it commits leaves the previously indexed state intact, and the file is\n// simply reindexed on the next run (reusing unchanged chunks via\n// ChunkEmbeddings).\nfunc (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error {\n\ta := mirror.Artifact{\n\t\tBlobSha:   pf.blobSha,\n\t\tModelName: model.ModelName(),\n\t\tVersion:   store.MajorVersion,\n\t\tChunks:    make([]mirror.Chunk, len(pf.chunks)),\n\t}\n\tfor i := range pf.chunks {\n\t\ta.Chunks[i] = mirror.Chunk{\n\t\t\tStart:     pf.spans[i][0],\n\t\t\tEnd:       pf.spans[i][1],\n\t\t\tEmbedding: pf.embeddings[i],\n\t\t}\n\t}\n\treturn o.mirrorTree().Write(pf.path, a)\n}",
-      "headingContext": "internal/index/manager.go \u003e method writeFile",
-      "startLine": 727,
-      "startCol": 1,
-      "endLine": 747,
-      "endCol": 2
-    },
-    {
-      "text": "// Contextualize builds the text actually embedded for a chunk: the raw chunk\n// text prefixed by its heading breadcrumb. When the file has a known\n// line-comment prefix the metadata is rendered as zero-indented comments in the\n// file's own language, which keeps the embedded text in distribution for code\n// embedding models; the chunk text itself is left untouched so its original\n// indentation is preserved. Files without a comment prefix (markdown/plaintext)\n// fall back to \u003ccontext\u003e...\u003c/context\u003e blocks. Empty components are omitted.\nfunc Contextualize(comment, headingContext, text string) string {\n\ts := text\n\tif headingContext != \"\" {\n\t\ts = metaBlock(comment, headingContext) + \"\\n\\n\" + s\n\t}\n\treturn s\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function Contextualize\n\n// Contextualize builds the text actually embedded for a chunk: the raw chunk\n// text prefixed by its heading breadcrumb. When the file has a known\n// line-comment prefix the metadata is rendered as zero-indented comments in the\n// file's own language, which keeps the embedded text in distribution for code\n// embedding models; the chunk text itself is left untouched so its original\n// indentation is preserved. Files without a comment prefix (markdown/plaintext)\n// fall back to \u003ccontext\u003e...\u003c/context\u003e blocks. Empty components are omitted.\nfunc Contextualize(comment, headingContext, text string) string {\n\ts := text\n\tif headingContext != \"\" {\n\t\ts = metaBlock(comment, headingContext) + \"\\n\\n\" + s\n\t}\n\treturn s\n}",
-      "headingContext": "internal/index/manager.go \u003e function Contextualize",
-      "startLine": 749,
-      "startCol": 1,
-      "endLine": 762,
-      "endCol": 2
-    },
-    {
-      "text": "// metaBlock renders a metadata string as a zero-indented comment block using the\n// given line-comment prefix, one prefix per line. With an empty prefix it falls\n// back to a \u003ccontext\u003e...\u003c/context\u003e block.\nfunc metaBlock(comment, s string) string {\n\tif comment == \"\" {\n\t\treturn fmt.Sprintf(\"\u003ccontext\u003e\\n%s\\n\u003c/context\u003e\", s)\n\t}\n\tlines := strings.Split(s, \"\\n\")\n\tfor i, l := range lines {\n\t\tlines[i] = comment + \" \" + l\n\t}\n\treturn strings.Join(lines, \"\\n\")\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function metaBlock\n\n// metaBlock renders a metadata string as a zero-indented comment block using the\n// given line-comment prefix, one prefix per line. With an empty prefix it falls\n// back to a \u003ccontext\u003e...\u003c/context\u003e block.\nfunc metaBlock(comment, s string) string {\n\tif comment == \"\" {\n\t\treturn fmt.Sprintf(\"\u003ccontext\u003e\\n%s\\n\u003c/context\u003e\", s)\n\t}\n\tlines := strings.Split(s, \"\\n\")\n\tfor i, l := range lines {\n\t\tlines[i] = comment + \" \" + l\n\t}\n\treturn strings.Join(lines, \"\\n\")\n}",
-      "headingContext": "internal/index/manager.go \u003e function metaBlock",
-      "startLine": 764,
-      "startCol": 1,
-      "endLine": 776,
-      "endCol": 2
-    },
-    {
-      "text": "// indexedEntry records which model embedded a path, the stored blob sha, and the\n// embedding/storage version the artifact was written under. The version lets the\n// reindex skip decision treat a format bump as staleness even when the blob is\n// unchanged.\ntype indexedEntry struct {\n\tmodel   string\n\tsha     string\n\tversion int\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type indexedEntry\n\n// indexedEntry records which model embedded a path, the stored blob sha, and the\n// embedding/storage version the artifact was written under. The version lets the\n// reindex skip decision treat a format bump as staleness even when the blob is\n// unchanged.\ntype indexedEntry struct {\n\tmodel   string\n\tsha     string\n\tversion int\n}",
-      "headingContext": "internal/index/manager.go \u003e type indexedEntry",
-      "startLine": 778,
-      "startCol": 1,
-      "endLine": 786,
-      "endCol": 2
-    },
-    {
-      "text": "// HealthIssue is a single discrepancy found by Healthcheck. Path is the\n// repo-relative file the issue concerns, or empty for index-wide issues.\ntype HealthIssue struct {\n\tPath string\n\tMsg  string\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type HealthIssue\n\n// HealthIssue is a single discrepancy found by Healthcheck. Path is the\n// repo-relative file the issue concerns, or empty for index-wide issues.\ntype HealthIssue struct {\n\tPath string\n\tMsg  string\n}",
-      "headingContext": "internal/index/manager.go \u003e type HealthIssue",
-      "startLine": 788,
-      "startCol": 1,
-      "endLine": 793,
-      "endCol": 2
-    },
-    {
-      "text": "// HealthReport is the result of Healthcheck: the commits compared, the headline\n// counts, and every discrepancy found between the git tree, the SQLite index,\n// and the state marker. It is healthy exactly when Issues is empty.\ntype HealthReport struct {\n\tHeadCommit    string\n\tStateCommit   string\n\tStateMissing  bool\n\tExpectedFiles int\n\tIndexedFiles  int\n\tIndexedChunks int\n\tIssues        []HealthIssue\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e type HealthReport\n\n// HealthReport is the result of Healthcheck: the commits compared, the headline\n// counts, and every discrepancy found between the git tree, the SQLite index,\n// and the state marker. It is healthy exactly when Issues is empty.\ntype HealthReport struct {\n\tHeadCommit    string\n\tStateCommit   string\n\tStateMissing  bool\n\tExpectedFiles int\n\tIndexedFiles  int\n\tIndexedChunks int\n\tIssues        []HealthIssue\n}",
-      "headingContext": "internal/index/manager.go \u003e type HealthReport",
-      "startLine": 795,
-      "startCol": 1,
-      "endLine": 806,
-      "endCol": 2
-    },
-    {
-      "text": "func (r *HealthReport) addf(path, format string, args ...any) {\n\tr.Issues = append(r.Issues, HealthIssue{Path: path, Msg: fmt.Sprintf(format, args...)})\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e method addf\n\nfunc (r *HealthReport) addf(path, format string, args ...any) {\n\tr.Issues = append(r.Issues, HealthIssue{Path: path, Msg: fmt.Sprintf(format, args...)})\n}",
-      "headingContext": "internal/index/manager.go \u003e method addf",
-      "startLine": 808,
-      "startCol": 1,
-      "endLine": 810,
-      "endCol": 2
-    },
-    {
-      "text": "// Healthcheck verifies the SQLite index and the state marker against the git\n// tree at HEAD without mutating anything. It checks that every expected file\n// (an indexable, non-ignored path in the tree) is indexed with the matching\n// blob sha, that no stale files linger in the index, and that the state\n// marker's file/chunk counts agree with the index. Blob-sha coverage -- not the\n// recorded commit -- is the source of correctness, so a mismatched marker commit\n// (e.g. after an amend, rebase, or a staged/pre-commit index) is not flagged.\nfunc Healthcheck(o *Options) (HealthReport, error) {\n\trepoRoot := string(o.Repo.Root)\n\tvar rep HealthReport\n\n\ttargetSha, err := o.Repo.ResolveRef(\"HEAD\")\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\trep.HeadCommit = targetSha\n\n\tprev, err := readState(repoRoot)\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\tif prev == nil {\n\t\trep.StateMissing = true\n\t\trep.addf(\"\", \"no state marker (%s); run `pkb reindex`\", statePath)\n\t\treturn rep, nil\n\t}\n\trep.StateCommit = prev.Commit\n\n\ttreeFiles, err := o.Repo.LsTree(\"HEAD\")\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\texpected := make(map[paths.GitRootRelativePath]string, len(treeFiles))\n\tfor _, f := range treeFiles {\n\t\tif o.candidate(f.Path) {\n\t\t\texpected[f.Path] = f.BlobSha\n\t\t}\n\t}\n\trep.ExpectedFiles = len(expected)\n\n\ttreeEntries, err := o.mirrorTree().List()\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\tactive := map[string]struct{}{}\n\tfor _, m := range o.activeModels() {\n\t\tactive[m.ModelName()] = struct{}{}\n\t}\n\tindexed := make(map[paths.GitRootRelativePath]indexedEntry, len(treeEntries))\n\tfor path, e := range treeEntries {\n\t\tif _, ok := active[e.ModelName]; !ok {\n\t\t\tcontinue\n\t\t}\n\t\tindexed[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha, version: e.Version}\n\t\trep.IndexedFiles++\n\t\trep.IndexedChunks += e.Chunks\n\t}",
-      "contextualizedText": "// internal/index/manager.go \u003e function Healthcheck\n\n// Healthcheck verifies the SQLite index and the state marker against the git\n// tree at HEAD without mutating anything. It checks that every expected file\n// (an indexable, non-ignored path in the tree) is indexed with the matching\n// blob sha, that no stale files linger in the index, and that the state\n// marker's file/chunk counts agree with the index. Blob-sha coverage -- not the\n// recorded commit -- is the source of correctness, so a mismatched marker commit\n// (e.g. after an amend, rebase, or a staged/pre-commit index) is not flagged.\nfunc Healthcheck(o *Options) (HealthReport, error) {\n\trepoRoot := string(o.Repo.Root)\n\tvar rep HealthReport\n\n\ttargetSha, err := o.Repo.ResolveRef(\"HEAD\")\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\trep.HeadCommit = targetSha\n\n\tprev, err := readState(repoRoot)\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\tif prev == nil {\n\t\trep.StateMissing = true\n\t\trep.addf(\"\", \"no state marker (%s); run `pkb reindex`\", statePath)\n\t\treturn rep, nil\n\t}\n\trep.StateCommit = prev.Commit\n\n\ttreeFiles, err := o.Repo.LsTree(\"HEAD\")\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\texpected := make(map[paths.GitRootRelativePath]string, len(treeFiles))\n\tfor _, f := range treeFiles {\n\t\tif o.candidate(f.Path) {\n\t\t\texpected[f.Path] = f.BlobSha\n\t\t}\n\t}\n\trep.ExpectedFiles = len(expected)\n\n\ttreeEntries, err := o.mirrorTree().List()\n\tif err != nil {\n\t\treturn rep, err\n\t}\n\tactive := map[string]struct{}{}\n\tfor _, m := range o.activeModels() {\n\t\tactive[m.ModelName()] = struct{}{}\n\t}\n\tindexed := make(map[paths.GitRootRelativePath]indexedEntry, len(treeEntries))\n\tfor path, e := range treeEntries {\n\t\tif _, ok := active[e.ModelName]; !ok {\n\t\t\tcontinue\n\t\t}\n\t\tindexed[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha, version: e.Version}\n\t\trep.IndexedFiles++\n\t\trep.IndexedChunks += e.Chunks\n\t}",
-      "headingContext": "internal/index/manager.go \u003e function Healthcheck",
-      "startLine": 812,
-      "startCol": 1,
-      "endLine": 868,
-      "endCol": 3
-    },
-    {
-      "text": "for path, sha := range expected {\n\t\te, ok := indexed[path]\n\t\tif !ok {\n\t\t\trep.addf(string(path), \"expected file is missing from the index\")\n\t\t\tcontinue\n\t\t}\n\t\tif e.sha != sha {\n\t\t\trep.addf(string(path), \"stale blob: index has %s, tree has %s\", e.sha, sha)\n\t\t}\n\t\tif e.version != store.MajorVersion {\n\t\t\trep.addf(string(path), \"stale format: artifact version %d, current %d\", e.version, store.MajorVersion)\n\t\t}\n\t}\n\tfor path := range indexed {\n\t\tif _, ok := expected[path]; !ok {\n\t\t\trep.addf(string(path), \"indexed but not an expected file (deleted or no longer indexable)\")\n\t\t}\n\t}\n\n\tif rep.IndexedFiles != prev.FileCount {\n\t\trep.addf(\"\", \"state fileCount %d does not match indexed file count %d\", prev.FileCount, rep.IndexedFiles)\n\t}\n\tif rep.IndexedChunks != prev.ChunkCount {\n\t\trep.addf(\"\", \"state chunkCount %d does not match indexed chunk count %d\", prev.ChunkCount, rep.IndexedChunks)\n\t}\n\n\tsort.SliceStable(rep.Issues, func(i, j int) bool {\n\t\tif rep.Issues[i].Path != rep.Issues[j].Path {\n\t\t\treturn rep.Issues[i].Path \u003c rep.Issues[j].Path\n\t\t}\n\t\treturn rep.Issues[i].Msg \u003c rep.Issues[j].Msg\n\t})\n\treturn rep, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function Healthcheck\n\nfor path, sha := range expected {\n\t\te, ok := indexed[path]\n\t\tif !ok {\n\t\t\trep.addf(string(path), \"expected file is missing from the index\")\n\t\t\tcontinue\n\t\t}\n\t\tif e.sha != sha {\n\t\t\trep.addf(string(path), \"stale blob: index has %s, tree has %s\", e.sha, sha)\n\t\t}\n\t\tif e.version != store.MajorVersion {\n\t\t\trep.addf(string(path), \"stale format: artifact version %d, current %d\", e.version, store.MajorVersion)\n\t\t}\n\t}\n\tfor path := range indexed {\n\t\tif _, ok := expected[path]; !ok {\n\t\t\trep.addf(string(path), \"indexed but not an expected file (deleted or no longer indexable)\")\n\t\t}\n\t}\n\n\tif rep.IndexedFiles != prev.FileCount {\n\t\trep.addf(\"\", \"state fileCount %d does not match indexed file count %d\", prev.FileCount, rep.IndexedFiles)\n\t}\n\tif rep.IndexedChunks != prev.ChunkCount {\n\t\trep.addf(\"\", \"state chunkCount %d does not match indexed chunk count %d\", prev.ChunkCount, rep.IndexedChunks)\n\t}\n\n\tsort.SliceStable(rep.Issues, func(i, j int) bool {\n\t\tif rep.Issues[i].Path != rep.Issues[j].Path {\n\t\t\treturn rep.Issues[i].Path \u003c rep.Issues[j].Path\n\t\t}\n\t\treturn rep.Issues[i].Msg \u003c rep.Issues[j].Msg\n\t})\n\treturn rep, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e function Healthcheck",
-      "startLine": 870,
-      "startCol": 2,
-      "endLine": 903,
-      "endCol": 2
-    },
-    {
-      "text": "// SyncCache reconciles the derived SQLite cache with the mirror tree so read\n// commands observe up-to-date results. It ensures each active model's vec table\n// exists, then upserts artifacts whose fingerprint changed and evicts those no\n// longer in the tree. It is safe to call on a cold cache (a full build) and on a\n// warm one (an incremental diff); a missing/stale cache only affects latency,\n// never results, because the mirror tree is the source of truth.\nfunc SyncCache(o *Options) error {\n\tmodels := o.activeModels()\n\tfor _, m := range models {\n\t\tif err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\treturn o.syncCache(models)\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function SyncCache\n\n// SyncCache reconciles the derived SQLite cache with the mirror tree so read\n// commands observe up-to-date results. It ensures each active model's vec table\n// exists, then upserts artifacts whose fingerprint changed and evicts those no\n// longer in the tree. It is safe to call on a cold cache (a full build) and on a\n// warm one (an incremental diff); a missing/stale cache only affects latency,\n// never results, because the mirror tree is the source of truth.\nfunc SyncCache(o *Options) error {\n\tmodels := o.activeModels()\n\tfor _, m := range models {\n\t\tif err := o.Store.EnsureVecTable(m.ModelName(), m.Dimensions()); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\treturn o.syncCache(models)\n}",
-      "headingContext": "internal/index/manager.go \u003e function SyncCache",
-      "startLine": 905,
-      "startCol": 1,
-      "endLine": 919,
-      "endCol": 2
-    },
-    {
-      "text": "// Search embeds the query with every active model, queries each model's vec\n// table, and merges results by descending score (truncated to topK). It first\n// syncs the derived cache from the mirror tree so results reflect the committed\n// index even when the cache is stale or absent.\nfunc Search(o *Options, query string, topK int) ([]store.SearchResult, error) {\n\tif err := SyncCache(o); err != nil {\n\t\treturn nil, err\n\t}\n\tvar all []store.SearchResult\n\tfor _, m := range o.activeModels() {\n\t\tqe, err := m.EmbedQuery(query)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tres, err := o.Store.Search(m.ModelName(), qe, topK)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tall = append(all, res...)\n\t}\n\tsort.SliceStable(all, func(i, j int) bool { return all[i].Score \u003e all[j].Score })\n\tif topK \u003e 0 \u0026\u0026 len(all) \u003e topK {\n\t\tall = all[:topK]\n\t}\n\treturn all, nil\n}",
-      "contextualizedText": "// internal/index/manager.go \u003e function Search\n\n// Search embeds the query with every active model, queries each model's vec\n// table, and merges results by descending score (truncated to topK). It first\n// syncs the derived cache from the mirror tree so results reflect the committed\n// index even when the cache is stale or absent.\nfunc Search(o *Options, query string, topK int) ([]store.SearchResult, error) {\n\tif err := SyncCache(o); err != nil {\n\t\treturn nil, err\n\t}\n\tvar all []store.SearchResult\n\tfor _, m := range o.activeModels() {\n\t\tqe, err := m.EmbedQuery(query)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tres, err := o.Store.Search(m.ModelName(), qe, topK)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tall = append(all, res...)\n\t}\n\tsort.SliceStable(all, func(i, j int) bool { return all[i].Score \u003e all[j].Score })\n\tif topK \u003e 0 \u0026\u0026 len(all) \u003e topK {\n\t\tall = all[:topK]\n\t}\n\treturn all, nil\n}",
-      "headingContext": "internal/index/manager.go \u003e function Search",
-      "startLine": 921,
-      "startCol": 1,
-      "endLine": 946,
-      "endCol": 2
+      "start": 30538,
+      "end": 32077
     }
   ]
 }
