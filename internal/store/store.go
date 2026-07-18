@@ -26,7 +26,7 @@ import (
 // breadcrumb/heading-context handling, tree-sitter grammars, or the tags.scm /
 // pkb chunking logic. Bumping it isolates old vectors into separate vec tables
 // and forces a full recompute.
-const MajorVersion = 5
+const MajorVersion = 6
 
 var vecOnce bool
 

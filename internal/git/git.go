@@ -80,6 +80,21 @@ func (r *Repo) LsTree(ref string) ([]RepoFile, error) {
 	return files, nil
 }
 
+// CatBlob returns the raw bytes of a blob object by its sha. It reads from the
+// object database, never the working tree, so offsets recorded against a blob
+// resolve against exactly that content regardless of the working tree state.
+func (r *Repo) CatBlob(sha string) ([]byte, error) {
+	cmd := exec.Command("git", "cat-file", "blob", sha)
+	cmd.Dir = string(r.Root)
+	var out, errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git cat-file blob %s: %v: %s", sha, err, strings.TrimSpace(errBuf.String()))
+	}
+	return out.Bytes(), nil
+}
+
 // WriteTree writes the current staging area (index) to the object database as a
 // tree and returns its sha. It does not create a commit or mutate the working
 // tree or index. The returned sha is a tree-ish consumable by LsTree.

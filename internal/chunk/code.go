@@ -424,6 +424,13 @@ func lineStartByte(source []byte, off int) int {
 	return 0
 }
 
+// PosFromByte computes a 1-based line/col Position for a byte offset in source.
+// It is the exported entry point used by the cache-sync reconstruction path to
+// derive chunk positions from stored byte offsets.
+func PosFromByte(source []byte, off int) Position {
+	return posFromByte(source, off)
+}
+
 // posFromByte computes a 1-based line/col Position for a byte offset in source.
 func posFromByte(source []byte, off int) Position {
 	line, col := 1, 1

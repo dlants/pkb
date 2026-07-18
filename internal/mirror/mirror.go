@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/embed"
 )
 
@@ -29,12 +28,15 @@ var vecMagic = [4]byte{'P', 'K', 'B', 'V'}
 
 const vecFormatVersion uint32 = 1
 
-// Chunk is one chunk's full record within an artifact: its structural info, the
-// contextualized text actually embedded, and its embedding.
+// Chunk is one chunk's record within an artifact: the byte span of the chunk
+// within the source file (identified by the artifact's BlobSha), its heading
+// breadcrumb, and its embedding. The chunk text and contextualized text are not
+// stored; they are reconstructed at cache-sync time by slicing the source blob.
 type Chunk struct {
-	Info               chunk.ChunkInfo
-	ContextualizedText string
-	Embedding          embed.Embedding
+	Start          int // byte offset into the source blob, inclusive
+	End            int // byte offset into the source blob, exclusive
+	HeadingContext string
+	Embedding      embed.Embedding
 }
 
 // Artifact is the complete index record for a single source file.
@@ -53,14 +55,14 @@ type metaFile struct {
 	Chunks    []metaChunk `json:"chunks"`
 }
 
+// metaChunk is offset-first: it stores only the chunk's byte span within the
+// source blob plus its heading breadcrumb. The chunk text and contextualized
+// text are reconstructed from the blob at sync time, so they are never
+// duplicated on disk.
 type metaChunk struct {
-	Text               string `json:"text"`
-	ContextualizedText string `json:"contextualizedText"`
-	HeadingContext     string `json:"headingContext"`
-	StartLine          int    `json:"startLine"`
-	StartCol           int    `json:"startCol"`
-	EndLine            int    `json:"endLine"`
-	EndCol             int    `json:"endCol"`
+	Start          int    `json:"start"`
+	End            int    `json:"end"`
+	HeadingContext string `json:"headingContext"`
 }
 
 // EncodeMeta serializes the artifact's file-level fields and per-chunk metadata
@@ -73,13 +75,9 @@ func EncodeMeta(a Artifact) ([]byte, error) {
 	}
 	for i, c := range a.Chunks {
 		m.Chunks[i] = metaChunk{
-			Text:               c.Info.Text,
-			ContextualizedText: c.ContextualizedText,
-			HeadingContext:     c.Info.HeadingContext,
-			StartLine:          c.Info.Start.Line,
-			StartCol:           c.Info.Start.Col,
-			EndLine:            c.Info.End.Line,
-			EndCol:             c.Info.End.Col,
+			Start:          c.Start,
+			End:            c.End,
+			HeadingContext: c.HeadingContext,
 		}
 	}
 	b, err := json.MarshalIndent(m, "", "  ")
@@ -178,13 +176,9 @@ func DecodeMeta(b []byte) (Artifact, error) {
 	}
 	for i, mc := range m.Chunks {
 		a.Chunks[i] = Chunk{
-			Info: chunk.ChunkInfo{
-				Text:           mc.Text,
-				HeadingContext: mc.HeadingContext,
-				Start:          chunk.Position{Line: mc.StartLine, Col: mc.StartCol},
-				End:            chunk.Position{Line: mc.EndLine, Col: mc.EndCol},
-			},
-			ContextualizedText: mc.ContextualizedText,
+			Start:          mc.Start,
+			End:            mc.End,
+			HeadingContext: mc.HeadingContext,
 		}
 	}
 	return a, nil

@@ -596,6 +596,9 @@ type preparedFile struct {
 	embedIdx       []int
 	remaining      int
 	chars          int
+	// spans[i] is the [start,end) byte offset of chunk i within blobSha's
+	// content, recovered by locating the chunk text verbatim in the source.
+	spans [][2]int
 }
 
 // embedRef points a slot in a cross-file embedding batch back to the chunk it
@@ -620,6 +623,73 @@ func (o *Options) chunkFile(path paths.GitRootRelativePath, content []byte) ([]c
 	return chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize), nil
 }
 
+// resolveSpans locates each chunk's text verbatim within content, returning the
+// [start,end) byte span of every chunk. It scans forward from a moving cursor so
+// non-overlapping chunks resolve to precise, ordered offsets. A chunk whose text
+// is not found at/after the cursor is a hard failure: offsets are load-bearing
+// (the chunk text is reconstructed from them at sync), so a miss must surface
+// immediately rather than persist a wrong span.
+func resolveSpans(path paths.GitRootRelativePath, content []byte, chunks []chunk.ChunkInfo) ([][2]int, error) {
+	spans := make([][2]int, len(chunks))
+	cursor := 0
+	for i, c := range chunks {
+		start := -1
+		// Prefer a match at/after the cursor so repeated chunk texts (e.g.
+		// identical code lines) resolve to distinct, ordered spans.
+		if rel := bytes.Index(content[cursor:], []byte(c.Text)); rel >= 0 {
+			start = cursor + rel
+			cursor = start + len(c.Text)
+		} else if abs := bytes.Index(content, []byte(c.Text)); abs >= 0 {
+			// Auto-chunk windowing can emit a chunk from an overlapping window
+			// out of file order; fall back to a whole-file search without moving
+			// the cursor backward.
+			start = abs
+		}
+		if start < 0 {
+			preview := c.Text
+			if len(preview) > 80 {
+				preview = preview[:80]
+			}
+			return nil, fmt.Errorf("index: cannot locate chunk %d of %s as a verbatim substring: %q", i, path, preview)
+		}
+		spans[i] = [2]int{start, start + len(c.Text)}
+	}
+	return spans, nil
+}
+
+// reconstructArtifact rebuilds the per-chunk cache rows (text, contextualized
+// text, heading breadcrumb, and line/col positions) for an artifact from its
+// stored byte offsets. It loads the artifact's exact blob from git (never the
+// working tree) so offsets resolve against the content they were generated from,
+// slices each chunk's text, and re-derives its contextualized form. Positions
+// are computed for code (offset -> line/col) and left file-tagged (zero) for the
+// auto-chunked text path, matching how each path was originally stored.
+func (o *Options) reconstructArtifact(path paths.GitRootRelativePath, a mirror.Artifact) ([]chunk.ChunkInfo, []string, error) {
+	content, err := o.Repo.CatBlob(a.BlobSha)
+	if err != nil {
+		return nil, nil, err
+	}
+	isCode := filetype.RoutePath(string(path)).Type == filetype.Code
+	comment := filetype.LineComment(string(path))
+	chunks := make([]chunk.ChunkInfo, len(a.Chunks))
+	contextualized := make([]string, len(a.Chunks))
+	for i, c := range a.Chunks {
+		if c.Start < 0 || c.End > len(content) || c.Start > c.End {
+			return nil, nil, fmt.Errorf("index: chunk %d of %s has out-of-range span [%d,%d) for %d-byte blob %s", i, path, c.Start, c.End, len(content), a.BlobSha)
+		}
+		text := string(content[c.Start:c.End])
+		ci := chunk.ChunkInfo{Text: text, HeadingContext: c.HeadingContext}
+		if isCode {
+			ci.Start = chunk.PosFromByte(content, c.Start)
+			ci.End = chunk.PosFromByte(content, c.End)
+		}
+		chunks[i] = ci
+		contextualized[i] = Contextualize(comment, c.HeadingContext, text)
+	}
+	return chunks, contextualized, nil
+}
+
+// mirrorTree returns the on-disk mirror tree rooted at the repo root. The tree
 // mirrorTree returns the on-disk mirror tree rooted at the repo root. The tree
 // is the source of truth for the index; the store is a derived cache.
 func (o *Options) mirrorTree() *mirror.Tree {
@@ -664,9 +734,13 @@ func (o *Options) reuseMap(path paths.GitRootRelativePath, modelName string) (ma
 	if !ok || a.ModelName != modelName {
 		return map[string]embed.Embedding{}, nil
 	}
+	chunks, _, err := o.reconstructArtifact(path, a)
+	if err != nil {
+		return nil, err
+	}
 	out := make(map[string]embed.Embedding, len(a.Chunks))
-	for _, c := range a.Chunks {
-		out[store.ChunkKey(c.Info.HeadingContext, c.Info.Text)] = c.Embedding
+	for i, c := range a.Chunks {
+		out[store.ChunkKey(chunks[i].HeadingContext, chunks[i].Text)] = c.Embedding
 	}
 	return out, nil
 }
@@ -708,12 +782,12 @@ func (o *Options) syncCache(models []embed.EmbeddingModel) error {
 		if !present {
 			continue
 		}
-		chunks := make([]chunk.ChunkInfo, len(a.Chunks))
-		contextualized := make([]string, len(a.Chunks))
+		chunks, contextualized, err := o.reconstructArtifact(path, a)
+		if err != nil {
+			return err
+		}
 		embeddings := make([]embed.Embedding, len(a.Chunks))
 		for i, c := range a.Chunks {
-			chunks[i] = c.Info
-			contextualized[i] = c.ContextualizedText
 			embeddings[i] = c.Embedding
 		}
 		if err := o.Store.PutFile(string(path), a.ModelName, a.BlobSha, chunks, contextualized, embeddings); err != nil {
@@ -772,6 +846,11 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, mo
 	// embedIdx to be embedded later in a cross-file batch.
 	pf := compactPrepared(path, comment, chunks, reuse, reuseEmb)
 	pf.blobSha = blobSha
+	spans, err := resolveSpans(path, content, pf.chunks)
+	if err != nil {
+		return nil, err
+	}
+	pf.spans = spans
 	return pf, nil
 }
 
@@ -822,6 +901,11 @@ func (o *Options) prepareContextualFile(path paths.GitRootRelativePath, blobSha 
 			pf.chars += len(text)
 		}
 	}
+	spans, err := resolveSpans(path, content, pf.chunks)
+	if err != nil {
+		return nil, err
+	}
+	pf.spans = spans
 	return pf, nil
 }
 
@@ -893,9 +977,10 @@ func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error 
 	}
 	for i := range pf.chunks {
 		a.Chunks[i] = mirror.Chunk{
-			Info:               pf.chunks[i],
-			ContextualizedText: pf.contextualized[i],
-			Embedding:          pf.embeddings[i],
+			Start:          pf.spans[i][0],
+			End:            pf.spans[i][1],
+			HeadingContext: pf.chunks[i].HeadingContext,
+			Embedding:      pf.embeddings[i],
 		}
 	}
 	return o.mirrorTree().Write(pf.path, a)

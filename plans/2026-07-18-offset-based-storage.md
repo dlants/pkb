@@ -243,14 +243,49 @@ verbatim, non-overlapping substring assumption that the offset-based design depe
 on holds for code as well as markdown — proceed with the remaining stages. Probe was
 deleted after the gate settled (throwaway per plan).
 
-## storage format: offsets only
+## storage format: offsets only — DONE
 
 - Goal: `metaChunk` stores just `{start,end}` byte offsets; `mirror.Encode/Decode`
   round-trip offsets; `.vec` untouched; `MajorVersion` bumped.
 - Tests:
-  - Encode an artifact and assert `.meta` no longer contains chunk text.
-  - Decode(Encode(a)) preserves offsets and vector alignment.
-  - Mismatched vec/meta counts still error (torn write).
+  - [x] Encode an artifact and assert `.meta` no longer contains chunk text
+    (`TestMetaHasNoChunkText`).
+  - [x] Decode(Encode(a)) preserves offsets and vector alignment
+    (`TestOffsetsRoundTrip`, `TestRoundTrip`, `TestVecStandalone`).
+  - [x] Mismatched vec/meta counts still error (`TestTornPairDetected`).
+
+**Result (2026-07-18): DONE.** `metaChunk`/`mirror.Chunk` are now offset-first:
+`{Start, End, HeadingContext}` on disk (plus the embedding in `.vec`). `Text`,
+`ContextualizedText`, and line/col are gone from disk. `MajorVersion` bumped
+5 -> 6 (forces a clean re-embed).
+
+Decisions / deviations (coupling forced some stage 3/4 work forward to keep the
+whole repo green — build/vet/test all pass):
+
+- **`HeadingContext` is kept on disk** rather than reconstructed via chunkers.
+  This is a deliberate simplification vs. the stage-3 plan (which reconstructs
+  breadcrumbs from tree-sitter/markdown headers). It keeps the big duplication
+  (`Text` + `ContextualizedText`) off disk — the actual repo-size win — while
+  avoiding re-running tree-sitter at sync. Stage 3 may later drop the stored
+  `HeadingContext` in favor of full reconstruction; the format field can be
+  removed then.
+- **Reconstruction wired now** (`reconstructArtifact` in `internal/index/manager.go`):
+  loads the artifact's exact blob via new `git.Repo.CatBlob` (git cat-file, never
+  the working tree), slices each `[Start,End)` to recover `Text`, derives
+  positions via new exported `chunk.PosFromByte` (code only; text stays
+  file-tagged/zero to match the auto-chunk path), and rebuilds
+  `ContextualizedText` via `Contextualize(LineComment(path), heading, text)`.
+  Wired into `syncCache` and `reuseMap`.
+- **Offsets computed at index time** via `resolveSpans` (forward substring scan
+  with whole-file fallback for out-of-order auto-chunk-window chunks). A chunk
+  whose text is not a verbatim substring is a hard failure (per the plan's
+  load-bearing constraint). Threaded through `preparedFile.spans` in both prepare
+  paths; `writeFile` stores offsets.
+- Per-chunk reuse is preserved (keys on `ChunkKey(heading, reconstructed-text)`
+  from the artifact's own blob), so it keeps working across edits; stage 4 can
+  still simplify it to file-level skip.
+- Test `findChunk` reconstructs text from the blob; store migration test seed
+  bumped to version 6.
 
 ## reconstruction helper
 

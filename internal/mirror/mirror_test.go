@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/embed"
 )
 
@@ -15,24 +14,16 @@ func fixture() Artifact {
 		ModelName: "mock@8",
 		Chunks: []Chunk{
 			{
-				Info: chunk.ChunkInfo{
-					Text:           "line one\nline two\n",
-					HeadingContext: "pkg > Foo",
-					Start:          chunk.Position{Line: 1, Col: 0},
-					End:            chunk.Position{Line: 2, Col: 8},
-				},
-				ContextualizedText: "ctx: line one\nline two\n",
-				Embedding:          embed.Embedding{0.1, -0.2, 3.5, 0},
+				Start:          10,
+				End:            42,
+				HeadingContext: "pkg > Foo",
+				Embedding:      embed.Embedding{0.1, -0.2, 3.5, 0},
 			},
 			{
-				Info: chunk.ChunkInfo{
-					Text:           "solo",
-					HeadingContext: "",
-					Start:          chunk.Position{Line: 10, Col: 4},
-					End:            chunk.Position{Line: 10, Col: 8},
-				},
-				ContextualizedText: "solo",
-				Embedding:          embed.Embedding{-1, 2, -3, 4},
+				Start:          64,
+				End:            68,
+				HeadingContext: "",
+				Embedding:      embed.Embedding{-1, 2, -3, 4},
 			},
 		},
 	}
@@ -50,6 +41,44 @@ func TestRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, in) {
 		t.Fatalf("round-trip mismatch:\n got %+v\nwant %+v", got, in)
+	}
+}
+
+func TestMetaHasNoChunkText(t *testing.T) {
+	meta, _, err := Encode(fixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(meta)
+	for _, forbidden := range []string{"line one", "solo", "ctx:", "\"text\"", "contextualizedText"} {
+		if bytes.Contains(meta, []byte(forbidden)) {
+			t.Errorf("meta must not contain %q, got:\n%s", forbidden, s)
+		}
+	}
+	for _, want := range []string{"start", "end", "headingContext"} {
+		if !bytes.Contains(meta, []byte(want)) {
+			t.Errorf("meta must contain offset field %q, got:\n%s", want, s)
+		}
+	}
+}
+
+func TestOffsetsRoundTrip(t *testing.T) {
+	in := fixture()
+	meta, vec, err := Encode(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Decode(meta, vec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, c := range in.Chunks {
+		if got.Chunks[i].Start != c.Start || got.Chunks[i].End != c.End {
+			t.Errorf("chunk %d offsets: got [%d,%d) want [%d,%d)", i, got.Chunks[i].Start, got.Chunks[i].End, c.Start, c.End)
+		}
+		if got.Chunks[i].HeadingContext != c.HeadingContext {
+			t.Errorf("chunk %d heading: got %q want %q", i, got.Chunks[i].HeadingContext, c.HeadingContext)
+		}
 	}
 }
 

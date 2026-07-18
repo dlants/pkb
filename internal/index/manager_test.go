@@ -675,7 +675,7 @@ func TestReindexReusesChunkKeepsArtifactBytes(t *testing.T) {
 	before, ok, err := tree.TryRead("p.go")
 	require.NoError(t, err)
 	require.True(t, ok)
-	alphaBefore := findChunk(t, before, "return 1")
+	alphaBefore := findChunk(t, o, before, "return 1")
 
 	// Edit only Beta's body.
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 22\n}\n")
@@ -688,14 +688,16 @@ func TestReindexReusesChunkKeepsArtifactBytes(t *testing.T) {
 	after, ok, err := tree.TryRead("p.go")
 	require.NoError(t, err)
 	require.True(t, ok)
-	alphaAfter := findChunk(t, after, "return 1")
+	alphaAfter := findChunk(t, o, after, "return 1")
 	require.Equal(t, alphaBefore.Embedding, alphaAfter.Embedding, "reused chunk keeps its vector")
 }
 
-func findChunk(t *testing.T, a mirror.Artifact, needle string) mirror.Chunk {
+func findChunk(t *testing.T, o *Options, a mirror.Artifact, needle string) mirror.Chunk {
 	t.Helper()
+	content, err := o.Repo.CatBlob(a.BlobSha)
+	require.NoError(t, err)
 	for _, c := range a.Chunks {
-		if strings.Contains(c.Info.Text, needle) {
+		if strings.Contains(string(content[c.Start:c.End]), needle) {
 			return c
 		}
 	}
