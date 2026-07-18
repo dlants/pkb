@@ -1,6 +1,6 @@
 // Command pkb is the CLI for the git-repo-rooted code+docs search index.
 // It runs from a repo root and exposes the reindex, estimate, search, stats,
-// and chunk commands.
+// and healthcheck commands.
 package main
 
 import (
@@ -13,11 +13,9 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/config"
 	"github.com/dlants/pkb/internal/cost"
 	"github.com/dlants/pkb/internal/embed"
-	"github.com/dlants/pkb/internal/filetype"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/index"
 	"github.com/dlants/pkb/internal/paths"
@@ -45,8 +43,6 @@ func main() {
 		err = runSearch(rest)
 	case "stats":
 		err = runStats(rest)
-	case "chunk":
-		err = runChunk(rest)
 	case "healthcheck":
 		err = runHealthcheck(rest)
 	case "version", "--version", "-v":
@@ -70,7 +66,6 @@ usage:
   pkb estimate         estimate the cost of the next and a full reindex
   pkb search <query>   search the index
   pkb stats            print index statistics
-  pkb chunk <file>     chunk a file and pretty-print the chunks
   pkb healthcheck      verify the index + state marker against the git tree
   pkb version          print the pkb version
 
@@ -275,9 +270,6 @@ func runStats(args []string) error {
 	return nil
 }
 
-// runChunk reads a file, chunks it the same way the indexer would (tree-sitter
-// for recognized code, markdown chunker otherwise), and pretty-prints the
-// resulting chunks. It does not touch the index, config, or any provider.
 // runVersion prints the module version. When pkb is built with `go install`,
 // the version is embedded in the build info; for local/dev builds it falls back
 // to "(devel)".
@@ -341,53 +333,8 @@ func runHealthcheck(args []string) error {
 	return fmt.Errorf("healthcheck found %d issue(s)", len(rep.Issues))
 }
 
-func runChunk(args []string) error {
-	fs := flag.NewFlagSet("chunk", flag.ExitOnError)
-	maxSize := fs.Int("max", chunk.TargetChunkSize, "max chunk size in characters")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	path := strings.TrimSpace(strings.Join(fs.Args(), " "))
-	if path == "" {
-		return fmt.Errorf("chunk: missing file path")
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	route := filetype.RoutePath(path)
-	var chunks []chunk.ChunkInfo
-	if route.Type == filetype.Code {
-		if chunk.IsConfigGrammar(route.Grammar) {
-			chunks, err = chunk.ChunkConfig(content, route.Grammar, path, *maxSize)
-		} else {
-			chunks, err = chunk.ChunkCode(content, route.Grammar, path, *maxSize)
-		}
-		if err != nil {
-			return err
-		}
-	} else {
-		chunks = chunk.ChunkMarkdown(string(content), path, *maxSize)
-	}
-
-	kind := route.Type.String()
-	if route.Grammar != "" {
-		kind = route.Grammar
-	}
-	fmt.Printf("%s (%s): %d chunks\n", path, kind, len(chunks))
-	// Show each chunk exactly as it is embedded: the heading breadcrumb rendered
-	// as comments/context blocks ahead of the raw chunk text.
-	comment := filetype.LineComment(path)
-	for _, c := range chunks {
-		embedded := index.Contextualize(comment, c.HeadingContext, c.Text)
-		fmt.Printf("\n%s\n\n%s\n", chunkHeading(c.HeadingContext, c.Start.Line), embedded)
-	}
-	return nil
-}
-
-// chunkHeading renders the shared header used by both search results and the
-// chunk preview. The breadcrumb is prefixed with the file path for both code and
+// chunkHeading renders the shared header used by search results. The breadcrumb
+// is prefixed with the file path for both code and
 // markdown; we attach the chunk's starting line to that leading path in
 // editor-friendly file:Ln form, e.g. "## path/to/file.go:L28 > type State" or
 // "## docs/readme.md:L2 > # Title".

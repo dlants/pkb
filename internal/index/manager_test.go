@@ -971,6 +971,35 @@ func TestSearchColdCacheMatchesWarm(t *testing.T) {
 	require.Equal(t, warm, cold, "cold cache must reproduce warm results exactly")
 }
 
+// TestSyncReadsIndexedBlobNotWorkingTree verifies sync reconstructs chunk text
+// from the exact blob the artifact was indexed against, never the working tree:
+// after the source file is edited on disk without reindexing, a cold-cache sync
+// still yields the indexed (committed) content.
+func TestSyncReadsIndexedBlobNotWorkingTree(t *testing.T) {
+	h := newHarness(t)
+	h.write("a.md", "# A\n\nindexed distinctive alpha content")
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	// Mutate the working tree only (no reindex): the mirror artifact still
+	// references the committed blob, so sync must ignore this content.
+	h.write("a.md", "# A\n\ntampered omega working-tree content")
+
+	res, err := Search(coldStore(t, o), "distinctive alpha content", 10)
+	require.NoError(t, err)
+	var joined string
+	for _, r := range res {
+		joined += r.Text
+	}
+	require.Contains(t, joined, "indexed distinctive alpha content", "sync must reconstruct from the indexed blob")
+	require.NotContains(t, joined, "tampered", "sync must not read the working tree")
+}
+
 // TestSearchEvictsRemovedArtifact verifies the read-path eviction invariant: an
 // artifact gone from the mirror tree is dropped from the cache on the next
 // search, even when the cache still holds its rows.

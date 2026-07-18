@@ -669,22 +669,24 @@ func (o *Options) reconstructArtifact(path paths.GitRootRelativePath, a mirror.A
 	if err != nil {
 		return nil, nil, err
 	}
-	isCode := filetype.RoutePath(string(path)).Type == filetype.Code
-	comment := filetype.LineComment(string(path))
-	chunks := make([]chunk.ChunkInfo, len(a.Chunks))
-	contextualized := make([]string, len(a.Chunks))
+	spans := make([]byteSpan, len(a.Chunks))
 	for i, c := range a.Chunks {
-		if c.Start < 0 || c.End > len(content) || c.Start > c.End {
-			return nil, nil, fmt.Errorf("index: chunk %d of %s has out-of-range span [%d,%d) for %d-byte blob %s", i, path, c.Start, c.End, len(content), a.BlobSha)
+		spans[i] = byteSpan{Start: c.Start, End: c.End}
+	}
+	recons, err := Reconstruct(path, content, spans)
+	if err != nil {
+		return nil, nil, err
+	}
+	chunks := make([]chunk.ChunkInfo, len(recons))
+	contextualized := make([]string, len(recons))
+	for i, rc := range recons {
+		chunks[i] = chunk.ChunkInfo{
+			Text:           rc.Text,
+			HeadingContext: rc.HeadingContext,
+			Start:          rc.Start,
+			End:            rc.End,
 		}
-		text := string(content[c.Start:c.End])
-		ci := chunk.ChunkInfo{Text: text, HeadingContext: c.HeadingContext}
-		if isCode {
-			ci.Start = chunk.PosFromByte(content, c.Start)
-			ci.End = chunk.PosFromByte(content, c.End)
-		}
-		chunks[i] = ci
-		contextualized[i] = Contextualize(comment, c.HeadingContext, text)
+		contextualized[i] = rc.Contextualized
 	}
 	return chunks, contextualized, nil
 }
@@ -977,10 +979,9 @@ func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error 
 	}
 	for i := range pf.chunks {
 		a.Chunks[i] = mirror.Chunk{
-			Start:          pf.spans[i][0],
-			End:            pf.spans[i][1],
-			HeadingContext: pf.chunks[i].HeadingContext,
-			Embedding:      pf.embeddings[i],
+			Start:     pf.spans[i][0],
+			End:       pf.spans[i][1],
+			Embedding: pf.embeddings[i],
 		}
 	}
 	return o.mirrorTree().Write(pf.path, a)

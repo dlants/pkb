@@ -339,18 +339,56 @@ Decisions / deviations:
   whose start is the extended def start (leading doc-comment/keywords, i.e. a
   definition-header chunk) is a boundary case that the unified-auto-chunk stage
   handles when boundaries become Voyage's rather than AST-derived.
-## sync wiring
+## sync wiring — DONE
 
 - Goal: `syncCache` builds rows via `Reconstruct` from git blobs; `store.PutFile`
   receives identical fields as before. The `pkb chunk` command is removed.
 - Tests:
-  - Full reindex then fresh `SyncCache` from a wiped `cache.db` produces the same
-    `chunks` rows (text/contextualized_text/heading_context/positions) as the old
-    format did for a fixture repo.
-  - `pkb chunk` and its wiring are gone; `main` and tests build without it.
-  - Sync reads the indexed blob, not the working tree: modify the working-tree
+  - [x] Full reindex then fresh `SyncCache` from a wiped `cache.db` produces the same
+    `chunks` rows (`TestSearchColdCacheMatchesWarm`).
+  - [x] `pkb chunk` and its wiring are gone; `main` and tests build without it.
+  - [x] Sync reads the indexed blob, not the working tree: modify the working-tree
     file after indexing, sync, and assert reconstructed text matches the indexed
-    blob.
+    blob (`TestSyncReadsIndexedBlobNotWorkingTree`).
+
+**Result (2026-07-18): DONE.** Wired the sync path through the stage-3
+`Reconstruct` helper and dropped the on-disk `HeadingContext` field (the last
+derivable value still duplicated on disk), so `.meta` now stores only
+`{start,end}` byte offsets per chunk:
+
+- `mirror.Chunk` / `metaChunk` (`internal/mirror/mirror.go`) reduced to
+  `{Start, End}` + the `.vec` embedding; `EncodeMeta`/`DecodeMeta` updated. The
+  `headingContext` JSON key is gone; `TestMetaHasNoChunkText` no longer asserts
+  it.
+- `index.reconstructArtifact` (`internal/index/manager.go`) is now a thin adapter
+  over `Reconstruct`: it `CatBlob`s the artifact's exact blob, builds `[]byteSpan`
+  from the stored offsets, and maps the returned `reconstructedChunk`s into the
+  `([]chunk.ChunkInfo, []string)` shape `PutFile` expects. `syncCache` and
+  `reuseMap` are unchanged callers, so both now derive heading breadcrumbs from
+  file structure (AST symbol path / markdown headers) at sync time rather than
+  reading a stored field. Per-chunk reuse still hits because the reconstructed
+  breadcrumb equals the chunker's `HeadingContext` (verified in stage 3).
+- `writeFile` no longer persists `HeadingContext`.
+- `store.MajorVersion` bumped 6 -> 7 (the `.meta` shape changed; forces a clean
+  re-embed). Store migration test seed and legacy-file test updated to v7.
+- `pkb chunk` removed: `runChunk`/its dispatch/usage line are deleted from
+  `main.go`, along with the now-unused `chunk`/`filetype` imports. `chunkHeading`
+  stays (still used by `formatResults`); its doc comment dropped the chunk-preview
+  reference. `pkb chunk` can no longer reproduce chunks offline since boundaries
+  are the API's, so it is dropped per the plan rather than reworked.
+
+Decisions / deviations:
+
+- **Dropped the on-disk `HeadingContext` now** (stage 2 had kept it as an
+  interim simplification). Stage 3 deferred this to "sync wiring"; done here since
+  `Reconstruct` fully recomputes the breadcrumb, making the stored field dead
+  weight. This is the final removal of derivable data from `.meta`.
+- **Per-chunk reuse kept intact** (not yet simplified to file-level skip — that is
+  the later unified-auto-chunk stage). `reuseMap` keys on the reconstructed
+  breadcrumb+text, so it keeps working across edits without the stored field.
+- Pre-existing repo-wide `golangci-lint` errcheck findings (21, all on untouched
+  files / established `defer x.Close()` patterns) are unchanged; `go build`,
+  `go vet`, and `go test ./...` are all green.
 
 ## unified auto-chunk positioning (code + text)
 

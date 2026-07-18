@@ -14,16 +14,14 @@ func fixture() Artifact {
 		ModelName: "mock@8",
 		Chunks: []Chunk{
 			{
-				Start:          10,
-				End:            42,
-				HeadingContext: "pkg > Foo",
-				Embedding:      embed.Embedding{0.1, -0.2, 3.5, 0},
+				Start:     10,
+				End:       42,
+				Embedding: embed.Embedding{0.1, -0.2, 3.5, 0},
 			},
 			{
-				Start:          64,
-				End:            68,
-				HeadingContext: "",
-				Embedding:      embed.Embedding{-1, 2, -3, 4},
+				Start:     64,
+				End:       68,
+				Embedding: embed.Embedding{-1, 2, -3, 4},
 			},
 		},
 	}
@@ -55,7 +53,7 @@ func TestMetaHasNoChunkText(t *testing.T) {
 			t.Errorf("meta must not contain %q, got:\n%s", forbidden, s)
 		}
 	}
-	for _, want := range []string{"start", "end", "headingContext"} {
+	for _, want := range []string{"start", "end"} {
 		if !bytes.Contains(meta, []byte(want)) {
 			t.Errorf("meta must contain offset field %q, got:\n%s", want, s)
 		}
@@ -75,9 +73,6 @@ func TestOffsetsRoundTrip(t *testing.T) {
 	for i, c := range in.Chunks {
 		if got.Chunks[i].Start != c.Start || got.Chunks[i].End != c.End {
 			t.Errorf("chunk %d offsets: got [%d,%d) want [%d,%d)", i, got.Chunks[i].Start, got.Chunks[i].End, c.Start, c.End)
-		}
-		if got.Chunks[i].HeadingContext != c.HeadingContext {
-			t.Errorf("chunk %d heading: got %q want %q", i, got.Chunks[i].HeadingContext, c.HeadingContext)
 		}
 	}
 }
