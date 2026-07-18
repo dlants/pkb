@@ -1,5 +1,5 @@
 {
-  "blobSha": "ab0a9918acde94e93bfe257bfde8007ceb4f6ab6",
+  "blobSha": "4ce8957e693bc204aad61ab0c1c8fafe6432933f",
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
@@ -66,12 +66,21 @@
       "endCol": 2
     },
     {
+      "text": "// CatBlob returns the raw bytes of a blob object by its sha. It reads from the\n// object database, never the working tree, so offsets recorded against a blob\n// resolve against exactly that content regardless of the working tree state.\nfunc (r *Repo) CatBlob(sha string) ([]byte, error) {\n\tcmd := exec.Command(\"git\", \"cat-file\", \"blob\", sha)\n\tcmd.Dir = string(r.Root)\n\tvar out, errBuf bytes.Buffer\n\tcmd.Stdout = \u0026out\n\tcmd.Stderr = \u0026errBuf\n\tif err := cmd.Run(); err != nil {\n\t\treturn nil, fmt.Errorf(\"git cat-file blob %s: %v: %s\", sha, err, strings.TrimSpace(errBuf.String()))\n\t}\n\treturn out.Bytes(), nil\n}",
+      "contextualizedText": "// internal/git/git.go \u003e method CatBlob\n\n// CatBlob returns the raw bytes of a blob object by its sha. It reads from the\n// object database, never the working tree, so offsets recorded against a blob\n// resolve against exactly that content regardless of the working tree state.\nfunc (r *Repo) CatBlob(sha string) ([]byte, error) {\n\tcmd := exec.Command(\"git\", \"cat-file\", \"blob\", sha)\n\tcmd.Dir = string(r.Root)\n\tvar out, errBuf bytes.Buffer\n\tcmd.Stdout = \u0026out\n\tcmd.Stderr = \u0026errBuf\n\tif err := cmd.Run(); err != nil {\n\t\treturn nil, fmt.Errorf(\"git cat-file blob %s: %v: %s\", sha, err, strings.TrimSpace(errBuf.String()))\n\t}\n\treturn out.Bytes(), nil\n}",
+      "headingContext": "internal/git/git.go \u003e method CatBlob",
+      "startLine": 83,
+      "startCol": 1,
+      "endLine": 96,
+      "endCol": 2
+    },
+    {
       "text": "// WriteTree writes the current staging area (index) to the object database as a\n// tree and returns its sha. It does not create a commit or mutate the working\n// tree or index. The returned sha is a tree-ish consumable by LsTree.\nfunc (r *Repo) WriteTree() (string, error) {\n\tout, err := r.run(\"write-tree\")\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\treturn strings.TrimSpace(out), nil\n}",
       "contextualizedText": "// internal/git/git.go \u003e method WriteTree\n\n// WriteTree writes the current staging area (index) to the object database as a\n// tree and returns its sha. It does not create a commit or mutate the working\n// tree or index. The returned sha is a tree-ish consumable by LsTree.\nfunc (r *Repo) WriteTree() (string, error) {\n\tout, err := r.run(\"write-tree\")\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\treturn strings.TrimSpace(out), nil\n}",
       "headingContext": "internal/git/git.go \u003e method WriteTree",
-      "startLine": 83,
+      "startLine": 98,
       "startCol": 1,
-      "endLine": 92,
+      "endLine": 107,
       "endCol": 2
     }
   ]

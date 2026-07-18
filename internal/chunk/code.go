@@ -65,6 +65,68 @@ func ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([
 	return sw.out, nil
 }
 
+// CodeBreadcrumber derives, for a byte range within a source file, the enclosing
+// symbol breadcrumb (path > label name > ...) that ChunkCode would attach. It is
+// the reconstruction-side counterpart to the sweeper's breadcrumb: it builds the
+// definition index once and answers per-span queries, so the cache-sync path can
+// rebuild HeadingContext from stored byte offsets without re-chunking.
+type CodeBreadcrumber struct {
+	idx         *defIndex
+	pathContext string
+}
+
+// NewCodeBreadcrumber parses content with the grammar and builds its definition
+// index. When the grammar is unknown or the source fails to parse cleanly the
+// breadcrumber degrades to the bare path context (matching ChunkCode's
+// line-based fallback, which carries pathContext as the breadcrumb).
+func NewCodeBreadcrumber(content []byte, grammar, pathContext string) (*CodeBreadcrumber, error) {
+	b := &CodeBreadcrumber{pathContext: pathContext}
+	if len(content) == 0 {
+		return b, nil
+	}
+	lang := languageFor(grammar)
+	if lang == nil {
+		return b, nil
+	}
+	parser := tree_sitter.NewParser()
+	defer parser.Close()
+	if err := parser.SetLanguage(lang); err != nil {
+		return b, nil
+	}
+	tree := parser.Parse(content, nil)
+	if tree == nil {
+		return b, nil
+	}
+	defer tree.Close()
+	root := tree.RootNode()
+	if root == nil || root.HasError() {
+		return b, nil
+	}
+	idx, err := buildDefIndex(root, content, grammar)
+	if err != nil {
+		return b, nil
+	}
+	b.idx = idx
+	return b, nil
+}
+
+// Breadcrumb returns the enclosing symbol path for the byte range [start, end):
+// the path context joined with every definition span that fully contains the
+// range, outermost first (spans are start-ordered). A range enclosed by no span
+// yields just the path context.
+func (b *CodeBreadcrumber) Breadcrumb(start, end int) string {
+	bc := b.pathContext
+	if b.idx == nil {
+		return bc
+	}
+	for _, sp := range b.idx.spans {
+		if sp.start <= start && end <= sp.end {
+			bc = joinBreadcrumb(bc, strings.TrimSpace(sp.label+" "+sp.name))
+		}
+	}
+	return bc
+}
+
 // sweeper performs the single recursive cAST pass over the parse tree. A
 // definition span (a @definition.* capture) is a hard break: entering or exiting
 // one force-flushes the current window, and the stack of active spans supplies

@@ -287,18 +287,58 @@ whole repo green — build/vet/test all pass):
 - Test `findChunk` reconstructs text from the blob; store migration test seed
   bumped to version 6.
 
-## reconstruction helper
+## reconstruction helper — DONE
 
 - Goal: a `Reconstruct(content, filetype, spans)` that yields text, breadcrumb,
   line/col, and contextualized text for both code and text, loading blobs by sha.
 - Tests:
-  - Code file: for a span enclosed by a definition, `heading_context` is the AST
+  - [x] Code file: for a span enclosed by a definition, `heading_context` is the AST
     symbol path (`path > label name > ...`) derived from `buildDefIndex`;
-    contextualized text matches `Contextualize` output.
-  - Markdown file: breadcrumb equals the enclosing header hierarchy for a chunk
-    under nested headings; a chunk before any heading has empty breadcrumb.
-  - Offsets -> line/col matches `positionAtOffset` for known positions.
+    contextualized text matches `Contextualize` output
+    (`TestReconstructCodeEnclosingDefinition`, `TestCodeBreadcrumberEnclosingSpan`,
+    `TestCodeBreadcrumberNested`).
+  - [x] Markdown file: breadcrumb equals the enclosing header hierarchy for a chunk
+    under nested headings; a chunk before any heading has empty breadcrumb (just
+    the path context) (`TestReconstructMarkdownMatchesChunker`,
+    `TestMarkdownBreadcrumbMatchesChunkMarkdown`, `TestMarkdownBreadcrumbBeforeAnyHeading`).
+  - [x] Offsets -> line/col matches `positionAtOffset` for known positions
+    (`TestPosFromByteMatchesPositionAtOffset`).
 
+**Result (2026-07-18): DONE.** Added a breadcrumb-from-content reconstruction path
+that derives HeadingContext from structure rather than reading it from disk:
+
+- `chunk.CodeBreadcrumber` (`internal/chunk/code.go`): builds a file's `defIndex`
+  once (`NewCodeBreadcrumber`), then `Breadcrumb(start,end)` joins the path context
+  with every enclosing `@definition.*` span (outermost first, start-ordered) —
+  the same `path > label name > ...` string the sweeper produces. Unknown grammar
+  / parse failure degrades to the bare path context, matching `ChunkCode`'s
+  line-based fallback.
+- `chunk.MarkdownBreadcrumb` (`internal/chunk/markdown.go`): walks the same
+  heading/code-fence state machine as `splitIntoHardBlocks` to return the header
+  hierarchy in effect at a byte offset, joined with the path context — verified
+  to reproduce `ChunkMarkdown`'s `HeadingContext` exactly.
+- `index.Reconstruct(path, content, spans)` (`internal/index/reconstruct.go`):
+  the DRY helper. Routes the path (code vs text), slices each `[Start,End)` span
+  to recover text, derives the breadcrumb via the two chunk helpers, computes
+  line/col (`chunk.PosFromByte`, code only — text stays file-tagged/zero as the
+  auto-chunk path stores it), and builds contextualized text via `Contextualize`.
+  Out-of-range spans hard-fail (naming file + chunk index).
+
+Decisions / deviations:
+
+- **Additive, not yet wired.** `syncCache`/`reuseMap` still use the stage-2
+  `reconstructArtifact` (which reads the stored `HeadingContext`). Switching them
+  to `Reconstruct` (and dropping the on-disk `HeadingContext` field) is deferred
+  to the "sync wiring" stage, since rewiring reuse keying is intertwined with the
+  later per-chunk-reuse simplification. This keeps stage 3 a pure, tested helper
+  with no behavior change to the live path.
+- **Breadcrumb containment uses raw span bounds.** `Breadcrumb` treats a span as
+  enclosing when `sp.start <= start && end <= sp.end`. This exactly reproduces the
+  sweeper breadcrumb for chunks *inside* a definition body (the reconstruction
+  case), and for text it reproduces `ChunkMarkdown` verbatim (tested). A chunk
+  whose start is the extended def start (leading doc-comment/keywords, i.e. a
+  definition-header chunk) is a boundary case that the unified-auto-chunk stage
+  handles when boundaries become Voyage's rather than AST-derived.
 ## sync wiring
 
 - Goal: `syncCache` builds rows via `Reconstruct` from git blobs; `store.PutFile`

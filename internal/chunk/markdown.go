@@ -248,6 +248,40 @@ func softSplitBlock(text string, blockStart Position, maxChunkSize int) []softCh
 	return chunks
 }
 
+// MarkdownBreadcrumb returns the heading breadcrumb in effect at byte offset
+// within text: the path context joined with the enclosing header hierarchy
+// (# h1 > ## h2 > ...), matching the HeadingContext ChunkMarkdown attaches to a
+// chunk that begins at that offset. It walks the same heading/code-fence state
+// machine as splitIntoHardBlocks so the reconstruction path reproduces the
+// original breadcrumb from a stored offset without re-chunking. An offset before
+// any heading yields just the path context.
+func MarkdownBreadcrumb(text, pathContext string, offset int) string {
+	hierarchy := map[int]string{}
+	hc := ""
+	inCodeBlock := false
+	pos := 0
+	for _, line := range strings.Split(text, "\n") {
+		lineEnd := pos + len(line)
+		reached := offset <= lineEnd
+		if isCodeFence(line) {
+			inCodeBlock = !inCodeBlock
+		} else if !inCodeBlock {
+			if h, ok := parseHeading(line); ok {
+				hierarchy[h.depth] = h.title
+				for d := h.depth + 1; d <= 6; d++ {
+					delete(hierarchy, d)
+				}
+				hc = getHeadingContext(hierarchy)
+			}
+		}
+		if reached {
+			break
+		}
+		pos = lineEnd + 1
+	}
+	return joinBreadcrumb(pathContext, hc)
+}
+
 // ChunkMarkdown splits markdown text into chunks along heading and paragraph
 // boundaries, carrying heading breadcrumbs as HeadingContext. pathContext seeds
 // the breadcrumb (typically the file's relative path) so the file path is part
