@@ -381,6 +381,20 @@ in returned order) makes "already covered" well-defined.
     yields correct breadcrumbs for a multi-window file (integration, not a
     restatement of slicing).
 
+## Stage 4 progress (DONE)
+
+- Bumped `store.MajorVersion` 9 → 10 (`internal/store/store.go`), the single
+  change needed to re-key every vec table and force a clean corrective re-embed
+  of all files under the new structured-window chunking format.
+- The store migration test (`store_test.go`) seeds its legacy row via the live
+  `MajorVersion` constant, so it needed no edit and stays green.
+- Verified end to end: `go build/vet/test ./...` all green; golangci-lint reports
+  only pre-existing `defer *.Close()` errcheck findings in untouched files.
+  Rebuilt `./pkb`, ran a full `pkb reindex` (all 64 files / 383 chunks re-embedded
+  at v10), then `pkb healthcheck` reports "index and state marker match the git
+  tree" and `pkb stats` matches. Spot-checked a search: results reconstruct with
+  correct header/AST breadcrumbs and no `<context>` leakage.
+
 ## version bump and full re-embed
 
 - Goal: bump `store.MajorVersion` 9 → 10 so existing artifacts are treated as
