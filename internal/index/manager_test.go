@@ -838,6 +838,112 @@ func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {
 	}
 }
 
+// straddleModel wraps MockModel and, for any window carrying a synthetic context
+// prefix (its input contains a "</context>" breadcrumb block), prepends a chunk
+// that straddles the prefix/body boundary. It verifies prepareFile drops a chunk
+// with no clean raw preimage rather than misresolving it.
+type straddleModel struct{ *embed.MockModel }
+
+func (m *straddleModel) EmbedDocument(document string) ([]embed.ContextualChunk, error) {
+	chunks, err := m.MockModel.EmbedDocument(document)
+	if err != nil {
+		return nil, err
+	}
+	const marker = "</context>\n\n"
+	if idx := strings.Index(document, marker); idx >= 0 {
+		boundary := idx + len(marker)
+		start, end := boundary-10, boundary+10
+		if start >= 0 && end <= len(document) {
+			straddle := embed.ContextualChunk{
+				Text:      document[start:end],
+				Embedding: make(embed.Embedding, m.Dims),
+			}
+			chunks = append([]embed.ContextualChunk{straddle}, chunks...)
+		}
+	}
+	return chunks, nil
+}
+
+// largeMarkdown builds a markdown document big enough to span several auto-chunk
+// windows, with a distinct head and many headed sections.
+func largeMarkdown() string {
+	var b strings.Builder
+	b.WriteString("# Title\n\nintro paragraph\n\n")
+	filler := strings.Repeat("word ", 200)
+	for i := 0; b.Len() <= autoChunkMaxWindowByte+autoChunkBodyBudget; i++ {
+		fmt.Fprintf(&b, "## Section %06d\n\n%s\n\n", i, filler)
+	}
+	return b.String()
+}
+
+func TestPrepareFileMapsMultiWindowChunksToRawSpans(t *testing.T) {
+	h := newHarness(t)
+	h.write("big.md", largeMarkdown())
+	h.commit("init")
+
+	model := embed.NewMockModel("mock", 8)
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	tree := mirror.NewTree(paths.AbsPath(h.root))
+	a, ok, err := tree.TryRead("big.md")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Greater(t, len(a.Chunks), 1, "a multi-window file yields many chunks")
+
+	content, err := o.Repo.CatBlob(a.BlobSha)
+	require.NoError(t, err)
+
+	seen := map[[2]mirror.RawOffset]struct{}{}
+	for _, c := range a.Chunks {
+		require.Less(t, int(c.Start), int(c.End))
+		require.LessOrEqual(t, int(c.End), len(content))
+		text := string(content[int(c.Start):int(c.End)])
+		// No synthetic prefix (head duplicate or breadcrumb) text leaks into a
+		// stored chunk.
+		require.NotContains(t, text, "<context>")
+		key := [2]mirror.RawOffset{c.Start, c.End}
+		_, dup := seen[key]
+		require.False(t, dup, "overlap-region duplicates must collapse to one raw span")
+		seen[key] = struct{}{}
+	}
+
+	// Reconstruction over the stored offsets yields correct header breadcrumbs
+	// for a multi-window file (a later section is contextualized by its heading).
+	_, contextualized, err := o.reconstructArtifact("big.md", a)
+	require.NoError(t, err)
+	joined := strings.Join(contextualized, "\n")
+	require.Contains(t, joined, "## Section", "reconstructed chunks carry their header breadcrumb")
+}
+
+func TestPrepareFileDropsStraddleChunk(t *testing.T) {
+	h := newHarness(t)
+	h.write("big.md", largeMarkdown())
+	h.commit("init")
+
+	model := &straddleModel{MockModel: embed.NewMockModel("mock", 8)}
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err, "a prefix/body straddle chunk must be dropped, not fail the reindex")
+
+	tree := mirror.NewTree(paths.AbsPath(h.root))
+	a, ok, err := tree.TryRead("big.md")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	content, err := o.Repo.CatBlob(a.BlobSha)
+	require.NoError(t, err)
+	for _, c := range a.Chunks {
+		require.NotContains(t, string(content[int(c.Start):int(c.End)]), "</context>",
+			"no stored chunk retains synthetic breadcrumb text from a straddle")
+	}
+}
+
 func TestAutoChunkWindowsSmallDocument(t *testing.T) {
 	doc := "the whole document fits in one window"
 	windows, err := autoChunkWindows("doc.txt", doc)

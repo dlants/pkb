@@ -680,13 +680,17 @@ const (
 
 // prepareFile builds a preparedFile for any file — code or text — via the
 // model's whole-document auto-chunking endpoint. PKB does not chunk the file;
-// the model returns its own chunks, each with a contextualized vector, and each
-// returned chunk is resolved to a verbatim byte span in the source (resolveSpans
-// hard-fails if a chunk is not found). Chunks carry only offsets; text, line/col
-// and breadcrumbs are reconstructed at sync. Large files are sent in overlapping
-// windows and the resulting chunks are deduped by text identity. Per-chunk reuse
-// does not apply; unchanged files are skipped wholesale by the caller's blob_sha
-// check.
+// the model returns its own chunks, each with a contextualized vector. Each
+// returned chunk is located within its window's transformed input and its span
+// is mapped back to the raw blob via the window's affine toRaw bridge. Chunks
+// touching the synthetic context prefix (head section or breadcrumb) have no raw
+// preimage and are dropped; body chunks are asserted to slice byte-identically
+// out of the blob. Chunks carry only offsets; text, line/col and breadcrumbs are
+// reconstructed at sync. Large files are sent in overlapping windows and the
+// resulting chunks are deduped by covered raw range (an overlap-region chunk
+// maps to a range a neighbouring window already covered, so it collapses
+// deterministically). Per-chunk reuse does not apply; unchanged files are
+// skipped wholesale by the caller's blob_sha check.
 func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {
 	// Embed and resolve spans against the exact blob recorded for this file,
 	// never the working tree. The stored offsets are sliced back out of this
@@ -701,43 +705,106 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm
 		return nil, err
 	}
 	pf := &preparedFile{path: path, blobSha: blobSha}
-	seen := map[string]struct{}{}
+	var covered coveredRanges
 	for _, w := range windows {
 		chunks, err := cm.EmbedDocument(w.input)
 		if err != nil {
 			return nil, err
 		}
-		for _, c := range chunks {
+		input := []byte(w.input)
+		cursor := 0
+		for i, c := range chunks {
 			text := strings.TrimSpace(c.Text)
 			if text == "" {
 				continue
 			}
-			// Drop chunks that a later window's synthetic context prefix (the
-			// structural breadcrumb) contributed: they have no verbatim preimage
-			// in the blob, so they cannot be resolved to a raw span. Head-section
-			// chunks are verbatim file bytes and survive as text duplicates of
-			// the first window's chunks. The guard is scoped to prefixed windows
-			// so the first/only window keeps the unlocatable-chunk hard-fail.
-			// Stage 3 replaces this text-based guard with exact
-			// InputOffset->RawOffset classification.
-			if w.prefixLen > 0 && !bytes.Contains(content, []byte(text)) {
+			// Locate the chunk within this window's transformed input with a
+			// forward cursor, mirroring resolveSpans: prefer a match at/after the
+			// cursor so repeated texts resolve to distinct, ordered spans, else
+			// fall back to a whole-input search without moving the cursor.
+			var t0 int
+			if rel := bytes.Index(input[cursor:], []byte(text)); rel >= 0 {
+				t0 = cursor + rel
+				cursor = t0 + len(text)
+			} else if abs := bytes.Index(input, []byte(text)); abs >= 0 {
+				t0 = abs
+			} else {
+				preview := text
+				if len(preview) > 80 {
+					preview = preview[:80]
+				}
+				return nil, fmt.Errorf("index: cannot locate chunk %d of %s as a verbatim substring of the window input: %q", i, path, preview)
+			}
+			t1 := t0 + len(text)
+			// Classify via the affine bridge: a chunk touching the synthetic
+			// prefix (head section or breadcrumb) or straddling the prefix/body
+			// boundary has no raw preimage and is dropped. Straddles are rare
+			// (the separator makes them unlikely) and the same content is emitted
+			// cleanly as a body chunk in the window whose body starts earlier.
+			rawStart, ok0 := w.toRaw(InputOffset(t0))
+			rawEnd, ok1 := w.toRaw(InputOffset(t1))
+			if !ok0 || !ok1 {
 				continue
 			}
-			if _, dup := seen[text]; dup {
+			// The affine map must be exact: the raw span slices byte-identically
+			// to the chunk text, or a mapping bug slipped through.
+			if string(content[rawStart:rawEnd]) != text {
+				return nil, fmt.Errorf("index: chunk raw span [%d,%d) of %s does not slice to chunk text", rawStart, rawEnd, path)
+			}
+			// Dedup by covered raw range: an overlap-region chunk maps to a range
+			// a neighbouring window already covered, so it is dropped regardless
+			// of how the endpoint split the boundary.
+			if covered.contains(rawStart, rawEnd) {
 				continue
 			}
-			seen[text] = struct{}{}
+			covered.add(rawStart, rawEnd)
 			pf.chunks = append(pf.chunks, chunk.ChunkInfo{Text: text})
 			pf.embeddings = append(pf.embeddings, c.Embedding)
 			pf.chars += len(text)
+			pf.spans = append(pf.spans, [2]int{int(rawStart), int(rawEnd)})
 		}
 	}
-	spans, err := resolveSpans(path, content, pf.chunks)
-	if err != nil {
-		return nil, err
-	}
-	pf.spans = spans
 	return pf, nil
+}
+
+// coveredRanges is the set of raw [start,end) byte ranges already accepted for a
+// file, kept as sorted, merged, non-overlapping intervals. It backs auto-chunk
+// dedup: an overlap-region chunk whose range is already fully covered by an
+// accepted chunk is dropped.
+type coveredRanges struct {
+	ivals [][2]mirror.RawOffset
+}
+
+// contains reports whether [start,end) lies entirely within the union of the
+// accepted intervals.
+func (c *coveredRanges) contains(start, end mirror.RawOffset) bool {
+	for _, iv := range c.ivals {
+		if iv[0] <= start && end <= iv[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// add records [start,end) as covered, merging it into any intervals it overlaps
+// or abuts so the set stays sorted, merged, and non-overlapping.
+func (c *coveredRanges) add(start, end mirror.RawOffset) {
+	merged := make([][2]mirror.RawOffset, 0, len(c.ivals)+1)
+	for _, iv := range c.ivals {
+		if iv[1] < start || end < iv[0] {
+			merged = append(merged, iv)
+			continue
+		}
+		if iv[0] < start {
+			start = iv[0]
+		}
+		if iv[1] > end {
+			end = iv[1]
+		}
+	}
+	merged = append(merged, [2]mirror.RawOffset{start, end})
+	sort.Slice(merged, func(i, j int) bool { return merged[i][0] < merged[j][0] })
+	c.ivals = merged
 }
 
 // autoChunkWindows splits a document into whole-document embedding windows. A

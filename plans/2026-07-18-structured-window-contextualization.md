@@ -333,6 +333,36 @@ in returned order) makes "already covered" well-defined.
     fixed prefix reserve), and `prefixLen <= autoChunkPrefixReserveByte`. A
     breadcrumb that would overflow the reserve hard-fails.
 
+## Stage 3 progress (DONE)
+
+- Rewrote `prepareFile` (`internal/index/manager.go`): each window is embedded,
+  each returned chunk (trimmed, non-empty) is located within `window.input` with
+  a forward cursor (`bytes.Index` from a moving position, whole-input fallback),
+  its `[t0,t1)` `InputOffset`s are classified via `w.toRaw`. A chunk touching the
+  synthetic prefix or straddling the boundary (`!ok0 || !ok1`) is dropped. Body
+  chunks assert `content[rawStart:rawEnd] == text` (hard fail on mismatch) and
+  are deduped by covered raw range. Retired the text-identity `seen` map and the
+  interim Stage-2 `bytes.Contains` prefix guard; `resolveSpans` is no longer
+  called on the windowed path (kept only because `reconstruct_test.go` uses it).
+- Added `coveredRanges` (sorted, merged, non-overlapping raw intervals) with
+  `contains`/`add`; a chunk fully within the covered union is dropped, so
+  overlap-region duplicates collapse deterministically regardless of how the
+  endpoint splits the boundary. `pf.spans` is populated directly (`[]int` pairs
+  from `RawOffset`), so `writeFile`/`mirror.Chunk`/`Reconstruct` are unchanged.
+- Deviation: kept the unlocatable-chunk hard fail for every window (not just the
+  single-window case) — with exact `InputOffset` classification a body chunk that
+  cannot be located in its own window input is a real bug, so failing is correct.
+  Error message retains "verbatim substring" + chunk index for the existing
+  `TestReindexHardFailsOnUnlocatableChunk` assertion.
+- Tests (manager_test.go): `TestPrepareFileMapsMultiWindowChunksToRawSpans`
+  (multi-window reindex: every stored span slices within the blob to unique raw
+  ranges, no `<context>` leakage, reconstruction carries header breadcrumbs) and
+  `TestPrepareFileDropsStraddleChunk` (a `straddleModel` emitting a prefix/body
+  boundary-straddling chunk: reindex succeeds and no stored chunk retains the
+  `</context>` breadcrumb text).
+- Full suite green (`go build/vet/test ./...`); remaining golangci-lint findings
+  are all pre-existing `defer st.Close()` errcheck in untouched test setup.
+
 ## prepareFile: classify, map, dedup
 
 - Goal: rewrite `prepareFile` to embed each `autoChunkWindow`, locate each
