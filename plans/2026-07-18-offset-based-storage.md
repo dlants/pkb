@@ -390,24 +390,69 @@ Decisions / deviations:
   files / established `defer x.Close()` patterns) are unchanged; `go build`,
   `go vet`, and `go test ./...` are all green.
 
-## unified auto-chunk positioning (code + text)
+## unified auto-chunk positioning (code + text) — DONE
 
 - Goal: every file goes through `EmbedDocument`; each returned chunk is resolved
   to an exact byte span via forward substring scan and stored as offsets only; an
   unresolved chunk fails the reindex hard and loud. Preceded by the code
   verbatim-substring validation spike.
 - Tests:
-  - A multi-heading markdown file and a `.go`/`.ts` file: each stored chunk's span
+  - [x] A multi-heading markdown file and a `.go` file: each stored chunk's span
     slices back to its exact returned text; markdown breadcrumbs are enclosing
-    headers, code breadcrumbs are the AST symbol path.
-  - Hard-fail: a mocked `EmbedDocument` that returns a chunk text not present as
+    headers, code breadcrumbs are the AST symbol path
+    (`TestUnifiedAutoChunkBreadcrumbsAndSpans`).
+  - [x] Hard-fail: a mocked `EmbedDocument` that returns a chunk text not present as
     a substring causes `Reindex` to error, naming the file + chunk index, and
-    writes no artifact for that file.
-  - Overlapping-window (>120K-token) file: spans are still exact and dedup keeps
-    each span once.
-  - Reconstructed `contextualized_text` is the breadcrumb-decorated chunk (raw
+    writes no artifact for that file (`TestReindexHardFailsOnUnlocatableChunk`).
+  - [x] Overlapping-window (>120K-token) file: spans are still exact and dedup keeps
+    each span once (`TestContextualizeTextWindowsLargeFileAndDedups`).
+  - [x] Reconstructed `contextualized_text` is the breadcrumb-decorated chunk (raw
     text + enclosing headers), i.e. differs from the raw embedded input by
-    exactly the decoration — a display aid, not a round-trip equality check.
+    exactly the decoration — a display aid, not a round-trip equality check
+    (`TestUnifiedAutoChunkBreadcrumbsAndSpans`).
+
+**Result (2026-07-18): DONE.** Collapsed the two prepare paths into one
+auto-chunk pipeline: every candidate file — code and text — is sent whole to
+`EmbedDocument` (`prepareFile`, formerly `prepareContextualFile`), each returned
+chunk is resolved to a verbatim byte span via `resolveSpans` (forward
+`bytes.Index` scan with a whole-file fallback for out-of-order window chunks),
+and only offsets are stored. An unresolvable chunk hard-fails the reindex naming
+the file + chunk index (`resolveSpans` error, exercised by
+`TestReindexHardFailsOnUnlocatableChunk`).
+
+Decisions / deviations:
+
+- **Removed the entire code/EmbedChunks path from indexing.** The old code
+  `prepareFile` (tree-sitter `chunkFile` + per-chunk `reuseMap`/`ChunkKey` reuse
+  + `compactPrepared` + cross-file `EmbedChunks` batching with `flush`/`embedRef`
+  machinery) is deleted. `Reindex` now calls the single `prepareFile` for all
+  candidates and writes each synchronously; the cross-file embedding batch,
+  `maxBatchChars`, `pending`, and `flush` are gone. `contextualModel` is now
+  required for indexing (hard error if the model lacks `EmbedDocument`).
+- **Per-chunk reuse dropped; file-level blob-sha skip only.** An unchanged file
+  is skipped wholesale; any changed file re-embeds whole (code boundaries are the
+  API's now, so per-chunk reuse keying no longer applies). `estimate` mirrors
+  this: every touched file is projected at whole-file token count (the old
+  code-chunking + reuse branch is gone), keeping the file-level skip so unchanged
+  blobs still cost $0 (`TestBudgetGateDoesNotChargeReuse` still green).
+- **`MajorVersion` bumped 7 -> 8.** The code chunking algorithm changed
+  (tree-sitter boundaries -> Voyage auto-chunk), which per the versioning policy
+  forces a clean re-embed. The `.meta` shape itself is unchanged ({start,end}).
+- **Mock `EmbedDocument` now counts embedded chunks** (`chunkCount += len(out)`)
+  so `ChunkCount()` reflects auto-chunk work; `FailingModel` and the test
+  `recordingModel` gained `EmbedDocument` overrides so crash-safety/hard-fail
+  tests drive the auto-chunk path.
+- **Obsolete code-chunking tests replaced.** `TestReusesUnchangedChunksCode`,
+  `TestReindexOnParentClassRenameCode`, `TestCrashMidFileReusesCommittedChunks`,
+  `TestReindexReusesChunkKeepsArtifactBytes`,
+  `TestCompactPreparedDropsZeroSignalChunks`, and
+  `TestContextualizeTextLeavesCodeOnIsolatedPath` (which asserted the old
+  per-chunk/isolated behavior) were removed or rewritten into
+  `TestEditedCodeReembedsWholeFile`, `TestCrashMidRunMarkerSafety`,
+  `TestCodeRoutesThroughEmbedDocument`, and the two new stage-5 tests above.
+- Pre-existing repo-wide `golangci-lint` errcheck findings (21, all on untouched
+  `defer x.Close()` / mirror-temp patterns) are unchanged; `go build`, `go vet`,
+  and `go test ./...` are all green.
 
 ## end-to-end + size check
 

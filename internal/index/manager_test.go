@@ -9,7 +9,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/embed"
 	"github.com/dlants/pkb/internal/git"
 	"github.com/dlants/pkb/internal/mirror"
@@ -252,8 +251,9 @@ func TestTextFileUnchangedBlobReusesAll(t *testing.T) {
 	require.Equal(t, calls, model.DocumentCalls(), "unchanged text file should embed nothing")
 }
 
-// recordingModel wraps a mock embedding model and captures the exact chunk
-// strings passed to EmbedChunks so tests can assert what was embedded.
+// recordingModel wraps a mock embedding model and captures the documents passed
+// to EmbedDocument so tests can assert what was embedded. failOnce injects a
+// one-shot failure to simulate a crash mid-run.
 type recordingModel struct {
 	*embed.MockModel
 	mu       sync.Mutex
@@ -261,16 +261,16 @@ type recordingModel struct {
 	failOnce bool
 }
 
-func (r *recordingModel) EmbedChunks(chunks []string) ([]embed.Embedding, error) {
+func (r *recordingModel) EmbedDocument(document string) ([]embed.ContextualChunk, error) {
 	r.mu.Lock()
 	if r.failOnce {
 		r.failOnce = false
 		r.mu.Unlock()
 		return nil, fmt.Errorf("injected embed failure")
 	}
-	r.embedded = append(r.embedded, chunks...)
+	r.embedded = append(r.embedded, document)
 	r.mu.Unlock()
-	return r.MockModel.EmbedChunks(chunks)
+	return r.MockModel.EmbedDocument(document)
 }
 
 func (r *recordingModel) inputs() []string {
@@ -279,7 +279,7 @@ func (r *recordingModel) inputs() []string {
 	return append([]string(nil), r.embedded...)
 }
 
-func TestCrashMidFileReusesCommittedChunks(t *testing.T) {
+func TestCrashMidRunMarkerSafety(t *testing.T) {
 	h := newHarness(t)
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 2\n}\n")
 	h.commit("init")
@@ -290,93 +290,47 @@ func TestCrashMidFileReusesCommittedChunks(t *testing.T) {
 
 	_, err := Reindex(o)
 	require.NoError(t, err)
-	firstRun := rec.inputs()
-	require.Len(t, firstRun, 3, "fixture should embed three chunks on first run")
 
-	// Edit only the second function, then crash the next embed call.
+	// Edit the file, then crash the next embed call.
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 22\n}\n")
 	h.commit("edit body")
 	rec.failOnce = true
 	_, err = Reindex(o)
 	require.Error(t, err, "injected failure should abort the run")
 
-	// Retry to completion. The unchanged first chunk is reused from the last
-	// committed index and is never re-embedded; only the changed chunk is
-	// embedded on the retry.
-	before := rec.inputs()
+	// Retry to completion: the changed file is re-embedded whole (per-chunk
+	// reuse is gone; a changed blob is re-embedded wholesale).
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	retry := rec.inputs()[len(before):]
-	require.Len(t, retry, 1, "retry re-embeds only the changed chunk")
 
-	// The committed index holds exactly two chunks.
+	// The committed index holds exactly the file's three chunks.
 	stats, err := st.Stats("mock")
 	require.NoError(t, err)
 	require.Equal(t, 1, stats.Files)
 	require.Equal(t, 3, stats.Chunks)
 }
 
-func TestReusesUnchangedChunksCode(t *testing.T) {
+func TestEditedCodeReembedsWholeFile(t *testing.T) {
 	h := newHarness(t)
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 2\n}\n\nfunc Gamma() int {\n\treturn 3\n}\n")
 	h.commit("init")
 
-	model := embed.NewMockModel("mock", 3)
+	model := &recordingContextModel{MockModel: embed.NewMockModel("mock", 3)}
 	o, st := h.opts(t, model)
 	defer st.Close()
 
 	_, err := Reindex(o)
 	require.NoError(t, err)
-	total := model.ChunkCount()
-	require.Greater(t, total, 1, "fixture should produce multiple chunks")
+	require.Equal(t, 1, model.DocumentCalls(), "code file is auto-chunked in one whole-document call")
 
-	// Change only the body of one function.
+	// Change only the body of one function: the whole file re-embeds (code
+	// boundaries are the API's now; there is no per-chunk reuse).
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 22\n}\n\nfunc Gamma() int {\n\treturn 3\n}\n")
 	h.commit("edit beta")
 
 	_, err = Reindex(o)
 	require.NoError(t, err)
-	delta := model.ChunkCount() - total
-	require.Greater(t, delta, 0, "changed function must re-embed")
-	require.Less(t, delta, total, "unchanged functions must be reused")
-}
-
-func bigClass(name string) string {
-	var b strings.Builder
-	b.WriteString("class " + name + " {\n")
-	for i := 0; i < 12; i++ {
-		fmt.Fprintf(&b, "  method%c() {\n", 'a'+i)
-		for j := 0; j < 6; j++ {
-			b.WriteString("    const x = 'padding padding padding padding padding';\n")
-		}
-		b.WriteString("    return 1;\n  }\n")
-	}
-	b.WriteString("}\n")
-	return b.String()
-}
-
-func TestReindexOnParentClassRenameCode(t *testing.T) {
-	h := newHarness(t)
-	h.write("f.ts", bigClass("Foo"))
-	h.commit("init")
-
-	model := embed.NewMockModel("mock", 3)
-	o, st := h.opts(t, model)
-	defer st.Close()
-
-	_, err := Reindex(o)
-	require.NoError(t, err)
-	total := model.ChunkCount()
-	require.Greater(t, total, 2, "fixture should split into many method chunks")
-
-	// Rename the enclosing class. Method-body text is identical, but the class
-	// is a parent breadcrumb of every method chunk, so all must re-embed.
-	h.write("f.ts", bigClass("Bar"))
-	h.commit("rename class")
-
-	_, err = Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, total*2, model.ChunkCount(), "renaming parent class must re-embed all chunks")
+	require.Equal(t, 2, model.DocumentCalls(), "an edited code file is re-embedded whole")
 }
 
 func TestRenameHandled(t *testing.T) {
@@ -656,53 +610,94 @@ func TestReindexWritesMirrorTree(t *testing.T) {
 	}
 }
 
-func TestReindexReusesChunkKeepsArtifactBytes(t *testing.T) {
+func TestUnifiedAutoChunkBreadcrumbsAndSpans(t *testing.T) {
 	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph\n\n## Sub\n\nnested paragraph")
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 2\n}\n")
 	h.commit("init")
 
-	rec := &recordingModel{MockModel: embed.NewMockModel("mock", 3)}
-	o, st := h.opts(t, rec)
+	model := embed.NewMockModel("mock", 3)
+	o, st := h.opts(t, model)
+	defer st.Close()
+	_, err := Reindex(o)
+	require.NoError(t, err)
+
+	reconstruct := func(rel paths.GitRootRelativePath) []reconstructedChunk {
+		tree := mirror.NewTree(paths.AbsPath(h.root))
+		a, ok, err := tree.TryRead(rel)
+		require.NoError(t, err)
+		require.True(t, ok)
+		content, err := o.Repo.CatBlob(a.BlobSha)
+		require.NoError(t, err)
+		require.NotEmpty(t, a.Chunks)
+		spans := make([]byteSpan, len(a.Chunks))
+		for i, c := range a.Chunks {
+			spans[i] = byteSpan{Start: c.Start, End: c.End}
+			// Every stored span slices back to exactly the returned chunk text.
+			require.NotEmpty(t, strings.TrimSpace(string(content[c.Start:c.End])))
+		}
+		recons, err := Reconstruct(rel, content, spans)
+		require.NoError(t, err)
+		return recons
+	}
+
+	find := func(recons []reconstructedChunk, needle string) reconstructedChunk {
+		for _, rc := range recons {
+			if strings.Contains(rc.Text, needle) {
+				return rc
+			}
+		}
+		t.Fatalf("no chunk containing %q", needle)
+		return reconstructedChunk{}
+	}
+
+	// Markdown breadcrumbs are the enclosing header hierarchy.
+	md := reconstruct("doc.md")
+	nested := find(md, "nested paragraph")
+	require.Contains(t, nested.HeadingContext, "Top")
+	require.Contains(t, nested.HeadingContext, "Sub")
+	// The contextualized text is the breadcrumb-decorated chunk, differing from
+	// the raw chunk text by exactly the decoration.
+	require.NotEqual(t, nested.Text, nested.Contextualized)
+	require.Contains(t, nested.Contextualized, nested.Text)
+
+	// Code breadcrumbs are the AST symbol path enclosing the span.
+	code := reconstruct("p.go")
+	alpha := find(code, "func Alpha")
+	require.Contains(t, alpha.HeadingContext, "Alpha")
+}
+
+// badChunkModel returns a chunk whose text does not appear in the source, to
+// exercise the verbatim-substring hard-fail guard.
+type badChunkModel struct{ *embed.MockModel }
+
+func (m *badChunkModel) EmbedDocument(document string) ([]embed.ContextualChunk, error) {
+	return []embed.ContextualChunk{{
+		Text:      "text that is not present anywhere in the source document",
+		Embedding: make(embed.Embedding, m.Dims),
+	}}, nil
+}
+
+func TestReindexHardFailsOnUnlocatableChunk(t *testing.T) {
+	h := newHarness(t)
+	h.write("doc.md", "# Top\n\nintro paragraph")
+	h.commit("init")
+
+	model := &badChunkModel{MockModel: embed.NewMockModel("mock", 3)}
+	o, st := h.opts(t, model)
 	defer st.Close()
 
 	_, err := Reindex(o)
-	require.NoError(t, err)
-	firstEmbeds := len(rec.inputs())
+	require.Error(t, err, "an unlocatable chunk must fail the reindex hard")
+	require.Contains(t, err.Error(), "doc.md", "error names the file")
+	require.Contains(t, err.Error(), "verbatim substring", "error explains the guard")
+	require.Contains(t, err.Error(), "chunk 0", "error names the chunk index")
 
-	// Capture the Alpha chunk's bytes: its meta+vec must be untouched after an
-	// edit to a different chunk. We locate it by decoding the artifact.
+	// No artifact was written for the failed file.
 	tree := mirror.NewTree(paths.AbsPath(h.root))
-	before, ok, err := tree.TryRead("p.go")
+	_, ok, err := tree.TryRead("doc.md")
 	require.NoError(t, err)
-	require.True(t, ok)
-	alphaBefore := findChunk(t, o, before, "return 1")
-
-	// Edit only Beta's body.
-	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n\nfunc Beta() int {\n\treturn 22\n}\n")
-	h.commit("edit beta")
-
-	_, err = Reindex(o)
-	require.NoError(t, err)
-	require.Equal(t, firstEmbeds+1, len(rec.inputs()), "only the changed chunk re-embeds")
-
-	after, ok, err := tree.TryRead("p.go")
-	require.NoError(t, err)
-	require.True(t, ok)
-	alphaAfter := findChunk(t, o, after, "return 1")
-	require.Equal(t, alphaBefore.Embedding, alphaAfter.Embedding, "reused chunk keeps its vector")
-}
-
-func findChunk(t *testing.T, o *Options, a mirror.Artifact, needle string) mirror.Chunk {
-	t.Helper()
-	content, err := o.Repo.CatBlob(a.BlobSha)
-	require.NoError(t, err)
-	for _, c := range a.Chunks {
-		if strings.Contains(string(content[c.Start:c.End]), needle) {
-			return c
-		}
-	}
-	t.Fatalf("no chunk containing %q", needle)
-	return mirror.Chunk{}
+	require.False(t, ok, "no artifact must be written for the failed file")
 }
 
 func TestReindexDeleteRemovesArtifact(t *testing.T) {
@@ -730,32 +725,6 @@ func TestReindexDeleteRemovesArtifact(t *testing.T) {
 	require.NotContains(t, entries, paths.GitRootRelativePath("del.md"))
 	require.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, "del.md"+mirror.MetaExt))
 	require.NoFileExists(t, filepath.Join(h.root, mirror.IndexDir, "del.md"+mirror.VecExt))
-}
-
-func TestCompactPreparedDropsZeroSignalChunks(t *testing.T) {
-	// A chunk whose contextualized text is whitespace-only carries no
-	// embeddable content; embedding it would send an empty string to the
-	// provider. compactPrepared must drop the chunk row and its vector slot
-	// together so the parallel slices passed to PutFile stay aligned.
-	chunks := []chunk.ChunkInfo{
-		{Text: "package main", HeadingContext: "a.go"},
-		{Text: "   ", HeadingContext: ""}, // zero-signal: Contextualize -> "   "
-		{Text: "func main() {}", HeadingContext: "a.go"},
-	}
-	reuse := []bool{false, false, false}
-	reuseEmb := make([]embed.Embedding, 3)
-
-	pf := compactPrepared("a.go", "//", chunks, reuse, reuseEmb)
-
-	require.Len(t, pf.chunks, 2, "the whitespace-only chunk must be dropped")
-	n := len(pf.chunks)
-	require.Len(t, pf.contextualized, n)
-	require.Len(t, pf.embeddings, n)
-	require.Equal(t, []int{0, 1}, pf.embedIdx)
-	require.Equal(t, n, pf.remaining)
-	for _, c := range pf.contextualized {
-		require.NotEmpty(t, strings.TrimSpace(c), "no empty text may survive compaction")
-	}
 }
 
 // failOnEmptyModel records every embedding input and fails if it is ever asked
@@ -867,7 +836,7 @@ func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {
 	}
 }
 
-func TestContextualizeTextLeavesCodeOnIsolatedPath(t *testing.T) {
+func TestCodeRoutesThroughEmbedDocument(t *testing.T) {
 	h := newHarness(t)
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")
 	h.commit("init")
@@ -879,8 +848,8 @@ func TestContextualizeTextLeavesCodeOnIsolatedPath(t *testing.T) {
 	_, err := Reindex(o)
 	require.NoError(t, err)
 
-	require.Equal(t, 0, model.DocumentCalls(), "code files must never use the auto-chunk path")
-	require.Greater(t, model.ChunkCalls(), 0, "code files stay on the isolated EmbedChunks path")
+	require.Equal(t, 0, model.ChunkCalls(), "code files no longer use the isolated EmbedChunks path")
+	require.Greater(t, model.DocumentCalls(), 0, "code files are auto-chunked via EmbedDocument")
 }
 
 func TestContextualizeTextReembedsOnEditSkipsUnchanged(t *testing.T) {

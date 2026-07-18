@@ -91,17 +91,10 @@ type Options struct {
 
 // contextualModel returns the embedding model as a ContextualEmbeddingModel.
 // The second result reports whether the model supports the contextual
-// whole-document path (all text files use it).
+// whole-document auto-chunk path (every file — code and text — uses it).
 func (o *Options) contextualModel() (embed.ContextualEmbeddingModel, bool) {
 	cm, ok := o.Model.(embed.ContextualEmbeddingModel)
 	return cm, ok
-}
-
-// isContextual reports whether a path is embedded via the whole-document
-// auto-chunk path: the contextual text path is active and the file is not code.
-func (o *Options) isContextual(path paths.GitRootRelativePath) bool {
-	_, ok := o.contextualModel()
-	return ok && o.route(path) != filetype.Code
 }
 
 // activeModels returns the embedding models in use.
@@ -250,80 +243,28 @@ func Reindex(o *Options) (State, error) {
 	var (
 		filesIndexed  int
 		chunksIndexed int
-		charsEmbedded int
-		embedTime     time.Duration
 		indexStart    = time.Now()
 		lastProgress  = time.Now()
 	)
 	const (
-		charsPerToken    = 3 // rough approximation for tok/s reporting
 		verboseFileLimit = 50
 		progressInterval = time.Minute
-	)
-	// maxBatchChars bounds a single embedding request. Voyage caps a request at
-	// 120000 tokens across the whole batch; at ~3 chars/token that is ~360000
-	// chars, so we keep a margin. Chunks are aggregated across files into one
-	// batch (the single level of batching); a file is written only once all of
-	// its chunks have been embedded.
-	const maxBatchChars = 250000
-	var (
-		pending    []*preparedFile
-		batchTexts []string
-		batchRefs  []embedRef
-		batchChars int
 	)
 	report := func(pf *preparedFile) {
 		filesIndexed++
 		chunksIndexed += len(pf.chunks)
-		charsEmbedded += pf.chars
 		elapsed := time.Since(indexStart).Seconds()
-		embedTokPerSec := 0.0
-		if s := embedTime.Seconds(); s > 0 {
-			embedTokPerSec = float64(charsEmbedded) / charsPerToken / s
-		}
 		if filesIndexed <= verboseFileLimit {
-			fmt.Fprintf(os.Stderr, "indexed %s (%d chunks) | %d files, %d chunks, %.1f chunks/sec, embed ~%.0f tok/sec\n",
-				pf.path, len(pf.chunks), filesIndexed, chunksIndexed, float64(chunksIndexed)/elapsed, embedTokPerSec)
+			fmt.Fprintf(os.Stderr, "indexed %s (%d chunks) | %d files, %d chunks, %.1f chunks/sec\n",
+				pf.path, len(pf.chunks), filesIndexed, chunksIndexed, float64(chunksIndexed)/elapsed)
 			if filesIndexed == verboseFileLimit {
 				fmt.Fprintf(os.Stderr, "... suppressing per-file output; reporting high-level progress every %s\n", progressInterval)
 			}
 		} else if time.Since(lastProgress) >= progressInterval {
 			lastProgress = time.Now()
-			fmt.Fprintf(os.Stderr, "progress: %d/%d files indexed, %d chunks, %.1f chunks/sec, embed ~%.0f tok/sec\n",
-				filesIndexed, est.files, chunksIndexed, float64(chunksIndexed)/elapsed, embedTokPerSec)
+			fmt.Fprintf(os.Stderr, "progress: %d/%d files indexed, %d chunks, %.1f chunks/sec\n",
+				filesIndexed, est.files, chunksIndexed, float64(chunksIndexed)/elapsed)
 		}
-	}
-	flush := func() error {
-		if len(batchTexts) == 0 {
-			return nil
-		}
-		embedStart := time.Now()
-		fresh, err := o.Model.EmbedChunks(batchTexts)
-		if err != nil {
-			return err
-		}
-		embedTime += time.Since(embedStart)
-		for j, ref := range batchRefs {
-			ref.pf.embeddings[ref.idx] = fresh[j]
-			ref.pf.remaining--
-		}
-		batchTexts = nil
-		batchRefs = nil
-		batchChars = 0
-		// Write every file whose chunks are now all embedded, in original order.
-		kept := pending[:0]
-		for _, pf := range pending {
-			if pf.remaining > 0 {
-				kept = append(kept, pf)
-				continue
-			}
-			if err := o.writeFile(pf, o.Model); err != nil {
-				return err
-			}
-			report(pf)
-		}
-		pending = kept
-		return nil
 	}
 	for path := range touched {
 		blobSha, inTree := treeMap[path]
@@ -337,43 +278,22 @@ func Reindex(o *Options) (State, error) {
 			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 				continue
 			}
-			// A different model previously embedded this path (e.g. routing
-			// changed): writing the new artifact below overwrites the old one, so
-			// no explicit purge is needed here (syncCache reconciles the cache).
-			if cm, ok := o.contextualModel(); ok && o.isContextual(path) {
-				pf, err := o.prepareContextualFile(path, blobSha, cm)
-				if err != nil {
-					return State{}, err
-				}
-				if err := o.writeFile(pf, model); err != nil {
-					return State{}, err
-				}
-				report(pf)
-				continue
+			// Every file — code and text alike — is embedded via the model's
+			// whole-document auto-chunk endpoint; a different model previously
+			// embedding this path is handled by overwriting the artifact below
+			// (syncCache reconciles the cache).
+			cm, ok := o.contextualModel()
+			if !ok {
+				return State{}, fmt.Errorf("model %q does not support document auto-chunking required for indexing", model.ModelName())
 			}
-			pf, err := o.prepareFile(path, blobSha, model)
+			pf, err := o.prepareFile(path, blobSha, cm)
 			if err != nil {
 				return State{}, err
 			}
-			if len(pf.embedIdx) == 0 {
-				// Fully reused: nothing to embed, write immediately.
-				if err := o.writeFile(pf, model); err != nil {
-					return State{}, err
-				}
-				report(pf)
-				continue
+			if err := o.writeFile(pf, model); err != nil {
+				return State{}, err
 			}
-			pending = append(pending, pf)
-			for _, idx := range pf.embedIdx {
-				batchTexts = append(batchTexts, pf.contextualized[idx])
-				batchRefs = append(batchRefs, embedRef{pf: pf, idx: idx})
-				batchChars += len(pf.contextualized[idx])
-				if batchChars >= maxBatchChars {
-					if err := flush(); err != nil {
-						return State{}, err
-					}
-				}
-			}
+			report(pf)
 		} else {
 			if wasIndexed {
 				if err := o.mirrorTree().Delete(path); err != nil {
@@ -381,9 +301,6 @@ func Reindex(o *Options) (State, error) {
 				}
 			}
 		}
-	}
-	if err := flush(); err != nil {
-		return State{}, err
 	}
 
 	// The mirror tree is now the up-to-date source of truth; refresh the derived
@@ -538,89 +455,34 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
 			continue
 		}
-		// Text files are sent whole to the contextual endpoint. Project their
-		// embedding tokens from the whole-file length.
-		if o.isContextual(path) {
-			content, err := os.ReadFile(o.Repo.Root.Join(path).String())
-			if err != nil {
-				return costEstimate{}, err
-			}
-			est.files++
-			est.chunks++
-			est.embedTokens += len(content) / cost.CharsPerToken
-			continue
-		}
+		// Every file — code and text — is sent whole to the contextual
+		// auto-chunk endpoint, so project its embedding tokens from the
+		// whole-file length. Per-chunk reuse no longer applies; a file is either
+		// skipped wholesale (same blob, above) or re-embedded whole.
 		content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 		if err != nil {
 			return costEstimate{}, err
 		}
-		chunks, err := o.chunkFile(path, content)
-		if err != nil {
-			return costEstimate{}, err
-		}
-		// A model change purges the old rows, so reuse is keyed on the new
-		// model's name -- an empty map there, correctly charging every chunk. A
-		// from-scratch projection ignores reuse entirely and charges every chunk.
-		var existing map[string]embed.Embedding
-		if !fromScratch {
-			existing, err = o.reuseMap(path, model.ModelName())
-			if err != nil {
-				return costEstimate{}, err
-			}
-		}
 		est.files++
-		for _, c := range chunks {
-			if _, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
-				continue
-			}
-			est.chunks++
-			est.embedTokens += len(Contextualize(filetype.LineComment(string(path)), c.HeadingContext, c.Text)) / cost.CharsPerToken
-		}
+		est.chunks++
+		est.embedTokens += len(content) / cost.CharsPerToken
 	}
 	est.embedDollars = float64(est.embedTokens) * cost.EmbeddingPricePerToken(model.ModelName())
 	est.dollars = est.embedDollars
 	return est, nil
 }
 
-// preparedFile holds everything needed to persist one file except the freshly
-// computed embeddings: chunking and reuse resolution are all done
-// up front, and embedIdx lists the chunk indices still awaiting embedding.
-// remaining counts how many of those are not yet filled in (decremented as
-// batches flush); the file is written only when it reaches zero.
+// preparedFile holds everything needed to persist one file: the auto-chunk
+// output already embedded, plus each chunk's verbatim byte span in the source.
 type preparedFile struct {
-	path           paths.GitRootRelativePath
-	blobSha        string
-	chunks         []chunk.ChunkInfo
-	contextualized []string
-	embeddings     []embed.Embedding
-	embedIdx       []int
-	remaining      int
-	chars          int
+	path       paths.GitRootRelativePath
+	blobSha    string
+	chunks     []chunk.ChunkInfo
+	embeddings []embed.Embedding
+	chars      int
 	// spans[i] is the [start,end) byte offset of chunk i within blobSha's
 	// content, recovered by locating the chunk text verbatim in the source.
 	spans [][2]int
-}
-
-// embedRef points a slot in a cross-file embedding batch back to the chunk it
-// belongs to so freshly returned vectors can be scattered into place.
-type embedRef struct {
-	pf  *preparedFile
-	idx int
-}
-
-// chunkFile chunks a file's content along the appropriate boundaries: code
-// files via tree-sitter (with a line-based fallback) or the config chunker;
-// text/markdown files via the structural markdown chunker. It is shared by the
-// real index path and the cost estimator so both see identical chunking.
-func (o *Options) chunkFile(path paths.GitRootRelativePath, content []byte) ([]chunk.ChunkInfo, error) {
-	if o.route(path) == filetype.Code {
-		grammar := o.grammarFor(path)
-		if chunk.IsConfigGrammar(grammar) {
-			return chunk.ChunkConfig(content, grammar, string(path), chunk.TargetChunkSize)
-		}
-		return chunk.ChunkCode(content, grammar, string(path), chunk.TargetChunkSize)
-	}
-	return chunk.ChunkMarkdown(string(content), string(path), chunk.TargetChunkSize), nil
 }
 
 // resolveSpans locates each chunk's text verbatim within content, returning the
@@ -724,28 +586,6 @@ func (o *Options) treeIndexed(models []embed.EmbeddingModel) (map[paths.GitRootR
 	return out, nil
 }
 
-// reuseMap builds the per-chunk reuse map (ChunkKey -> embedding) for a path
-// from its existing mirror artifact, replacing Store.ChunkEmbeddings. An
-// artifact embedded by a different model, or a missing/torn artifact, yields an
-// empty map so every chunk is re-embedded.
-func (o *Options) reuseMap(path paths.GitRootRelativePath, modelName string) (map[string]embed.Embedding, error) {
-	a, ok, err := o.mirrorTree().TryRead(path)
-	if err != nil {
-		return nil, err
-	}
-	if !ok || a.ModelName != modelName {
-		return map[string]embed.Embedding{}, nil
-	}
-	chunks, _, err := o.reconstructArtifact(path, a)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]embed.Embedding, len(a.Chunks))
-	for i, c := range a.Chunks {
-		out[store.ChunkKey(chunks[i].HeadingContext, chunks[i].Text)] = c.Embedding
-	}
-	return out, nil
-}
 
 // syncCache reconciles the derived SQLite store against the mirror tree: it
 // (re)writes any artifact whose blob sha or model differs from the cache and
@@ -807,54 +647,6 @@ func (o *Options) syncCache(models []embed.EmbeddingModel) error {
 	return nil
 }
 
-// prepareFile does all per-file work except the embedding call and the database
-// write: it chunks the file, resolves reuse, and builds the contextualized text
-// for every chunk. The returned preparedFile carries reused vectors already in
-// place and embedIdx listing the chunks that still need embedding (in a
-// cross-file batch).
-func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, model embed.EmbeddingModel) (*preparedFile, error) {
-	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
-	if err != nil {
-		return nil, err
-	}
-	chunks, err := o.chunkFile(path, content)
-	if err != nil {
-		return nil, err
-	}
-
-	comment := filetype.LineComment(string(path))
-
-	// Load the committed-generation reuse map keyed on ChunkKey (heading
-	// breadcrumb + raw text) from the file's existing mirror artifact, so an
-	// unchanged chunk keeps its embedding even when the file changed elsewhere.
-	existing, err := o.reuseMap(path, model.ModelName())
-	if err != nil {
-		return nil, err
-	}
-
-	// Resolve, per chunk, whether it is a reuse hit and carry over its stored
-	// vector; misses are re-embedded.
-	reuse := make([]bool, len(chunks))
-	reuseEmb := make([]embed.Embedding, len(chunks))
-	for i, c := range chunks {
-		if emb, ok := existing[store.ChunkKey(c.HeadingContext, c.Text)]; ok {
-			reuse[i] = true
-			reuseEmb[i] = emb
-		}
-	}
-
-	// Build the embedded text for every chunk from its heading breadcrumb.
-	// Reused vectors are carried over in place; reuse misses are recorded in
-	// embedIdx to be embedded later in a cross-file batch.
-	pf := compactPrepared(path, comment, chunks, reuse, reuseEmb)
-	pf.blobSha = blobSha
-	spans, err := resolveSpans(path, content, pf.chunks)
-	if err != nil {
-		return nil, err
-	}
-	pf.spans = spans
-	return pf, nil
-}
 
 // Auto-chunk windowing: a text file's estimated token count (chars/charsPerAutoChunkToken)
 // is compared against autoChunkTokenLimit. Files at or under the limit are sent
@@ -868,14 +660,16 @@ const (
 	autoChunkOverlapByte   = autoChunkOverlapTokens * charsPerAutoChunkToken
 )
 
-// prepareContextualFile builds a preparedFile for a text file via the model's
-// whole-document auto-chunking endpoint. PKB does not chunk the file; instead
-// the model returns its own chunks, each with a contextualized vector. Chunks
-// are file-tagged (no line ranges). Large files are sent in overlapping windows
-// and the resulting chunks are deduped by text identity. Per-chunk reuse does
-// not apply here; unchanged files are skipped wholesale by the caller's
-// blob_sha check.
-func (o *Options) prepareContextualFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {
+// prepareFile builds a preparedFile for any file — code or text — via the
+// model's whole-document auto-chunking endpoint. PKB does not chunk the file;
+// the model returns its own chunks, each with a contextualized vector, and each
+// returned chunk is resolved to a verbatim byte span in the source (resolveSpans
+// hard-fails if a chunk is not found). Chunks carry only offsets; text, line/col
+// and breadcrumbs are reconstructed at sync. Large files are sent in overlapping
+// windows and the resulting chunks are deduped by text identity. Per-chunk reuse
+// does not apply; unchanged files are skipped wholesale by the caller's blob_sha
+// check.
+func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {
 	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
 	if err != nil {
 		return nil, err
@@ -898,7 +692,6 @@ func (o *Options) prepareContextualFile(path paths.GitRootRelativePath, blobSha 
 			}
 			seen[text] = struct{}{}
 			pf.chunks = append(pf.chunks, chunk.ChunkInfo{Text: text})
-			pf.contextualized = append(pf.contextualized, text)
 			pf.embeddings = append(pf.embeddings, c.Embedding)
 			pf.chars += len(text)
 		}
@@ -934,37 +727,6 @@ func autoChunkWindows(document string) []string {
 	return windows
 }
 
-// compactPrepared builds the embedded text for every chunk and assembles the
-// parallel slices that make up a preparedFile, dropping any "zero-signal" chunk
-// whose contextualized text is empty or whitespace-only. Such a chunk carries no
-// retrievable content and, if embedded, would send an empty string to the
-// embedder -- which some providers (e.g. Bedrock Cohere embed-v4) reject with a
-// ValidationException. Dropping it here removes both the chunk row and its
-// vector together, so the embedding count stays aligned with what PutFile
-// writes. Reused vectors are carried over in place; reuse misses are recorded in
-// embedIdx (as indices into the compacted slices) to be embedded later.
-func compactPrepared(path paths.GitRootRelativePath, comment string, chunks []chunk.ChunkInfo, reuse []bool, reuseEmb []embed.Embedding) *preparedFile {
-	pf := &preparedFile{path: path}
-	for i, c := range chunks {
-		ctx := Contextualize(comment, c.HeadingContext, c.Text)
-		if strings.TrimSpace(ctx) == "" {
-			fmt.Fprintf(os.Stderr, "warning: skipping empty chunk %d in %s (no embeddable content)\n", i, path)
-			continue
-		}
-		j := len(pf.chunks)
-		pf.chunks = append(pf.chunks, c)
-		pf.contextualized = append(pf.contextualized, ctx)
-		if reuse[i] {
-			pf.embeddings = append(pf.embeddings, reuseEmb[i])
-			continue
-		}
-		pf.embeddings = append(pf.embeddings, nil)
-		pf.chars += len(ctx)
-		pf.embedIdx = append(pf.embedIdx, j)
-	}
-	pf.remaining = len(pf.embedIdx)
-	return pf
-}
 
 // writeFile persists a fully embedded file in a single transaction. The
 // expensive embedding work is already done, so the write is quick. A crash

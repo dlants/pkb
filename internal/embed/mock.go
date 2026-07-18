@@ -69,9 +69,6 @@ func (m *MockModel) EmbedChunks(chunks []string) ([]Embedding, error) {
 // contextual vector is sibling-dependent — it folds in the whole document — so
 // it is distinct from the isolated vector for the same chunk text.
 func (m *MockModel) EmbedDocument(document string) ([]ContextualChunk, error) {
-	m.mu.Lock()
-	m.documentCalls++
-	m.mu.Unlock()
 	var out []ContextualChunk
 	for _, part := range strings.Split(document, "\n\n") {
 		text := strings.TrimSpace(part)
@@ -83,6 +80,10 @@ func (m *MockModel) EmbedDocument(document string) ([]ContextualChunk, error) {
 			Embedding: m.contextualVector(text, document),
 		})
 	}
+	m.mu.Lock()
+	m.documentCalls++
+	m.chunkCount += len(out)
+	m.mu.Unlock()
 	return out, nil
 }
 
@@ -132,4 +133,14 @@ func (f *FailingModel) EmbedChunks(chunks []string) ([]Embedding, error) {
 		return nil, fmt.Errorf("simulated embed failure")
 	}
 	return f.MockModel.EmbedChunks(chunks)
+}
+
+// EmbedDocument fails after FailAfter whole-document calls, mirroring
+// EmbedChunks so the unified auto-chunk path can be crashed mid-run.
+func (f *FailingModel) EmbedDocument(document string) ([]ContextualChunk, error) {
+	f.batches++
+	if f.batches > f.FailAfter {
+		return nil, fmt.Errorf("simulated embed failure")
+	}
+	return f.MockModel.EmbedDocument(document)
 }
