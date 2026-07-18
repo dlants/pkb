@@ -682,7 +682,7 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm
 	pf := &preparedFile{path: path, blobSha: blobSha}
 	seen := map[string]struct{}{}
 	for _, w := range windows {
-		chunks, err := cm.EmbedDocument(w)
+		chunks, err := cm.EmbedDocument(w.input)
 		if err != nil {
 			return nil, err
 		}
@@ -712,23 +712,55 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm
 // embedding. A document at or under the window size is returned as a single
 // window; larger documents are split into windows of autoChunkMaxWindowByte
 // that overlap by autoChunkOverlapByte so no content falls between two windows.
-func autoChunkWindows(document string) []string {
+func autoChunkWindows(document string) []autoChunkWindow {
 	if len(document) <= autoChunkMaxWindowByte {
-		return []string{document}
+		return []autoChunkWindow{{input: document}}
 	}
-	var windows []string
+	var windows []autoChunkWindow
 	step := autoChunkMaxWindowByte - autoChunkOverlapByte
 	for start := 0; start < len(document); start += step {
 		end := start + autoChunkMaxWindowByte
 		if end > len(document) {
 			end = len(document)
 		}
-		windows = append(windows, document[start:end])
+		windows = append(windows, autoChunkWindow{
+			input:     document[start:end],
+			bodyStart: mirror.RawOffset(start),
+		})
 		if end == len(document) {
 			break
 		}
 	}
 	return windows
+}
+
+// InputOffset is a byte offset into a window's transformed input string (the
+// synthetic context prefix followed by the verbatim body). It is meaningful
+// only within a single window and is never persisted. It is a defined type so
+// the compiler refuses to mix it with a raw-blob mirror.RawOffset without an
+// explicit conversion; the only sanctioned bridge between the two systems is
+// autoChunkWindow.toRaw.
+type InputOffset int
+
+// autoChunkWindow is one whole-document embedding request. Its body,
+// input[prefixLen:], is a verbatim contiguous copy of blob[bodyStart:...], so a
+// transformed-input offset maps back to a raw-blob offset by a single affine
+// shift. The synthetic context prefix, input[:prefixLen], has no raw preimage.
+type autoChunkWindow struct {
+	input     string           // transformed text sent to EmbedDocument
+	prefixLen InputOffset      // bytes of synthetic context; body is input[prefixLen:]
+	bodyStart mirror.RawOffset // raw blob offset where the body begins
+}
+
+// toRaw converts an InputOffset within this window to its RawOffset in the
+// source blob, reporting false when the offset lies inside the synthetic prefix
+// (which has no raw preimage). It is the single sanctioned bridge between the
+// InputOffset and RawOffset coordinate systems.
+func (w autoChunkWindow) toRaw(t InputOffset) (mirror.RawOffset, bool) {
+	if t < w.prefixLen {
+		return 0, false
+	}
+	return w.bodyStart + mirror.RawOffset(t-w.prefixLen), true
 }
 
 // writeFile persists a fully embedded file in a single transaction. The
@@ -745,8 +777,8 @@ func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error 
 	}
 	for i := range pf.chunks {
 		a.Chunks[i] = mirror.Chunk{
-			Start:     pf.spans[i][0],
-			End:       pf.spans[i][1],
+			Start:     mirror.RawOffset(pf.spans[i][0]),
+			End:       mirror.RawOffset(pf.spans[i][1]),
 			Embedding: pf.embeddings[i],
 		}
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/filetype"
+	"github.com/dlants/pkb/internal/mirror"
 	"github.com/dlants/pkb/internal/paths"
 )
 
@@ -21,7 +22,7 @@ func TestReconstructMarkdownMatchesChunker(t *testing.T) {
 	}
 	spans := make([]byteSpan, len(rawSpans))
 	for i, s := range rawSpans {
-		spans[i] = byteSpan{Start: s[0], End: s[1]}
+		spans[i] = byteSpan{Start: mirror.RawOffset(s[0]), End: mirror.RawOffset(s[1])}
 	}
 
 	recons, err := Reconstruct(path, content, spans)
@@ -49,7 +50,7 @@ func TestReconstructCodeEnclosingDefinition(t *testing.T) {
 	content := []byte(src)
 
 	start := strings.Index(src, "x := 1")
-	span := byteSpan{Start: start, End: start + len("x := 1")}
+	span := byteSpan{Start: mirror.RawOffset(start), End: mirror.RawOffset(start + len("x := 1"))}
 
 	recons, err := Reconstruct(path, content, []byteSpan{span})
 	if err != nil {
@@ -62,7 +63,7 @@ func TestReconstructCodeEnclosingDefinition(t *testing.T) {
 	if got.HeadingContext != "p.go > function Outer" {
 		t.Fatalf("breadcrumb: %q", got.HeadingContext)
 	}
-	if got.Start != chunk.PosFromByte(content, span.Start) {
+	if got.Start != chunk.PosFromByte(content, int(span.Start)) {
 		t.Fatalf("start pos: %+v", got.Start)
 	}
 	want := Contextualize(filetype.LineComment("p.go"), "p.go > function Outer", "x := 1")
@@ -74,7 +75,7 @@ func TestReconstructCodeEnclosingDefinition(t *testing.T) {
 func TestReconstructOutOfRangeSpanFails(t *testing.T) {
 	path := paths.GitRootRelativePath("p.go")
 	content := []byte("package p\n")
-	_, err := Reconstruct(path, content, []byteSpan{{Start: 0, End: len(content) + 5}})
+	_, err := Reconstruct(path, content, []byteSpan{{Start: 0, End: mirror.RawOffset(len(content) + 5)}})
 	if err == nil {
 		t.Fatal("expected out-of-range error")
 	}

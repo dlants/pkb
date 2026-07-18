@@ -836,6 +836,55 @@ func TestContextualizeTextWindowsLargeFileAndDedups(t *testing.T) {
 	}
 }
 
+func TestAutoChunkWindowsSmallDocument(t *testing.T) {
+	doc := "the whole document fits in one window"
+	windows := autoChunkWindows(doc)
+	require.Len(t, windows, 1)
+	require.Equal(t, doc, windows[0].input)
+	require.Equal(t, InputOffset(0), windows[0].prefixLen)
+	require.Equal(t, mirror.RawOffset(0), windows[0].bodyStart)
+}
+
+func TestAutoChunkWindowsLargeDocumentBodiesCoverBlob(t *testing.T) {
+	doc := strings.Repeat("abcdefghij", (autoChunkMaxWindowByte+autoChunkOverlapByte)/10)
+	windows := autoChunkWindows(doc)
+	require.Greater(t, len(windows), 1)
+
+	step := autoChunkMaxWindowByte - autoChunkOverlapByte
+	for i, w := range windows {
+		// Each window's body is a verbatim contiguous copy of the raw blob.
+		require.Equal(t, InputOffset(0), w.prefixLen)
+		require.Equal(t, mirror.RawOffset(i*step), w.bodyStart)
+		require.Equal(t, doc[int(w.bodyStart):int(w.bodyStart)+len(w.input)], w.input)
+	}
+	// Consecutive bodies overlap by autoChunkOverlapByte, so no content is lost.
+	for i := 1; i < len(windows); i++ {
+		prevEnd := int(windows[i-1].bodyStart) + len(windows[i-1].input)
+		require.GreaterOrEqual(t, prevEnd-int(windows[i].bodyStart), autoChunkOverlapByte)
+	}
+	// The last body reaches the end of the blob.
+	last := windows[len(windows)-1]
+	require.Equal(t, len(doc), int(last.bodyStart)+len(last.input))
+}
+
+func TestAutoChunkWindowToRaw(t *testing.T) {
+	w := autoChunkWindow{input: "PREFIXbody", prefixLen: InputOffset(6), bodyStart: mirror.RawOffset(100)}
+
+	// An offset inside the body maps affinely to the raw blob.
+	raw, ok := w.toRaw(InputOffset(6))
+	require.True(t, ok)
+	require.Equal(t, mirror.RawOffset(100), raw)
+	raw, ok = w.toRaw(InputOffset(9))
+	require.True(t, ok)
+	require.Equal(t, mirror.RawOffset(103), raw)
+
+	// An offset inside the synthetic prefix has no raw preimage.
+	_, ok = w.toRaw(InputOffset(0))
+	require.False(t, ok)
+	_, ok = w.toRaw(InputOffset(5))
+	require.False(t, ok)
+}
+
 func TestCodeRoutesThroughEmbedDocument(t *testing.T) {
 	h := newHarness(t)
 	h.write("p.go", "package p\n\nfunc Alpha() int {\n\treturn 1\n}\n")

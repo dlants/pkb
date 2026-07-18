@@ -28,14 +28,20 @@ var vecMagic = [4]byte{'P', 'K', 'B', 'V'}
 
 const vecFormatVersion uint32 = 1
 
+// RawOffset is a byte offset into a source git blob. Every persisted offset
+// (mirror Chunk.Start/End and, in package index, byteSpan) is a RawOffset. It
+// is a defined type so the compiler refuses to mix it with a transformed-input
+// offset (index.InputOffset) without an explicit, auditable conversion.
+type RawOffset int
+
 // Chunk is one chunk's record within an artifact: the byte span of the chunk
 // within the source file (identified by the artifact's BlobSha) and its
 // embedding. The chunk text, heading breadcrumb, and contextualized text are
 // not stored; they are all reconstructed at cache-sync time by slicing the
 // source blob and re-deriving structure from it.
 type Chunk struct {
-	Start     int // byte offset into the source blob, inclusive
-	End       int // byte offset into the source blob, exclusive
+	Start     RawOffset // byte offset into the source blob, inclusive
+	End       RawOffset // byte offset into the source blob, exclusive
 	Embedding embed.Embedding
 }
 
@@ -81,8 +87,8 @@ func EncodeMeta(a Artifact) ([]byte, error) {
 	}
 	for i, c := range a.Chunks {
 		m.Chunks[i] = metaChunk{
-			Start: c.Start,
-			End:   c.End,
+			Start: int(c.Start),
+			End:   int(c.End),
 		}
 	}
 	b, err := json.MarshalIndent(m, "", "  ")
@@ -182,8 +188,8 @@ func DecodeMeta(b []byte) (Artifact, error) {
 	}
 	for i, mc := range m.Chunks {
 		a.Chunks[i] = Chunk{
-			Start: mc.Start,
-			End:   mc.End,
+			Start: RawOffset(mc.Start),
+			End:   RawOffset(mc.End),
 		}
 	}
 	return a, nil

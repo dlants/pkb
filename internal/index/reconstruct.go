@@ -5,6 +5,7 @@ import (
 
 	"github.com/dlants/pkb/internal/chunk"
 	"github.com/dlants/pkb/internal/filetype"
+	"github.com/dlants/pkb/internal/mirror"
 	"github.com/dlants/pkb/internal/paths"
 )
 
@@ -12,8 +13,8 @@ import (
 // It is the only per-chunk state kept on disk; everything else is reconstructed
 // from it at cache-sync time.
 type byteSpan struct {
-	Start int
-	End   int
+	Start mirror.RawOffset
+	End   mirror.RawOffset
 }
 
 // reconstructedChunk is the fully rehydrated form of a stored offset span: the
@@ -52,18 +53,18 @@ func Reconstruct(path paths.GitRootRelativePath, content []byte, spans []byteSpa
 
 	out := make([]reconstructedChunk, len(spans))
 	for i, s := range spans {
-		if s.Start < 0 || s.End > len(content) || s.Start > s.End {
+		if s.Start < 0 || int(s.End) > len(content) || s.Start > s.End {
 			return nil, fmt.Errorf("index: chunk %d of %s has out-of-range span [%d,%d) for %d-byte blob", i, path, s.Start, s.End, len(content))
 		}
 		text := string(content[s.Start:s.End])
 		var heading string
 		var start, end chunk.Position
 		if isCode {
-			heading = coder.Breadcrumb(s.Start, s.End)
-			start = chunk.PosFromByte(content, s.Start)
-			end = chunk.PosFromByte(content, s.End)
+			heading = coder.Breadcrumb(int(s.Start), int(s.End))
+			start = chunk.PosFromByte(content, int(s.Start))
+			end = chunk.PosFromByte(content, int(s.End))
 		} else {
-			heading = chunk.MarkdownBreadcrumb(string(content), string(path), s.Start)
+			heading = chunk.MarkdownBreadcrumb(string(content), string(path), int(s.Start))
 		}
 		out[i] = reconstructedChunk{
 			Text:           text,
