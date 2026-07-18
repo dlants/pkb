@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -131,7 +132,7 @@ func TestMigrationFromOldSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
 	}
-	_, err = raw.Exec(`
+	_, err = raw.Exec(fmt.Sprintf(`
 		CREATE TABLE files (
 			id INTEGER PRIMARY KEY,
 			path TEXT NOT NULL,
@@ -151,10 +152,10 @@ func TestMigrationFromOldSchema(t *testing.T) {
 			end_col INTEGER NOT NULL
 		);
 		INSERT INTO files (path, model_name, embedding_version, blob_sha)
-			VALUES ('legacy.md', 'mock@8', 8, 'oldsha');
+			VALUES ('legacy.md', 'mock@8', %d, 'oldsha');
 		INSERT INTO chunks (file_id, text, contextualized_text, start_line, start_col, end_line, end_col)
 			VALUES (1, 'legacy chunk', 'legacy chunk', 1, 0, 1, 12);
-	`)
+	`, MajorVersion))
 	if err != nil {
 		t.Fatalf("seed old schema: %v", err)
 	}

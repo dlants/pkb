@@ -268,7 +268,7 @@ func Reindex(o *Options) (State, error) {
 			// against the same blob. Because each file is written in a single
 			// transaction, a recorded file row always reflects a fully indexed
 			// file.
-			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+			if wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha && prevEntry.version == store.MajorVersion {
 				continue
 			}
 			// Every file — code and text alike — is embedded via the model's
@@ -405,7 +405,7 @@ func (o *Options) touchedPaths(treeMap map[paths.GitRootRelativePath]string, ind
 			continue
 		}
 		entry, wasIndexed := indexed[path]
-		if !wasIndexed || entry.sha != blobSha {
+		if !wasIndexed || entry.sha != blobSha || entry.version != store.MajorVersion {
 			touched[path] = struct{}{}
 		}
 	}
@@ -445,14 +445,16 @@ func (o *Options) estimate(touched map[paths.GitRootRelativePath]struct{}, treeM
 			continue
 		}
 		prevEntry, wasIndexed := indexed[path]
-		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha {
+		if !fromScratch && wasIndexed && prevEntry.model == model.ModelName() && prevEntry.sha == blobSha && prevEntry.version == store.MajorVersion {
 			continue
 		}
 		// Every file — code and text — is sent whole to the contextual
 		// auto-chunk endpoint, so project its embedding tokens from the
 		// whole-file length. Per-chunk reuse no longer applies; a file is either
-		// skipped wholesale (same blob, above) or re-embedded whole.
-		content, err := os.ReadFile(o.Repo.Root.Join(path).String())
+		// skipped wholesale (same blob, above) or re-embedded whole. Size the
+		// projection from the recorded blob (not the working tree) so the
+		// estimate matches the content that will actually be embedded.
+		content, err := o.Repo.CatBlob(blobSha)
 		if err != nil {
 			return costEstimate{}, err
 		}
@@ -574,7 +576,7 @@ func (o *Options) treeIndexed(models []embed.EmbeddingModel) (map[paths.GitRootR
 		if _, ok := active[e.ModelName]; !ok {
 			continue
 		}
-		out[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha}
+		out[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha, version: e.Version}
 	}
 	return out, nil
 }
@@ -661,7 +663,11 @@ const (
 // does not apply; unchanged files are skipped wholesale by the caller's blob_sha
 // check.
 func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm embed.ContextualEmbeddingModel) (*preparedFile, error) {
-	content, err := os.ReadFile(o.Repo.Root.Join(path).String())
+	// Embed and resolve spans against the exact blob recorded for this file,
+	// never the working tree. The stored offsets are sliced back out of this
+	// same blob at reconstruction time, so embedding a dirty working-tree copy
+	// would produce offsets that are out of range for the committed blob.
+	content, err := o.Repo.CatBlob(blobSha)
 	if err != nil {
 		return nil, err
 	}
@@ -727,6 +733,7 @@ func (o *Options) writeFile(pf *preparedFile, model embed.EmbeddingModel) error 
 	a := mirror.Artifact{
 		BlobSha:   pf.blobSha,
 		ModelName: model.ModelName(),
+		Version:   store.MajorVersion,
 		Chunks:    make([]mirror.Chunk, len(pf.chunks)),
 	}
 	for i := range pf.chunks {
@@ -768,10 +775,14 @@ func metaBlock(comment, s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// indexedEntry records which model embedded a path and the stored blob sha.
+// indexedEntry records which model embedded a path, the stored blob sha, and the
+// embedding/storage version the artifact was written under. The version lets the
+// reindex skip decision treat a format bump as staleness even when the blob is
+// unchanged.
 type indexedEntry struct {
-	model string
-	sha   string
+	model   string
+	sha     string
+	version int
 }
 
 // HealthIssue is a single discrepancy found by Healthcheck. Path is the
@@ -851,7 +862,7 @@ func Healthcheck(o *Options) (HealthReport, error) {
 		if _, ok := active[e.ModelName]; !ok {
 			continue
 		}
-		indexed[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha}
+		indexed[path] = indexedEntry{model: e.ModelName, sha: e.BlobSha, version: e.Version}
 		rep.IndexedFiles++
 		rep.IndexedChunks += e.Chunks
 	}
@@ -864,6 +875,9 @@ func Healthcheck(o *Options) (HealthReport, error) {
 		}
 		if e.sha != sha {
 			rep.addf(string(path), "stale blob: index has %s, tree has %s", e.sha, sha)
+		}
+		if e.version != store.MajorVersion {
+			rep.addf(string(path), "stale format: artifact version %d, current %d", e.version, store.MajorVersion)
 		}
 	}
 	for path := range indexed {

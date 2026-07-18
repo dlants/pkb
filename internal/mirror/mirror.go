@@ -43,7 +43,12 @@ type Chunk struct {
 type Artifact struct {
 	BlobSha   string
 	ModelName string
-	Chunks    []Chunk
+	// Version is the embedding/storage compatibility identity the artifact was
+	// written under. A change to how chunks are produced or offsets are stored
+	// bumps it, so a mismatch marks the artifact stale and forces a re-embed
+	// even when the source blob is unchanged.
+	Version int
+	Chunks  []Chunk
 }
 
 // metaFile is the canonical JSON shape of the .meta file. Field order is fixed
@@ -52,6 +57,7 @@ type Artifact struct {
 type metaFile struct {
 	BlobSha   string      `json:"blobSha"`
 	ModelName string      `json:"modelName"`
+	Version   int         `json:"version"`
 	Chunks    []metaChunk `json:"chunks"`
 }
 
@@ -70,6 +76,7 @@ func EncodeMeta(a Artifact) ([]byte, error) {
 	m := metaFile{
 		BlobSha:   a.BlobSha,
 		ModelName: a.ModelName,
+		Version:   a.Version,
 		Chunks:    make([]metaChunk, len(a.Chunks)),
 	}
 	for i, c := range a.Chunks {
@@ -170,6 +177,7 @@ func DecodeMeta(b []byte) (Artifact, error) {
 	a := Artifact{
 		BlobSha:   m.BlobSha,
 		ModelName: m.ModelName,
+		Version:   m.Version,
 		Chunks:    make([]Chunk, len(m.Chunks)),
 	}
 	for i, mc := range m.Chunks {

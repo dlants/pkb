@@ -42,6 +42,7 @@ func (t *Tree) vecPath(rel paths.GitRootRelativePath) string  { return t.base(re
 type Entry struct {
 	BlobSha   string
 	ModelName string
+	Version   int
 	Chunks    int
 }
 
@@ -70,7 +71,7 @@ func (t *Tree) List() (map[paths.GitRootRelativePath]Entry, error) {
 		}
 		relOS := strings.TrimSuffix(strings.TrimPrefix(p, dir+string(filepath.Separator)), MetaExt)
 		rel := paths.GitRootRelativePath(filepath.ToSlash(relOS))
-		out[rel] = Entry{BlobSha: a.BlobSha, ModelName: a.ModelName, Chunks: len(a.Chunks)}
+		out[rel] = Entry{BlobSha: a.BlobSha, ModelName: a.ModelName, Version: a.Version, Chunks: len(a.Chunks)}
 		return nil
 	})
 	if err != nil {
