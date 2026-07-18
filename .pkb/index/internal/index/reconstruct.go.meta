@@ -3,40 +3,12 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package index\n\nimport (\n\t\"fmt\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/paths\"\n)",
-      "contextualizedText": "// internal/index/reconstruct.go\n\npackage index\n\nimport (\n\t\"fmt\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/paths\"\n)",
-      "headingContext": "internal/index/reconstruct.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 9,
-      "endCol": 2
+      "start": 0,
+      "end": 1961
     },
     {
-      "text": "// byteSpan is a chunk's half-open [Start, End) byte range within a source blob.\n// It is the only per-chunk state kept on disk; everything else is reconstructed\n// from it at cache-sync time.\ntype byteSpan struct {\n\tStart int\n\tEnd   int\n}",
-      "contextualizedText": "// internal/index/reconstruct.go \u003e type byteSpan\n\n// byteSpan is a chunk's half-open [Start, End) byte range within a source blob.\n// It is the only per-chunk state kept on disk; everything else is reconstructed\n// from it at cache-sync time.\ntype byteSpan struct {\n\tStart int\n\tEnd   int\n}",
-      "headingContext": "internal/index/reconstruct.go \u003e type byteSpan",
-      "startLine": 11,
-      "startCol": 1,
-      "endLine": 17,
-      "endCol": 2
-    },
-    {
-      "text": "// reconstructedChunk is the fully rehydrated form of a stored offset span: the\n// chunk text sliced from the blob, its heading breadcrumb (AST symbol path for\n// code, header hierarchy for text), line/col positions, and the contextualized\n// text actually associated with the chunk for display/situating.\ntype reconstructedChunk struct {\n\tText           string\n\tHeadingContext string\n\tStart          chunk.Position\n\tEnd            chunk.Position\n\tContextualized string\n}",
-      "contextualizedText": "// internal/index/reconstruct.go \u003e type reconstructedChunk\n\n// reconstructedChunk is the fully rehydrated form of a stored offset span: the\n// chunk text sliced from the blob, its heading breadcrumb (AST symbol path for\n// code, header hierarchy for text), line/col positions, and the contextualized\n// text actually associated with the chunk for display/situating.\ntype reconstructedChunk struct {\n\tText           string\n\tHeadingContext string\n\tStart          chunk.Position\n\tEnd            chunk.Position\n\tContextualized string\n}",
-      "headingContext": "internal/index/reconstruct.go \u003e type reconstructedChunk",
-      "startLine": 19,
-      "startCol": 1,
-      "endLine": 29,
-      "endCol": 2
-    },
-    {
-      "text": "// Reconstruct rehydrates chunk rows from byte-offset spans against the exact\n// blob content they were generated from. It slices each span's text, derives its\n// breadcrumb from the file's structure (tree-sitter symbol path for code,\n// markdown headers for text), computes line/col positions from the offsets, and\n// builds the contextualized text via Contextualize. It is the single load path\n// shared by the cache-sync reconstruction so code and text are rehydrated\n// uniformly. A span out of range for the blob is a hard failure: a broken offset\n// must surface immediately rather than degrade silently.\nfunc Reconstruct(path paths.GitRootRelativePath, content []byte, spans []byteSpan) ([]reconstructedChunk, error) {\n\troute := filetype.RoutePath(string(path))\n\tcomment := filetype.LineComment(string(path))\n\tisCode := route.Type == filetype.Code\n\n\tvar coder *chunk.CodeBreadcrumber\n\tif isCode {\n\t\tvar err error\n\t\tcoder, err = chunk.NewCodeBreadcrumber(content, route.Grammar, string(path))\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"index: reconstruct %s: %w\", path, err)\n\t\t}\n\t}\n\n\tout := make([]reconstructedChunk, len(spans))\n\tfor i, s := range spans {\n\t\tif s.Start \u003c 0 || s.End \u003e len(content) || s.Start \u003e s.End {\n\t\t\treturn nil, fmt.Errorf(\"index: chunk %d of %s has out-of-range span [%d,%d) for %d-byte blob\", i, path, s.Start, s.End, len(content))\n\t\t}\n\t\ttext := string(content[s.Start:s.End])\n\t\tvar heading string\n\t\tvar start, end chunk.Position\n\t\tif isCode {\n\t\t\theading = coder.Breadcrumb(s.Start, s.End)\n\t\t\tstart = chunk.PosFromByte(content, s.Start)\n\t\t\tend = chunk.PosFromByte(content, s.End)\n\t\t} else {\n\t\t\theading = chunk.MarkdownBreadcrumb(string(content), string(path), s.Start)\n\t\t}\n\t\tout[i] = reconstructedChunk{\n\t\t\tText:           text,\n\t\t\tHeadingContext: heading,\n\t\t\tStart:          start,\n\t\t\tEnd:            end,\n\t\t\tContextualized: Contextualize(comment, heading, text),\n\t\t}\n\t}\n\treturn out, nil\n}",
-      "contextualizedText": "// internal/index/reconstruct.go \u003e function Reconstruct\n\n// Reconstruct rehydrates chunk rows from byte-offset spans against the exact\n// blob content they were generated from. It slices each span's text, derives its\n// breadcrumb from the file's structure (tree-sitter symbol path for code,\n// markdown headers for text), computes line/col positions from the offsets, and\n// builds the contextualized text via Contextualize. It is the single load path\n// shared by the cache-sync reconstruction so code and text are rehydrated\n// uniformly. A span out of range for the blob is a hard failure: a broken offset\n// must surface immediately rather than degrade silently.\nfunc Reconstruct(path paths.GitRootRelativePath, content []byte, spans []byteSpan) ([]reconstructedChunk, error) {\n\troute := filetype.RoutePath(string(path))\n\tcomment := filetype.LineComment(string(path))\n\tisCode := route.Type == filetype.Code\n\n\tvar coder *chunk.CodeBreadcrumber\n\tif isCode {\n\t\tvar err error\n\t\tcoder, err = chunk.NewCodeBreadcrumber(content, route.Grammar, string(path))\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"index: reconstruct %s: %w\", path, err)\n\t\t}\n\t}\n\n\tout := make([]reconstructedChunk, len(spans))\n\tfor i, s := range spans {\n\t\tif s.Start \u003c 0 || s.End \u003e len(content) || s.Start \u003e s.End {\n\t\t\treturn nil, fmt.Errorf(\"index: chunk %d of %s has out-of-range span [%d,%d) for %d-byte blob\", i, path, s.Start, s.End, len(content))\n\t\t}\n\t\ttext := string(content[s.Start:s.End])\n\t\tvar heading string\n\t\tvar start, end chunk.Position\n\t\tif isCode {\n\t\t\theading = coder.Breadcrumb(s.Start, s.End)\n\t\t\tstart = chunk.PosFromByte(content, s.Start)\n\t\t\tend = chunk.PosFromByte(content, s.End)\n\t\t} else {\n\t\t\theading = chunk.MarkdownBreadcrumb(string(content), string(path), s.Start)\n\t\t}\n\t\tout[i] = reconstructedChunk{\n\t\t\tText:           text,\n\t\t\tHeadingContext: heading,\n\t\t\tStart:          start,\n\t\t\tEnd:            end,\n\t\t\tContextualized: Contextualize(comment, heading, text),\n\t\t}\n\t}\n\treturn out, nil\n}",
-      "headingContext": "internal/index/reconstruct.go \u003e function Reconstruct",
-      "startLine": 31,
-      "startCol": 1,
-      "endLine": 77,
-      "endCol": 2
+      "start": 1964,
+      "end": 2794
     }
   ]
 }

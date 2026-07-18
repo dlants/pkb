@@ -3,40 +3,8 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "// Package cost holds the pricing table and unit conversions used to estimate\n// the dollar cost of a reindex run before any paid embedding work is done.\n// Prices are approximate ($/1M tokens) and easy to update in one place;\n// the versioning/reuse logic does not depend on them.\npackage cost\n\nimport \"strings\"\n\n// CharsPerToken approximates token count from character count. It matches the\n// rough proxy used elsewhere for throughput reporting; estimation only needs an\n// order-of-magnitude figure to gate spending.\nconst CharsPerToken = 3",
-      "contextualizedText": "// internal/cost/cost.go\n\n// Package cost holds the pricing table and unit conversions used to estimate\n// the dollar cost of a reindex run before any paid embedding work is done.\n// Prices are approximate ($/1M tokens) and easy to update in one place;\n// the versioning/reuse logic does not depend on them.\npackage cost\n\nimport \"strings\"\n\n// CharsPerToken approximates token count from character count. It matches the\n// rough proxy used elsewhere for throughput reporting; estimation only needs an\n// order-of-magnitude figure to gate spending.\nconst CharsPerToken = 3",
-      "headingContext": "internal/cost/cost.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 12,
-      "endCol": 24
-    },
-    {
-      "text": "// perMillion converts a $/1M-tokens rate to $/token.\nfunc perMillion(d float64) float64 { return d / 1_000_000 }",
-      "contextualizedText": "// internal/cost/cost.go \u003e function perMillion\n\n// perMillion converts a $/1M-tokens rate to $/token.\nfunc perMillion(d float64) float64 { return d / 1_000_000 }",
-      "headingContext": "internal/cost/cost.go \u003e function perMillion",
-      "startLine": 14,
-      "startCol": 1,
-      "endLine": 15,
-      "endCol": 60
-    },
-    {
-      "text": "// embeddingPricesPerM maps an embedding model id to its input price per 1M\n// tokens. Keys are matched as substrings of the model name (which may carry a\n// \"@dims\" suffix), so e.g. \"voyage-context-3@256\" resolves.\nvar embeddingPricesPerM = map[string]float64{\n\t\"voyage-context-4\": 0.12,\n\t\"voyage-context-3\": 0.18,\n}\n\n// fallbackEmbeddingPerM is a conservative input price for an unknown embedding\n// model.\nconst fallbackEmbeddingPerM = 0.20",
-      "contextualizedText": "// internal/cost/cost.go\n\n// embeddingPricesPerM maps an embedding model id to its input price per 1M\n// tokens. Keys are matched as substrings of the model name (which may carry a\n// \"@dims\" suffix), so e.g. \"voyage-context-3@256\" resolves.\nvar embeddingPricesPerM = map[string]float64{\n\t\"voyage-context-4\": 0.12,\n\t\"voyage-context-3\": 0.18,\n}\n\n// fallbackEmbeddingPerM is a conservative input price for an unknown embedding\n// model.\nconst fallbackEmbeddingPerM = 0.20",
-      "headingContext": "internal/cost/cost.go",
-      "startLine": 17,
-      "startCol": 1,
-      "endLine": 27,
-      "endCol": 35
-    },
-    {
-      "text": "// EmbeddingPricePerToken returns the input price ($/token) for an embedding\n// model name, falling back conservatively for unknown models.\nfunc EmbeddingPricePerToken(model string) float64 {\n\tfor key, price := range embeddingPricesPerM {\n\t\tif strings.Contains(model, key) {\n\t\t\treturn perMillion(price)\n\t\t}\n\t}\n\treturn perMillion(fallbackEmbeddingPerM)\n}",
-      "contextualizedText": "// internal/cost/cost.go \u003e function EmbeddingPricePerToken\n\n// EmbeddingPricePerToken returns the input price ($/token) for an embedding\n// model name, falling back conservatively for unknown models.\nfunc EmbeddingPricePerToken(model string) float64 {\n\tfor key, price := range embeddingPricesPerM {\n\t\tif strings.Contains(model, key) {\n\t\t\treturn perMillion(price)\n\t\t}\n\t}\n\treturn perMillion(fallbackEmbeddingPerM)\n}",
-      "headingContext": "internal/cost/cost.go \u003e function EmbeddingPricePerToken",
-      "startLine": 29,
-      "startCol": 1,
-      "endLine": 38,
-      "endCol": 2
+      "start": 0,
+      "end": 1459
     }
   ]
 }

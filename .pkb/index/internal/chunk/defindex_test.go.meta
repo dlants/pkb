@@ -3,76 +3,16 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport (\n\t\"testing\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
-      "contextualizedText": "// internal/chunk/defindex_test.go\n\npackage chunk\n\nimport (\n\t\"testing\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
-      "headingContext": "internal/chunk/defindex_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 7,
-      "endCol": 2
+      "start": 0,
+      "end": 1655
     },
     {
-      "text": "func parseFor(t *testing.T, source []byte, grammar string) (*tree_sitter.Tree, *tree_sitter.Node) {\n\tt.Helper()\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\tt.Fatalf(\"no language for grammar %q\", grammar)\n\t}\n\tparser := tree_sitter.NewParser()\n\tt.Cleanup(parser.Close)\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\tt.Fatalf(\"set language: %v\", err)\n\t}\n\ttree := parser.Parse(source, nil)\n\tif tree == nil {\n\t\tt.Fatal(\"nil tree\")\n\t}\n\tt.Cleanup(tree.Close)\n\troot := tree.RootNode()\n\tif root == nil {\n\t\tt.Fatal(\"nil root\")\n\t}\n\treturn tree, root\n}",
-      "contextualizedText": "// internal/chunk/defindex_test.go \u003e function parseFor\n\nfunc parseFor(t *testing.T, source []byte, grammar string) (*tree_sitter.Tree, *tree_sitter.Node) {\n\tt.Helper()\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\tt.Fatalf(\"no language for grammar %q\", grammar)\n\t}\n\tparser := tree_sitter.NewParser()\n\tt.Cleanup(parser.Close)\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\tt.Fatalf(\"set language: %v\", err)\n\t}\n\ttree := parser.Parse(source, nil)\n\tif tree == nil {\n\t\tt.Fatal(\"nil tree\")\n\t}\n\tt.Cleanup(tree.Close)\n\troot := tree.RootNode()\n\tif root == nil {\n\t\tt.Fatal(\"nil root\")\n\t}\n\treturn tree, root\n}",
-      "headingContext": "internal/chunk/defindex_test.go \u003e function parseFor",
-      "startLine": 9,
-      "startCol": 1,
-      "endLine": 30,
-      "endCol": 2
+      "start": 1658,
+      "end": 2973
     },
     {
-      "text": "// findEntry locates the defEntry for a definition with the given name and label.\nfunc findEntry(idx *defIndex, name, label string) (defEntry, bool) {\n\tfor _, e := range idx.info {\n\t\tif e.name == name \u0026\u0026 e.label == label {\n\t\t\treturn e, true\n\t\t}\n\t}\n\treturn defEntry{}, false\n}",
-      "contextualizedText": "// internal/chunk/defindex_test.go \u003e function findEntry\n\n// findEntry locates the defEntry for a definition with the given name and label.\nfunc findEntry(idx *defIndex, name, label string) (defEntry, bool) {\n\tfor _, e := range idx.info {\n\t\tif e.name == name \u0026\u0026 e.label == label {\n\t\t\treturn e, true\n\t\t}\n\t}\n\treturn defEntry{}, false\n}",
-      "headingContext": "internal/chunk/defindex_test.go \u003e function findEntry",
-      "startLine": 32,
-      "startCol": 1,
-      "endLine": 40,
-      "endCol": 2
-    },
-    {
-      "text": "func TestBuildDefIndexGo(t *testing.T) {\n\tsrc := []byte(\"package p\\n\\n// Foo does a thing.\\nfunc Foo() int {\\n\\treturn 1\\n}\\n\\ntype Bar struct {\\n\\tX int\\n}\\n\")\n\t_, root := parseFor(t, src, \"go\")\n\n\tidx, err := buildDefIndex(root, src, \"go\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx == nil {\n\t\tt.Fatal(\"nil index for go\")\n\t}\n\n\t_, ok := findEntry(idx, \"Foo\", \"function\")\n\tif !ok {\n\t\tt.Fatalf(\"Foo function not indexed: %+v\", idx.info)\n\t}\n\t_, ok = findEntry(idx, \"Bar\", \"type\")\n\tif !ok {\n\t\tt.Fatalf(\"Bar type not indexed: %+v\", idx.info)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/defindex_test.go \u003e function TestBuildDefIndexGo\n\nfunc TestBuildDefIndexGo(t *testing.T) {\n\tsrc := []byte(\"package p\\n\\n// Foo does a thing.\\nfunc Foo() int {\\n\\treturn 1\\n}\\n\\ntype Bar struct {\\n\\tX int\\n}\\n\")\n\t_, root := parseFor(t, src, \"go\")\n\n\tidx, err := buildDefIndex(root, src, \"go\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx == nil {\n\t\tt.Fatal(\"nil index for go\")\n\t}\n\n\t_, ok := findEntry(idx, \"Foo\", \"function\")\n\tif !ok {\n\t\tt.Fatalf(\"Foo function not indexed: %+v\", idx.info)\n\t}\n\t_, ok = findEntry(idx, \"Bar\", \"type\")\n\tif !ok {\n\t\tt.Fatalf(\"Bar type not indexed: %+v\", idx.info)\n\t}\n}",
-      "headingContext": "internal/chunk/defindex_test.go \u003e function TestBuildDefIndexGo",
-      "startLine": 42,
-      "startCol": 1,
-      "endLine": 62,
-      "endCol": 2
-    },
-    {
-      "text": "func TestBuildDefIndexTypescript(t *testing.T) {\n\tsrc := []byte(\"function foo(): number {\\n  return 1;\\n}\\n\\nclass Bar {\\n  alpha(): void {}\\n}\\n\")\n\t_, root := parseFor(t, src, \"typescript\")\n\n\tidx, err := buildDefIndex(root, src, \"typescript\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx == nil {\n\t\tt.Fatal(\"nil index for typescript\")\n\t}\n\n\tif _, ok := findEntry(idx, \"foo\", \"function\"); !ok {\n\t\tt.Fatalf(\"foo function not indexed: %+v\", idx.info)\n\t}\n\tif _, ok := findEntry(idx, \"Bar\", \"class\"); !ok {\n\t\tt.Fatalf(\"Bar class not indexed: %+v\", idx.info)\n\t}\n\tif _, ok := findEntry(idx, \"alpha\", \"method\"); !ok {\n\t\tt.Fatalf(\"alpha method not indexed: %+v\", idx.info)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/defindex_test.go \u003e function TestBuildDefIndexTypescript\n\nfunc TestBuildDefIndexTypescript(t *testing.T) {\n\tsrc := []byte(\"function foo(): number {\\n  return 1;\\n}\\n\\nclass Bar {\\n  alpha(): void {}\\n}\\n\")\n\t_, root := parseFor(t, src, \"typescript\")\n\n\tidx, err := buildDefIndex(root, src, \"typescript\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx == nil {\n\t\tt.Fatal(\"nil index for typescript\")\n\t}\n\n\tif _, ok := findEntry(idx, \"foo\", \"function\"); !ok {\n\t\tt.Fatalf(\"foo function not indexed: %+v\", idx.info)\n\t}\n\tif _, ok := findEntry(idx, \"Bar\", \"class\"); !ok {\n\t\tt.Fatalf(\"Bar class not indexed: %+v\", idx.info)\n\t}\n\tif _, ok := findEntry(idx, \"alpha\", \"method\"); !ok {\n\t\tt.Fatalf(\"alpha method not indexed: %+v\", idx.info)\n\t}\n}",
-      "headingContext": "internal/chunk/defindex_test.go \u003e function TestBuildDefIndexTypescript",
-      "startLine": 64,
-      "startCol": 1,
-      "endLine": 85,
-      "endCol": 2
-    },
-    {
-      "text": "func findSpan(idx *defIndex, name, label string) (defSpan, bool) {\n\tfor _, s := range idx.spans {\n\t\tif s.name == name \u0026\u0026 s.label == label {\n\t\t\treturn s, true\n\t\t}\n\t}\n\treturn defSpan{}, false\n}",
-      "contextualizedText": "// internal/chunk/defindex_test.go \u003e function findSpan\n\nfunc findSpan(idx *defIndex, name, label string) (defSpan, bool) {\n\tfor _, s := range idx.spans {\n\t\tif s.name == name \u0026\u0026 s.label == label {\n\t\t\treturn s, true\n\t\t}\n\t}\n\treturn defSpan{}, false\n}",
-      "headingContext": "internal/chunk/defindex_test.go \u003e function findSpan",
-      "startLine": 87,
-      "startCol": 1,
-      "endLine": 94,
-      "endCol": 2
-    },
-    {
-      "text": "func TestBuildDefIndexSpansGo(t *testing.T) {\n\tsrc := []byte(\"package p\\n\\n// Foo does a thing.\\nfunc Foo() int {\\n\\treturn 1\\n}\\n\\nfunc (b Bar) M() {}\\n\\ntype State struct {\\n\\tX int\\n}\\n\")\n\t_, root := parseFor(t, src, \"go\")\n\n\tidx, err := buildDefIndex(root, src, \"go\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx == nil {\n\t\tt.Fatal(\"nil index for go\")\n\t}\n\n\tif len(idx.spans) != 3 {\n\t\tt.Fatalf(\"expected 3 spans, got %d: %+v\", len(idx.spans), idx.spans)\n\t}\n\n\t// Spans are ordered by start byte.\n\tfor i := 1; i \u003c len(idx.spans); i++ {\n\t\tif idx.spans[i-1].start \u003e idx.spans[i].start {\n\t\t\tt.Fatalf(\"spans not ordered by start: %+v\", idx.spans)\n\t\t}\n\t}\n\n\tfoo, ok := findSpan(idx, \"Foo\", \"function\")\n\tif !ok {\n\t\tt.Fatalf(\"Foo function span missing: %+v\", idx.spans)\n\t}\n\tif got := string(src[foo.start : foo.start+len(\"func Foo\")]); got != \"func Foo\" {\n\t\tt.Fatalf(\"Foo span should start at the func keyword, got %q\", got)\n\t}\n\n\tm, ok := findSpan(idx, \"M\", \"method\")\n\tif !ok {\n\t\tt.Fatalf(\"M method span missing: %+v\", idx.spans)\n\t}\n\tif m.start \u003e= m.end {\n\t\tt.Fatalf(\"M span has empty interval: %+v\", m)\n\t}\n\n\tstate, ok := findSpan(idx, \"State\", \"type\")\n\tif !ok {\n\t\tt.Fatalf(\"State type span missing: %+v\", idx.spans)\n\t}\n\tif got := string(src[state.start : state.start+len(\"State\")]); got != \"State\" {\n\t\tt.Fatalf(\"State span should start at the type_spec node (State), got %q\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/defindex_test.go \u003e function TestBuildDefIndexSpansGo\n\nfunc TestBuildDefIndexSpansGo(t *testing.T) {\n\tsrc := []byte(\"package p\\n\\n// Foo does a thing.\\nfunc Foo() int {\\n\\treturn 1\\n}\\n\\nfunc (b Bar) M() {}\\n\\ntype State struct {\\n\\tX int\\n}\\n\")\n\t_, root := parseFor(t, src, \"go\")\n\n\tidx, err := buildDefIndex(root, src, \"go\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx == nil {\n\t\tt.Fatal(\"nil index for go\")\n\t}\n\n\tif len(idx.spans) != 3 {\n\t\tt.Fatalf(\"expected 3 spans, got %d: %+v\", len(idx.spans), idx.spans)\n\t}\n\n\t// Spans are ordered by start byte.\n\tfor i := 1; i \u003c len(idx.spans); i++ {\n\t\tif idx.spans[i-1].start \u003e idx.spans[i].start {\n\t\t\tt.Fatalf(\"spans not ordered by start: %+v\", idx.spans)\n\t\t}\n\t}\n\n\tfoo, ok := findSpan(idx, \"Foo\", \"function\")\n\tif !ok {\n\t\tt.Fatalf(\"Foo function span missing: %+v\", idx.spans)\n\t}\n\tif got := string(src[foo.start : foo.start+len(\"func Foo\")]); got != \"func Foo\" {\n\t\tt.Fatalf(\"Foo span should start at the func keyword, got %q\", got)\n\t}\n\n\tm, ok := findSpan(idx, \"M\", \"method\")\n\tif !ok {\n\t\tt.Fatalf(\"M method span missing: %+v\", idx.spans)\n\t}\n\tif m.start \u003e= m.end {\n\t\tt.Fatalf(\"M span has empty interval: %+v\", m)\n\t}\n\n\tstate, ok := findSpan(idx, \"State\", \"type\")\n\tif !ok {\n\t\tt.Fatalf(\"State type span missing: %+v\", idx.spans)\n\t}\n\tif got := string(src[state.start : state.start+len(\"State\")]); got != \"State\" {\n\t\tt.Fatalf(\"State span should start at the type_spec node (State), got %q\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/defindex_test.go \u003e function TestBuildDefIndexSpansGo",
-      "startLine": 96,
-      "startCol": 1,
-      "endLine": 142,
-      "endCol": 2
-    },
-    {
-      "text": "func TestBuildDefIndexNoQuery(t *testing.T) {\n\tsrc := []byte(\"x = 1\\n\")\n\tidx, err := buildDefIndex(nil, src, \"nonexistent\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx != nil {\n\t\tt.Fatalf(\"expected nil index for grammar without query, got %+v\", idx)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/defindex_test.go \u003e function TestBuildDefIndexNoQuery\n\nfunc TestBuildDefIndexNoQuery(t *testing.T) {\n\tsrc := []byte(\"x = 1\\n\")\n\tidx, err := buildDefIndex(nil, src, \"nonexistent\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif idx != nil {\n\t\tt.Fatalf(\"expected nil index for grammar without query, got %+v\", idx)\n\t}\n}",
-      "headingContext": "internal/chunk/defindex_test.go \u003e function TestBuildDefIndexNoQuery",
-      "startLine": 144,
-      "startCol": 1,
-      "endLine": 153,
-      "endCol": 2
+      "start": 2976,
+      "end": 3957
     }
   ]
 }

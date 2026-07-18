@@ -3,130 +3,24 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport (\n\t\"strconv\"\n\t\"strings\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)\n\n// configGrammars are the structured-config grammars whose chunks carry a\n// structural key/index path as their breadcrumb (e.g. services.web.ports[1])\n// rather than a tags.scm definition path. They intentionally have no vendored\n// query; chunking reuses the cAST sweeper with a config breadcrumb hook.\nvar configGrammars = map[string]bool{\n\t\"json\": true,\n\t\"yaml\": true,\n\t\"toml\": true,\n}",
-      "contextualizedText": "// internal/chunk/config.go\n\npackage chunk\n\nimport (\n\t\"strconv\"\n\t\"strings\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)\n\n// configGrammars are the structured-config grammars whose chunks carry a\n// structural key/index path as their breadcrumb (e.g. services.web.ports[1])\n// rather than a tags.scm definition path. They intentionally have no vendored\n// query; chunking reuses the cAST sweeper with a config breadcrumb hook.\nvar configGrammars = map[string]bool{\n\t\"json\": true,\n\t\"yaml\": true,\n\t\"toml\": true,\n}",
-      "headingContext": "internal/chunk/config.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 18,
-      "endCol": 2
+      "start": 0,
+      "end": 1787
     },
     {
-      "text": "// IsConfigGrammar reports whether a grammar is chunked by ChunkConfig.\nfunc IsConfigGrammar(grammar string) bool {\n\treturn configGrammars[grammar]\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function IsConfigGrammar\n\n// IsConfigGrammar reports whether a grammar is chunked by ChunkConfig.\nfunc IsConfigGrammar(grammar string) bool {\n\treturn configGrammars[grammar]\n}",
-      "headingContext": "internal/chunk/config.go \u003e function IsConfigGrammar",
-      "startLine": 20,
-      "startCol": 1,
-      "endLine": 23,
-      "endCol": 2
+      "start": 1790,
+      "end": 3569
     },
     {
-      "text": "// ChunkConfig chunks a structured-config file. It reuses the tree-sitter cAST\n// sweeper (no definition index, so packing is pure budget windowing along node\n// boundaries) but installs a breadcrumb hook that maps each chunk's byte window\n// to its structural path from the document root. Falls back to line-based\n// chunking when the grammar is unknown or the source fails to parse.\nfunc ChunkConfig(content []byte, grammar, pathContext string, maxChunkSize int) ([]ChunkInfo, error) {\n\tif maxChunkSize \u003c= 0 {\n\t\tmaxChunkSize = TargetChunkSize\n\t}\n\tif len(content) == 0 {\n\t\treturn nil, nil\n\t}\n\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\ttree := parser.Parse(content, nil)\n\tif tree == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\tdefer tree.Close()\n\n\troot := tree.RootNode()\n\tif root == nil || root.HasError() {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tsw := \u0026sweeper{\n\t\tsource:      content,\n\t\tbudget:      maxChunkSize,\n\t\tpathContext: pathContext,\n\t\twinStart:    -1,\n\t\tbreadcrumbFn: func(lo, hi int) string {\n\t\t\treturn joinBreadcrumb(pathContext, configPath(root, content, lo, hi))\n\t\t},\n\t}\n\tsw.sweepChildren(root, int(root.StartByte()))\n\tsw.flush()\n\tif len(sw.out) == 0 {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\treturn sw.out, nil\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function ChunkConfig\n\n// ChunkConfig chunks a structured-config file. It reuses the tree-sitter cAST\n// sweeper (no definition index, so packing is pure budget windowing along node\n// boundaries) but installs a breadcrumb hook that maps each chunk's byte window\n// to its structural path from the document root. Falls back to line-based\n// chunking when the grammar is unknown or the source fails to parse.\nfunc ChunkConfig(content []byte, grammar, pathContext string, maxChunkSize int) ([]ChunkInfo, error) {\n\tif maxChunkSize \u003c= 0 {\n\t\tmaxChunkSize = TargetChunkSize\n\t}\n\tif len(content) == 0 {\n\t\treturn nil, nil\n\t}\n\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\ttree := parser.Parse(content, nil)\n\tif tree == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\tdefer tree.Close()\n\n\troot := tree.RootNode()\n\tif root == nil || root.HasError() {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tsw := \u0026sweeper{\n\t\tsource:      content,\n\t\tbudget:      maxChunkSize,\n\t\tpathContext: pathContext,\n\t\twinStart:    -1,\n\t\tbreadcrumbFn: func(lo, hi int) string {\n\t\t\treturn joinBreadcrumb(pathContext, configPath(root, content, lo, hi))\n\t\t},\n\t}\n\tsw.sweepChildren(root, int(root.StartByte()))\n\tsw.flush()\n\tif len(sw.out) == 0 {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\treturn sw.out, nil\n}",
-      "headingContext": "internal/chunk/config.go \u003e function ChunkConfig",
-      "startLine": 25,
-      "startCol": 1,
-      "endLine": 74,
-      "endCol": 2
+      "start": 3571,
+      "end": 5266
     },
     {
-      "text": "// configPath returns the formatted structural path (e.g. \"services.web.ports[1]\")\n// of the lowest container node fully enclosing the byte window [lo, hi). It\n// descends from root through the unique named child that still contains the\n// window, accumulating a path segment at each step, and stops at the lowest\n// common ancestor (the deepest node no single child fully contains).\nfunc configPath(root *tree_sitter.Node, src []byte, lo, hi int) string {\n\tnode := root\n\tvar parts []segPart\n\tfor {\n\t\tchild := childContaining(node, lo, hi)\n\t\tif child == nil {\n\t\t\tbreak\n\t\t}\n\t\tparts = append(parts, configSegment(node, child, src)...)\n\t\tnode = child\n\t}\n\treturn formatConfigPath(parts)\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function configPath\n\n// configPath returns the formatted structural path (e.g. \"services.web.ports[1]\")\n// of the lowest container node fully enclosing the byte window [lo, hi). It\n// descends from root through the unique named child that still contains the\n// window, accumulating a path segment at each step, and stops at the lowest\n// common ancestor (the deepest node no single child fully contains).\nfunc configPath(root *tree_sitter.Node, src []byte, lo, hi int) string {\n\tnode := root\n\tvar parts []segPart\n\tfor {\n\t\tchild := childContaining(node, lo, hi)\n\t\tif child == nil {\n\t\t\tbreak\n\t\t}\n\t\tparts = append(parts, configSegment(node, child, src)...)\n\t\tnode = child\n\t}\n\treturn formatConfigPath(parts)\n}",
-      "headingContext": "internal/chunk/config.go \u003e function configPath",
-      "startLine": 76,
-      "startCol": 1,
-      "endLine": 93,
-      "endCol": 2
+      "start": 5268,
+      "end": 7058
     },
     {
-      "text": "// segPart is one element of a config path: a key (joined with \".\") or an index\n// (e.g. \"[1]\", appended with no separator).\ntype segPart struct {\n\ttext    string\n\tisIndex bool\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e type segPart\n\n// segPart is one element of a config path: a key (joined with \".\") or an index\n// (e.g. \"[1]\", appended with no separator).\ntype segPart struct {\n\ttext    string\n\tisIndex bool\n}",
-      "headingContext": "internal/chunk/config.go \u003e type segPart",
-      "startLine": 95,
-      "startCol": 1,
-      "endLine": 100,
-      "endCol": 2
-    },
-    {
-      "text": "// childContaining returns the unique named child of node whose byte range fully\n// contains [lo, hi), or nil if none does (siblings are disjoint, so at most one\n// can match). A nil result means node itself is the lowest enclosing container.\nfunc childContaining(node *tree_sitter.Node, lo, hi int) *tree_sitter.Node {\n\tcount := node.NamedChildCount()\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := node.NamedChild(i)\n\t\tif int(c.StartByte()) \u003c= lo \u0026\u0026 hi \u003c= int(c.EndByte()) {\n\t\t\treturn c\n\t\t}\n\t}\n\treturn nil\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function childContaining\n\n// childContaining returns the unique named child of node whose byte range fully\n// contains [lo, hi), or nil if none does (siblings are disjoint, so at most one\n// can match). A nil result means node itself is the lowest enclosing container.\nfunc childContaining(node *tree_sitter.Node, lo, hi int) *tree_sitter.Node {\n\tcount := node.NamedChildCount()\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := node.NamedChild(i)\n\t\tif int(c.StartByte()) \u003c= lo \u0026\u0026 hi \u003c= int(c.EndByte()) {\n\t\t\treturn c\n\t\t}\n\t}\n\treturn nil\n}",
-      "headingContext": "internal/chunk/config.go \u003e function childContaining",
-      "startLine": 102,
-      "startCol": 1,
-      "endLine": 114,
-      "endCol": 2
-    },
-    {
-      "text": "// configSegment returns the path segment(s) contributed by descending from\n// parent into child, across JSON / YAML / TOML. Transparent wrappers (documents,\n// nodes, scalars, the value side of a pair) contribute nothing. Mapping members\n// contribute their key; sequence elements contribute their index; TOML tables\n// contribute their (possibly dotted) header, and array-of-tables also an index.\nfunc configSegment(parent, child *tree_sitter.Node, src []byte) []segPart {\n\tswitch parent.Kind() {\n\tcase \"object\", \"block_mapping\", \"flow_mapping\":\n\t\treturn []segPart{{text: keyText(child, src)}}\n\tcase \"array\", \"block_sequence\", \"flow_sequence\":\n\t\treturn []segPart{{text: indexBracket(positionalIndex(parent, child)), isIndex: true}}\n\tcase \"table\", \"table_array_element\":\n\t\t// child is either a pair (-\u003e its key) or the table's header key node,\n\t\t// which was already emitted at the document-\u003etable step.\n\t\tif child.Kind() == \"pair\" {\n\t\t\treturn []segPart{{text: keyText(child, src)}}\n\t\t}\n\t\treturn nil\n\tcase \"document\":\n\t\tswitch child.Kind() {\n\t\tcase \"table\":\n\t\t\treturn []segPart{{text: tableHeader(child, src)}}\n\t\tcase \"table_array_element\":\n\t\t\treturn []segPart{\n\t\t\t\t{text: tableHeader(child, src)},\n\t\t\t\t{text: indexBracket(tableArrayIndex(parent, child, src)), isIndex: true},\n\t\t\t}\n\t\t}\n\t}\n\treturn nil\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function configSegment\n\n// configSegment returns the path segment(s) contributed by descending from\n// parent into child, across JSON / YAML / TOML. Transparent wrappers (documents,\n// nodes, scalars, the value side of a pair) contribute nothing. Mapping members\n// contribute their key; sequence elements contribute their index; TOML tables\n// contribute their (possibly dotted) header, and array-of-tables also an index.\nfunc configSegment(parent, child *tree_sitter.Node, src []byte) []segPart {\n\tswitch parent.Kind() {\n\tcase \"object\", \"block_mapping\", \"flow_mapping\":\n\t\treturn []segPart{{text: keyText(child, src)}}\n\tcase \"array\", \"block_sequence\", \"flow_sequence\":\n\t\treturn []segPart{{text: indexBracket(positionalIndex(parent, child)), isIndex: true}}\n\tcase \"table\", \"table_array_element\":\n\t\t// child is either a pair (-\u003e its key) or the table's header key node,\n\t\t// which was already emitted at the document-\u003etable step.\n\t\tif child.Kind() == \"pair\" {\n\t\t\treturn []segPart{{text: keyText(child, src)}}\n\t\t}\n\t\treturn nil\n\tcase \"document\":\n\t\tswitch child.Kind() {\n\t\tcase \"table\":\n\t\t\treturn []segPart{{text: tableHeader(child, src)}}\n\t\tcase \"table_array_element\":\n\t\t\treturn []segPart{\n\t\t\t\t{text: tableHeader(child, src)},\n\t\t\t\t{text: indexBracket(tableArrayIndex(parent, child, src)), isIndex: true},\n\t\t\t}\n\t\t}\n\t}\n\treturn nil\n}",
-      "headingContext": "internal/chunk/config.go \u003e function configSegment",
-      "startLine": 116,
-      "startCol": 1,
-      "endLine": 146,
-      "endCol": 2
-    },
-    {
-      "text": "// keyText extracts the key of a mapping member (JSON/YAML pair) or TOML pair.\n// JSON/YAML expose a \"key\" field; TOML pairs are positional (first named child).\nfunc keyText(pair *tree_sitter.Node, src []byte) string {\n\tkey := pair.ChildByFieldName(\"key\")\n\tif key == nil {\n\t\tkey = pair.NamedChild(0)\n\t}\n\tif key == nil {\n\t\treturn \"\"\n\t}\n\treturn unquote(strings.TrimSpace(key.Utf8Text(src)))\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function keyText\n\n// keyText extracts the key of a mapping member (JSON/YAML pair) or TOML pair.\n// JSON/YAML expose a \"key\" field; TOML pairs are positional (first named child).\nfunc keyText(pair *tree_sitter.Node, src []byte) string {\n\tkey := pair.ChildByFieldName(\"key\")\n\tif key == nil {\n\t\tkey = pair.NamedChild(0)\n\t}\n\tif key == nil {\n\t\treturn \"\"\n\t}\n\treturn unquote(strings.TrimSpace(key.Utf8Text(src)))\n}",
-      "headingContext": "internal/chunk/config.go \u003e function keyText",
-      "startLine": 148,
-      "startCol": 1,
-      "endLine": 159,
-      "endCol": 2
-    },
-    {
-      "text": "// tableHeader returns the dotted header of a TOML table / table-array element\n// (its leading bare_key or dotted_key), e.g. \"servers.alpha\".\nfunc tableHeader(table *tree_sitter.Node, src []byte) string {\n\tcount := table.NamedChildCount()\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := table.NamedChild(i)\n\t\tif k := c.Kind(); k == \"bare_key\" || k == \"dotted_key\" || k == \"quoted_key\" {\n\t\t\treturn unquote(strings.TrimSpace(c.Utf8Text(src)))\n\t\t}\n\t}\n\treturn \"\"\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function tableHeader\n\n// tableHeader returns the dotted header of a TOML table / table-array element\n// (its leading bare_key or dotted_key), e.g. \"servers.alpha\".\nfunc tableHeader(table *tree_sitter.Node, src []byte) string {\n\tcount := table.NamedChildCount()\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := table.NamedChild(i)\n\t\tif k := c.Kind(); k == \"bare_key\" || k == \"dotted_key\" || k == \"quoted_key\" {\n\t\t\treturn unquote(strings.TrimSpace(c.Utf8Text(src)))\n\t\t}\n\t}\n\treturn \"\"\n}",
-      "headingContext": "internal/chunk/config.go \u003e function tableHeader",
-      "startLine": 161,
-      "startCol": 1,
-      "endLine": 172,
-      "endCol": 2
-    },
-    {
-      "text": "// positionalIndex returns child's 0-based position among parent's named\n// children (used for sequence/array elements, whose kinds may be mixed).\nfunc positionalIndex(parent, child *tree_sitter.Node) int {\n\tcount := parent.NamedChildCount()\n\tidx := 0\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := parent.NamedChild(i)\n\t\tif c.Id() == child.Id() {\n\t\t\treturn idx\n\t\t}\n\t\tidx++\n\t}\n\treturn idx\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function positionalIndex\n\n// positionalIndex returns child's 0-based position among parent's named\n// children (used for sequence/array elements, whose kinds may be mixed).\nfunc positionalIndex(parent, child *tree_sitter.Node) int {\n\tcount := parent.NamedChildCount()\n\tidx := 0\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := parent.NamedChild(i)\n\t\tif c.Id() == child.Id() {\n\t\t\treturn idx\n\t\t}\n\t\tidx++\n\t}\n\treturn idx\n}",
-      "headingContext": "internal/chunk/config.go \u003e function positionalIndex",
-      "startLine": 174,
-      "startCol": 1,
-      "endLine": 187,
-      "endCol": 2
-    },
-    {
-      "text": "// tableArrayIndex returns the 0-based occurrence index of a [[header]] element\n// among preceding document children sharing the same header text.\nfunc tableArrayIndex(parent, child *tree_sitter.Node, src []byte) int {\n\twant := tableHeader(child, src)\n\tcount := parent.NamedChildCount()\n\tidx := 0\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := parent.NamedChild(i)\n\t\tif c.Id() == child.Id() {\n\t\t\treturn idx\n\t\t}\n\t\tif c.Kind() == \"table_array_element\" \u0026\u0026 tableHeader(c, src) == want {\n\t\t\tidx++\n\t\t}\n\t}\n\treturn idx\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function tableArrayIndex\n\n// tableArrayIndex returns the 0-based occurrence index of a [[header]] element\n// among preceding document children sharing the same header text.\nfunc tableArrayIndex(parent, child *tree_sitter.Node, src []byte) int {\n\twant := tableHeader(child, src)\n\tcount := parent.NamedChildCount()\n\tidx := 0\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tc := parent.NamedChild(i)\n\t\tif c.Id() == child.Id() {\n\t\t\treturn idx\n\t\t}\n\t\tif c.Kind() == \"table_array_element\" \u0026\u0026 tableHeader(c, src) == want {\n\t\t\tidx++\n\t\t}\n\t}\n\treturn idx\n}",
-      "headingContext": "internal/chunk/config.go \u003e function tableArrayIndex",
-      "startLine": 189,
-      "startCol": 1,
-      "endLine": 205,
-      "endCol": 2
-    },
-    {
-      "text": "func indexBracket(i int) string {\n\treturn \"[\" + strconv.Itoa(i) + \"]\"\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function indexBracket\n\nfunc indexBracket(i int) string {\n\treturn \"[\" + strconv.Itoa(i) + \"]\"\n}",
-      "headingContext": "internal/chunk/config.go \u003e function indexBracket",
-      "startLine": 207,
-      "startCol": 1,
-      "endLine": 209,
-      "endCol": 2
-    },
-    {
-      "text": "// formatConfigPath joins path parts: keys with \".\", indices appended directly.\nfunc formatConfigPath(parts []segPart) string {\n\tvar b strings.Builder\n\tfor _, p := range parts {\n\t\tif p.text == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\tif p.isIndex {\n\t\t\tb.WriteString(p.text)\n\t\t\tcontinue\n\t\t}\n\t\tif b.Len() \u003e 0 {\n\t\t\tb.WriteByte('.')\n\t\t}\n\t\tb.WriteString(p.text)\n\t}\n\treturn b.String()\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function formatConfigPath\n\n// formatConfigPath joins path parts: keys with \".\", indices appended directly.\nfunc formatConfigPath(parts []segPart) string {\n\tvar b strings.Builder\n\tfor _, p := range parts {\n\t\tif p.text == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\tif p.isIndex {\n\t\t\tb.WriteString(p.text)\n\t\t\tcontinue\n\t\t}\n\t\tif b.Len() \u003e 0 {\n\t\t\tb.WriteByte('.')\n\t\t}\n\t\tb.WriteString(p.text)\n\t}\n\treturn b.String()\n}",
-      "headingContext": "internal/chunk/config.go \u003e function formatConfigPath",
-      "startLine": 211,
-      "startCol": 1,
-      "endLine": 228,
-      "endCol": 2
-    },
-    {
-      "text": "// unquote strips a single layer of matching surrounding quotes from a key.\nfunc unquote(s string) string {\n\tif len(s) \u003e= 2 {\n\t\tif (s[0] == '\"' \u0026\u0026 s[len(s)-1] == '\"') || (s[0] == '\\'' \u0026\u0026 s[len(s)-1] == '\\'') {\n\t\t\treturn s[1 : len(s)-1]\n\t\t}\n\t}\n\treturn s\n}",
-      "contextualizedText": "// internal/chunk/config.go \u003e function unquote\n\n// unquote strips a single layer of matching surrounding quotes from a key.\nfunc unquote(s string) string {\n\tif len(s) \u003e= 2 {\n\t\tif (s[0] == '\"' \u0026\u0026 s[len(s)-1] == '\"') || (s[0] == '\\'' \u0026\u0026 s[len(s)-1] == '\\'') {\n\t\t\treturn s[1 : len(s)-1]\n\t\t}\n\t}\n\treturn s\n}",
-      "headingContext": "internal/chunk/config.go \u003e function unquote",
-      "startLine": 230,
-      "startCol": 1,
-      "endLine": 238,
-      "endCol": 2
+      "start": 7060,
+      "end": 7314
     }
   ]
 }

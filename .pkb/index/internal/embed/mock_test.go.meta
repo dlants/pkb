@@ -3,40 +3,8 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package embed\n\nimport (\n\t\"testing\"\n\n\t\"github.com/stretchr/testify/require\"\n)",
-      "contextualizedText": "// internal/embed/mock_test.go\n\npackage embed\n\nimport (\n\t\"testing\"\n\n\t\"github.com/stretchr/testify/require\"\n)",
-      "headingContext": "internal/embed/mock_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 7,
-      "endCol": 2
-    },
-    {
-      "text": "func TestMockModelImplementsContextual(t *testing.T) {\n\tvar _ ContextualEmbeddingModel = NewMockModel(\"mock\", 8)\n}",
-      "contextualizedText": "// internal/embed/mock_test.go \u003e function TestMockModelImplementsContextual\n\nfunc TestMockModelImplementsContextual(t *testing.T) {\n\tvar _ ContextualEmbeddingModel = NewMockModel(\"mock\", 8)\n}",
-      "headingContext": "internal/embed/mock_test.go \u003e function TestMockModelImplementsContextual",
-      "startLine": 9,
-      "startCol": 1,
-      "endLine": 11,
-      "endCol": 2
-    },
-    {
-      "text": "func TestMockEmbedDocumentAutoChunks(t *testing.T) {\n\tm := NewMockModel(\"mock\", 8)\n\tdoc := \"first paragraph\\n\\nsecond paragraph\\n\\n\\nthird paragraph\"\n\n\tchunks, err := m.EmbedDocument(doc)\n\trequire.NoError(t, err)\n\trequire.Len(t, chunks, 3)\n\trequire.Equal(t, \"first paragraph\", chunks[0].Text)\n\trequire.Equal(t, \"second paragraph\", chunks[1].Text)\n\trequire.Equal(t, \"third paragraph\", chunks[2].Text)\n\tfor _, c := range chunks {\n\t\trequire.Len(t, c.Embedding, 8)\n\t}\n\trequire.Equal(t, 1, m.DocumentCalls())\n}",
-      "contextualizedText": "// internal/embed/mock_test.go \u003e function TestMockEmbedDocumentAutoChunks\n\nfunc TestMockEmbedDocumentAutoChunks(t *testing.T) {\n\tm := NewMockModel(\"mock\", 8)\n\tdoc := \"first paragraph\\n\\nsecond paragraph\\n\\n\\nthird paragraph\"\n\n\tchunks, err := m.EmbedDocument(doc)\n\trequire.NoError(t, err)\n\trequire.Len(t, chunks, 3)\n\trequire.Equal(t, \"first paragraph\", chunks[0].Text)\n\trequire.Equal(t, \"second paragraph\", chunks[1].Text)\n\trequire.Equal(t, \"third paragraph\", chunks[2].Text)\n\tfor _, c := range chunks {\n\t\trequire.Len(t, c.Embedding, 8)\n\t}\n\trequire.Equal(t, 1, m.DocumentCalls())\n}",
-      "headingContext": "internal/embed/mock_test.go \u003e function TestMockEmbedDocumentAutoChunks",
-      "startLine": 13,
-      "startCol": 1,
-      "endLine": 27,
-      "endCol": 2
-    },
-    {
-      "text": "func TestMockContextualDiffersFromIsolated(t *testing.T) {\n\tm := NewMockModel(\"mock\", 8)\n\tdoc := \"alpha chunk\\n\\nbeta chunk\"\n\n\tchunks, err := m.EmbedDocument(doc)\n\trequire.NoError(t, err)\n\trequire.Len(t, chunks, 2)\n\n\tisolated, err := m.EmbedChunk(\"alpha chunk\")\n\trequire.NoError(t, err)\n\trequire.NotEqual(t, isolated, chunks[0].Embedding)\n}",
-      "contextualizedText": "// internal/embed/mock_test.go \u003e function TestMockContextualDiffersFromIsolated\n\nfunc TestMockContextualDiffersFromIsolated(t *testing.T) {\n\tm := NewMockModel(\"mock\", 8)\n\tdoc := \"alpha chunk\\n\\nbeta chunk\"\n\n\tchunks, err := m.EmbedDocument(doc)\n\trequire.NoError(t, err)\n\trequire.Len(t, chunks, 2)\n\n\tisolated, err := m.EmbedChunk(\"alpha chunk\")\n\trequire.NoError(t, err)\n\trequire.NotEqual(t, isolated, chunks[0].Embedding)\n}",
-      "headingContext": "internal/embed/mock_test.go \u003e function TestMockContextualDiffersFromIsolated",
-      "startLine": 29,
-      "startCol": 1,
-      "endLine": 40,
-      "endCol": 2
+      "start": 0,
+      "end": 1041
     }
   ]
 }

@@ -3,40 +3,8 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)",
-      "contextualizedText": "// internal/chunk/markdown_test.go\n\npackage chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)",
-      "headingContext": "internal/chunk/markdown_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 6,
-      "endCol": 2
-    },
-    {
-      "text": "func TestChunkMarkdownEmpty(t *testing.T) {\n\tif got := ChunkMarkdown(\"   \\n\\n\", \"doc.md\", TargetChunkSize); got != nil {\n\t\tt.Fatalf(\"expected nil chunks, got %v\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/markdown_test.go \u003e function TestChunkMarkdownEmpty\n\nfunc TestChunkMarkdownEmpty(t *testing.T) {\n\tif got := ChunkMarkdown(\"   \\n\\n\", \"doc.md\", TargetChunkSize); got != nil {\n\t\tt.Fatalf(\"expected nil chunks, got %v\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/markdown_test.go \u003e function TestChunkMarkdownEmpty",
-      "startLine": 8,
-      "startCol": 1,
-      "endLine": 12,
-      "endCol": 2
-    },
-    {
-      "text": "func TestChunkMarkdownHeadingContext(t *testing.T) {\n\tmd := \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\"\n\tchunks := ChunkMarkdown(md, \"docs/guide.md\", TargetChunkSize)\n\tif len(chunks) != 2 {\n\t\tt.Fatalf(\"expected 2 chunks, got %d\", len(chunks))\n\t}\n\tif chunks[0].HeadingContext != \"docs/guide.md \u003e # Top\" {\n\t\tt.Fatalf(\"chunk 0 heading: %q\", chunks[0].HeadingContext)\n\t}\n\tif chunks[1].HeadingContext != \"docs/guide.md \u003e # Top \u003e ## Sub\" {\n\t\tt.Fatalf(\"chunk 1 heading: %q\", chunks[1].HeadingContext)\n\t}\n\tif !strings.Contains(chunks[1].Text, \"nested paragraph\") {\n\t\tt.Fatalf(\"chunk 1 text: %q\", chunks[1].Text)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/markdown_test.go \u003e function TestChunkMarkdownHeadingContext\n\nfunc TestChunkMarkdownHeadingContext(t *testing.T) {\n\tmd := \"# Top\\n\\nintro paragraph\\n\\n## Sub\\n\\nnested paragraph\"\n\tchunks := ChunkMarkdown(md, \"docs/guide.md\", TargetChunkSize)\n\tif len(chunks) != 2 {\n\t\tt.Fatalf(\"expected 2 chunks, got %d\", len(chunks))\n\t}\n\tif chunks[0].HeadingContext != \"docs/guide.md \u003e # Top\" {\n\t\tt.Fatalf(\"chunk 0 heading: %q\", chunks[0].HeadingContext)\n\t}\n\tif chunks[1].HeadingContext != \"docs/guide.md \u003e # Top \u003e ## Sub\" {\n\t\tt.Fatalf(\"chunk 1 heading: %q\", chunks[1].HeadingContext)\n\t}\n\tif !strings.Contains(chunks[1].Text, \"nested paragraph\") {\n\t\tt.Fatalf(\"chunk 1 text: %q\", chunks[1].Text)\n\t}\n}",
-      "headingContext": "internal/chunk/markdown_test.go \u003e function TestChunkMarkdownHeadingContext",
-      "startLine": 14,
-      "startCol": 1,
-      "endLine": 29,
-      "endCol": 2
-    },
-    {
-      "text": "func TestChunkMarkdownSplitsLargeBlock(t *testing.T) {\n\tvar b strings.Builder\n\tb.WriteString(\"# Big\\n\\n\")\n\tfor i := 0; i \u003c 200; i++ {\n\t\tb.WriteString(\"This is a sentence that adds bulk to the document. \")\n\t\tif i%5 == 0 {\n\t\t\tb.WriteString(\"\\n\\n\")\n\t\t}\n\t}\n\tchunks := ChunkMarkdown(b.String(), \"big.md\", 500)\n\tif len(chunks) \u003c 2 {\n\t\tt.Fatalf(\"expected multiple chunks, got %d\", len(chunks))\n\t}\n}",
-      "contextualizedText": "// internal/chunk/markdown_test.go \u003e function TestChunkMarkdownSplitsLargeBlock\n\nfunc TestChunkMarkdownSplitsLargeBlock(t *testing.T) {\n\tvar b strings.Builder\n\tb.WriteString(\"# Big\\n\\n\")\n\tfor i := 0; i \u003c 200; i++ {\n\t\tb.WriteString(\"This is a sentence that adds bulk to the document. \")\n\t\tif i%5 == 0 {\n\t\t\tb.WriteString(\"\\n\\n\")\n\t\t}\n\t}\n\tchunks := ChunkMarkdown(b.String(), \"big.md\", 500)\n\tif len(chunks) \u003c 2 {\n\t\tt.Fatalf(\"expected multiple chunks, got %d\", len(chunks))\n\t}\n}",
-      "headingContext": "internal/chunk/markdown_test.go \u003e function TestChunkMarkdownSplitsLargeBlock",
-      "startLine": 31,
-      "startCol": 1,
-      "endLine": 44,
-      "endCol": 2
+      "start": 0,
+      "end": 1237
     }
   ]
 }

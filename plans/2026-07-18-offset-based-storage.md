@@ -454,10 +454,43 @@ Decisions / deviations:
   `defer x.Close()` / mirror-temp patterns) are unchanged; `go build`, `go vet`,
   and `go test ./...` are all green.
 
-## end-to-end + size check
+## end-to-end + size check — DONE
 
 - Goal: confirm the repo-size reduction and healthcheck consistency.
 - Tests:
-  - `pkb healthcheck` clean after full reindex on this repo.
-  - Assert total `.pkb/index/**.meta` bytes drop substantially vs. before.
-  - `pkb search` returns coherent snippets (reconstructed text) end-to-end.
+  - [x] `pkb healthcheck` clean after full reindex on this repo.
+  - [x] Assert total `.pkb/index/**.meta` bytes drop substantially vs. before.
+  - [x] `pkb search` returns coherent snippets (reconstructed text) end-to-end.
+
+**Result (2026-07-18): DONE.** Ran a full from-scratch reindex on this repo and
+verified all three checks:
+
+- **Healthcheck clean.** `pkb healthcheck` after reindex: HEAD == state commit,
+  expected files 63 == indexed files 63, 355 chunks, "healthy: index and state
+  marker match the git tree".
+- **`.meta` bytes dropped ~98%.** Total `.pkb/index/**.meta` bytes went from
+  1,237,052 (pre-refactor commit `1234d41`) to **25,910** after the offset-only
+  reindex — the `.meta` now holds only `{start,end}` per chunk (blobSha +
+  modelName header aside). All 63 `.meta` are the new format (0 files retain a
+  `text`/`contextualized`/`headingContext` key).
+- **Search returns coherent reconstructed snippets.** `pkb search` returns
+  correctly reconstructed chunk text with accurate `path:Lnn` line numbers,
+  proving the sync-time reconstruction (blob slice + breadcrumb + line/col)
+  round-trips end-to-end.
+
+Decisions / deviations:
+
+- **Forced a from-scratch reindex (`rm -rf .pkb/index .pkb/cache.db`) to
+  regenerate the mirror.** The `MajorVersion` bump (now 8) re-keys the SQLite
+  cache but the mirror-artifact skip in `Reindex` is keyed on `(model, blob_sha)`
+  only — it does not carry the major version — so an ordinary `pkb reindex` left
+  the 54 unchanged files in their old (v≤7) on-disk format. Wiping the mirror was
+  the pragmatic one-time way to realize the format migration across every file.
+  This is a known gap (major-version invalidation of the *mirror* is not
+  automatic), not a regression introduced here.
+- **Removed a dead helper.** Stage 5's collapse of the code-chunking path left
+  `(*Options).grammarFor` unused (golangci `unused`); deleted it. The remaining
+  21 golangci findings are the pre-existing repo-wide `errcheck` items on
+  untouched files, unchanged from prior stages. `go build`, `go vet`, and
+  `go test ./...` are all green.
+- Committed the regenerated `.pkb/index/**` offset-only artifacts + `pkb-state.toml`.

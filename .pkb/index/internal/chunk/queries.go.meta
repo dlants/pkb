@@ -3,22 +3,8 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport _ \"embed\"\n\n// Vendored tree-sitter tags.scm queries, one per grammar. These are copied from\n// each grammar's module (queries/tags.scm) and embedded because the binary is\n// statically linked cgo and does not ship the module cache. Vendored queries\n// must match the grammar version pinned in go.mod; bumping a grammar means\n// re-vendoring its query. The typescript/tsx queries concatenate the\n// javascript tags (upstream relies on query inheritance) so they capture the\n// full ECMAScript construct set in addition to TypeScript-specific nodes.\n//\n// Source versions: go v0.23.4, javascript v0.23.1, python v0.23.6,\n// rust v0.23.2, typescript v0.23.2, hcl v1.2.0 (hcl.scm is pkb-authored, not\n// vendored upstream, capturing top-level blocks as @definition.block).\n\n//go:embed queries/hcl.scm\nvar queryHCL string\n\n//go:embed queries/go.scm\nvar queryGo string\n\n//go:embed queries/javascript.scm\nvar queryJavascript string\n\n//go:embed queries/python.scm\nvar queryPython string\n\n//go:embed queries/rust.scm\nvar queryRust string\n\n//go:embed queries/typescript.scm\nvar queryTypescript string\n\n//go:embed queries/tsx.scm\nvar queryTSX string\n\n// queries maps a grammar name to its embedded tags.scm source.\nvar queries = map[string]string{\n\t\"go\":         queryGo,\n\t\"hcl\":        queryHCL,\n\t\"javascript\": queryJavascript,\n\t\"python\":     queryPython,\n\t\"rust\":       queryRust,\n\t\"typescript\": queryTypescript,\n\t\"tsx\":        queryTSX,\n}",
-      "contextualizedText": "// internal/chunk/queries.go\n\npackage chunk\n\nimport _ \"embed\"\n\n// Vendored tree-sitter tags.scm queries, one per grammar. These are copied from\n// each grammar's module (queries/tags.scm) and embedded because the binary is\n// statically linked cgo and does not ship the module cache. Vendored queries\n// must match the grammar version pinned in go.mod; bumping a grammar means\n// re-vendoring its query. The typescript/tsx queries concatenate the\n// javascript tags (upstream relies on query inheritance) so they capture the\n// full ECMAScript construct set in addition to TypeScript-specific nodes.\n//\n// Source versions: go v0.23.4, javascript v0.23.1, python v0.23.6,\n// rust v0.23.2, typescript v0.23.2, hcl v1.2.0 (hcl.scm is pkb-authored, not\n// vendored upstream, capturing top-level blocks as @definition.block).\n\n//go:embed queries/hcl.scm\nvar queryHCL string\n\n//go:embed queries/go.scm\nvar queryGo string\n\n//go:embed queries/javascript.scm\nvar queryJavascript string\n\n//go:embed queries/python.scm\nvar queryPython string\n\n//go:embed queries/rust.scm\nvar queryRust string\n\n//go:embed queries/typescript.scm\nvar queryTypescript string\n\n//go:embed queries/tsx.scm\nvar queryTSX string\n\n// queries maps a grammar name to its embedded tags.scm source.\nvar queries = map[string]string{\n\t\"go\":         queryGo,\n\t\"hcl\":        queryHCL,\n\t\"javascript\": queryJavascript,\n\t\"python\":     queryPython,\n\t\"rust\":       queryRust,\n\t\"typescript\": queryTypescript,\n\t\"tsx\":        queryTSX,\n}",
-      "headingContext": "internal/chunk/queries.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 47,
-      "endCol": 2
-    },
-    {
-      "text": "// queryFor returns the vendored tags.scm source for a grammar name, or \"\" if\n// none is vendored.\nfunc queryFor(name string) string {\n\treturn queries[name]\n}",
-      "contextualizedText": "// internal/chunk/queries.go \u003e function queryFor\n\n// queryFor returns the vendored tags.scm source for a grammar name, or \"\" if\n// none is vendored.\nfunc queryFor(name string) string {\n\treturn queries[name]\n}",
-      "headingContext": "internal/chunk/queries.go \u003e function queryFor",
-      "startLine": 49,
-      "startCol": 1,
-      "endLine": 53,
-      "endCol": 2
+      "start": 0,
+      "end": 1612
     }
   ]
 }

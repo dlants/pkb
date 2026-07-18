@@ -3,31 +3,8 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "// Package smoke proves the cgo toolchain links both sqlite-vec and a\n// tree-sitter grammar into the binary.\npackage smoke\n\nimport (\n\t\"database/sql\"\n\t\"testing\"\n\n\tsqlite_vec \"github.com/asg017/sqlite-vec-go-bindings/cgo\"\n\t_ \"github.com/mattn/go-sqlite3\"\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n\ttree_sitter_typescript \"github.com/tree-sitter/tree-sitter-typescript/bindings/go\"\n)",
-      "contextualizedText": "// internal/smoke/smoke_test.go\n\n// Package smoke proves the cgo toolchain links both sqlite-vec and a\n// tree-sitter grammar into the binary.\npackage smoke\n\nimport (\n\t\"database/sql\"\n\t\"testing\"\n\n\tsqlite_vec \"github.com/asg017/sqlite-vec-go-bindings/cgo\"\n\t_ \"github.com/mattn/go-sqlite3\"\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n\ttree_sitter_typescript \"github.com/tree-sitter/tree-sitter-typescript/bindings/go\"\n)",
-      "headingContext": "internal/smoke/smoke_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 13,
-      "endCol": 2
-    },
-    {
-      "text": "func TestSqliteVecLinks(t *testing.T) {\n\tsqlite_vec.Auto()\n\n\tdb, err := sql.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tt.Fatalf(\"open db: %v\", err)\n\t}\n\tdefer db.Close()\n\n\tvar version string\n\tif err := db.QueryRow(\"select vec_version()\").Scan(\u0026version); err != nil {\n\t\tt.Fatalf(\"vec_version: %v\", err)\n\t}\n\tif version == \"\" {\n\t\tt.Fatal(\"empty vec_version\")\n\t}\n}",
-      "contextualizedText": "// internal/smoke/smoke_test.go \u003e function TestSqliteVecLinks\n\nfunc TestSqliteVecLinks(t *testing.T) {\n\tsqlite_vec.Auto()\n\n\tdb, err := sql.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tt.Fatalf(\"open db: %v\", err)\n\t}\n\tdefer db.Close()\n\n\tvar version string\n\tif err := db.QueryRow(\"select vec_version()\").Scan(\u0026version); err != nil {\n\t\tt.Fatalf(\"vec_version: %v\", err)\n\t}\n\tif version == \"\" {\n\t\tt.Fatal(\"empty vec_version\")\n\t}\n}",
-      "headingContext": "internal/smoke/smoke_test.go \u003e function TestSqliteVecLinks",
-      "startLine": 15,
-      "startCol": 1,
-      "endLine": 31,
-      "endCol": 2
-    },
-    {
-      "text": "func TestTreeSitterGrammarLinks(t *testing.T) {\n\tlang := tree_sitter.NewLanguage(tree_sitter_typescript.LanguageTypescript())\n\tif lang == nil {\n\t\tt.Fatal(\"failed to load typescript grammar\")\n\t}\n\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\tt.Fatalf(\"set language: %v\", err)\n\t}\n\n\ttree := parser.Parse([]byte(\"const x = 1;\"), nil)\n\tdefer tree.Close()\n\tif tree.RootNode().HasError() {\n\t\tt.Fatal(\"parse produced an error node\")\n\t}\n}",
-      "contextualizedText": "// internal/smoke/smoke_test.go \u003e function TestTreeSitterGrammarLinks\n\nfunc TestTreeSitterGrammarLinks(t *testing.T) {\n\tlang := tree_sitter.NewLanguage(tree_sitter_typescript.LanguageTypescript())\n\tif lang == nil {\n\t\tt.Fatal(\"failed to load typescript grammar\")\n\t}\n\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\tt.Fatalf(\"set language: %v\", err)\n\t}\n\n\ttree := parser.Parse([]byte(\"const x = 1;\"), nil)\n\tdefer tree.Close()\n\tif tree.RootNode().HasError() {\n\t\tt.Fatal(\"parse produced an error node\")\n\t}\n}",
-      "headingContext": "internal/smoke/smoke_test.go \u003e function TestTreeSitterGrammarLinks",
-      "startLine": 33,
-      "startCol": 1,
-      "endLine": 50,
-      "endCol": 2
+      "start": 0,
+      "end": 1251
     }
   ]
 }

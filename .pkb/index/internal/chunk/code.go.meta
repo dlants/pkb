@@ -3,256 +3,48 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport (\n\t\"strings\"\n\t\"unicode/utf8\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
-      "contextualizedText": "// internal/chunk/code.go\n\npackage chunk\n\nimport (\n\t\"strings\"\n\t\"unicode/utf8\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
-      "headingContext": "internal/chunk/code.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 8,
-      "endCol": 2
+      "start": 0,
+      "end": 1806
     },
     {
-      "text": "// ChunkCode splits source code into chunks along syntactic boundaries using\n// tree-sitter, carrying a structural breadcrumb (file path + enclosing symbol\n// path) as HeadingContext. pathContext seeds the breadcrumb (typically the\n// file's relative path). It falls back to line-based chunking when the grammar\n// is unknown or the source fails to parse cleanly.\nfunc ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([]ChunkInfo, error) {\n\tif maxChunkSize \u003c= 0 {\n\t\tmaxChunkSize = TargetChunkSize\n\t}\n\tif len(content) == 0 {\n\t\treturn nil, nil\n\t}\n\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\ttree := parser.Parse(content, nil)\n\tif tree == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\tdefer tree.Close()\n\n\troot := tree.RootNode()\n\tif root == nil || root.HasError() {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tidx, idxErr := buildDefIndex(root, content, grammar)\n\tif idxErr != nil {\n\t\t// Query failed to compile: chunk with no definition spans (whole-file\n\t\t// cAST packing).\n\t\tidx = nil\n\t}\n\n\tsw := \u0026sweeper{\n\t\tsource:      content,\n\t\tbudget:      maxChunkSize,\n\t\tidx:         idx,\n\t\tpathContext: pathContext,\n\t\twinStart:    -1,\n\t\tlongLines:   computeLongLines(content, maxChunkSize),\n\t\temittedLong: map[int]bool{},\n\t}\n\tsw.sweepChildren(root, int(root.StartByte()))\n\tsw.flush()\n\tif len(sw.out) == 0 {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\treturn sw.out, nil\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function ChunkCode\n\n// ChunkCode splits source code into chunks along syntactic boundaries using\n// tree-sitter, carrying a structural breadcrumb (file path + enclosing symbol\n// path) as HeadingContext. pathContext seeds the breadcrumb (typically the\n// file's relative path). It falls back to line-based chunking when the grammar\n// is unknown or the source fails to parse cleanly.\nfunc ChunkCode(content []byte, grammar, pathContext string, maxChunkSize int) ([]ChunkInfo, error) {\n\tif maxChunkSize \u003c= 0 {\n\t\tmaxChunkSize = TargetChunkSize\n\t}\n\tif len(content) == 0 {\n\t\treturn nil, nil\n\t}\n\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\ttree := parser.Parse(content, nil)\n\tif tree == nil {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\tdefer tree.Close()\n\n\troot := tree.RootNode()\n\tif root == nil || root.HasError() {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\n\tidx, idxErr := buildDefIndex(root, content, grammar)\n\tif idxErr != nil {\n\t\t// Query failed to compile: chunk with no definition spans (whole-file\n\t\t// cAST packing).\n\t\tidx = nil\n\t}\n\n\tsw := \u0026sweeper{\n\t\tsource:      content,\n\t\tbudget:      maxChunkSize,\n\t\tidx:         idx,\n\t\tpathContext: pathContext,\n\t\twinStart:    -1,\n\t\tlongLines:   computeLongLines(content, maxChunkSize),\n\t\temittedLong: map[int]bool{},\n\t}\n\tsw.sweepChildren(root, int(root.StartByte()))\n\tsw.flush()\n\tif len(sw.out) == 0 {\n\t\treturn lineChunks(content, pathContext, maxChunkSize), nil\n\t}\n\treturn sw.out, nil\n}",
-      "headingContext": "internal/chunk/code.go \u003e function ChunkCode",
-      "startLine": 10,
-      "startCol": 1,
-      "endLine": 66,
-      "endCol": 2
+      "start": 1808,
+      "end": 3818
     },
     {
-      "text": "// CodeBreadcrumber derives, for a byte range within a source file, the enclosing\n// symbol breadcrumb (path \u003e label name \u003e ...) that ChunkCode would attach. It is\n// the reconstruction-side counterpart to the sweeper's breadcrumb: it builds the\n// definition index once and answers per-span queries, so the cache-sync path can\n// rebuild HeadingContext from stored byte offsets without re-chunking.\ntype CodeBreadcrumber struct {\n\tidx         *defIndex\n\tpathContext string\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e type CodeBreadcrumber\n\n// CodeBreadcrumber derives, for a byte range within a source file, the enclosing\n// symbol breadcrumb (path \u003e label name \u003e ...) that ChunkCode would attach. It is\n// the reconstruction-side counterpart to the sweeper's breadcrumb: it builds the\n// definition index once and answers per-span queries, so the cache-sync path can\n// rebuild HeadingContext from stored byte offsets without re-chunking.\ntype CodeBreadcrumber struct {\n\tidx         *defIndex\n\tpathContext string\n}",
-      "headingContext": "internal/chunk/code.go \u003e type CodeBreadcrumber",
-      "startLine": 68,
-      "startCol": 1,
-      "endLine": 76,
-      "endCol": 2
+      "start": 3820,
+      "end": 5235
     },
     {
-      "text": "// NewCodeBreadcrumber parses content with the grammar and builds its definition\n// index. When the grammar is unknown or the source fails to parse cleanly the\n// breadcrumber degrades to the bare path context (matching ChunkCode's\n// line-based fallback, which carries pathContext as the breadcrumb).\nfunc NewCodeBreadcrumber(content []byte, grammar, pathContext string) (*CodeBreadcrumber, error) {\n\tb := \u0026CodeBreadcrumber{pathContext: pathContext}\n\tif len(content) == 0 {\n\t\treturn b, nil\n\t}\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn b, nil\n\t}\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\treturn b, nil\n\t}\n\ttree := parser.Parse(content, nil)\n\tif tree == nil {\n\t\treturn b, nil\n\t}\n\tdefer tree.Close()\n\troot := tree.RootNode()\n\tif root == nil || root.HasError() {\n\t\treturn b, nil\n\t}\n\tidx, err := buildDefIndex(root, content, grammar)\n\tif err != nil {\n\t\treturn b, nil\n\t}\n\tb.idx = idx\n\treturn b, nil\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function NewCodeBreadcrumber\n\n// NewCodeBreadcrumber parses content with the grammar and builds its definition\n// index. When the grammar is unknown or the source fails to parse cleanly the\n// breadcrumber degrades to the bare path context (matching ChunkCode's\n// line-based fallback, which carries pathContext as the breadcrumb).\nfunc NewCodeBreadcrumber(content []byte, grammar, pathContext string) (*CodeBreadcrumber, error) {\n\tb := \u0026CodeBreadcrumber{pathContext: pathContext}\n\tif len(content) == 0 {\n\t\treturn b, nil\n\t}\n\tlang := languageFor(grammar)\n\tif lang == nil {\n\t\treturn b, nil\n\t}\n\tparser := tree_sitter.NewParser()\n\tdefer parser.Close()\n\tif err := parser.SetLanguage(lang); err != nil {\n\t\treturn b, nil\n\t}\n\ttree := parser.Parse(content, nil)\n\tif tree == nil {\n\t\treturn b, nil\n\t}\n\tdefer tree.Close()\n\troot := tree.RootNode()\n\tif root == nil || root.HasError() {\n\t\treturn b, nil\n\t}\n\tidx, err := buildDefIndex(root, content, grammar)\n\tif err != nil {\n\t\treturn b, nil\n\t}\n\tb.idx = idx\n\treturn b, nil\n}",
-      "headingContext": "internal/chunk/code.go \u003e function NewCodeBreadcrumber",
-      "startLine": 78,
-      "startCol": 1,
-      "endLine": 111,
-      "endCol": 2
+      "start": 5237,
+      "end": 6915
     },
     {
-      "text": "// Breadcrumb returns the enclosing symbol path for the byte range [start, end):\n// the path context joined with every definition span that fully contains the\n// range, outermost first (spans are start-ordered). A range enclosed by no span\n// yields just the path context.\nfunc (b *CodeBreadcrumber) Breadcrumb(start, end int) string {\n\tbc := b.pathContext\n\tif b.idx == nil {\n\t\treturn bc\n\t}\n\tfor _, sp := range b.idx.spans {\n\t\tif sp.start \u003c= start \u0026\u0026 end \u003c= sp.end {\n\t\t\tbc = joinBreadcrumb(bc, strings.TrimSpace(sp.label+\" \"+sp.name))\n\t\t}\n\t}\n\treturn bc\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method Breadcrumb\n\n// Breadcrumb returns the enclosing symbol path for the byte range [start, end):\n// the path context joined with every definition span that fully contains the\n// range, outermost first (spans are start-ordered). A range enclosed by no span\n// yields just the path context.\nfunc (b *CodeBreadcrumber) Breadcrumb(start, end int) string {\n\tbc := b.pathContext\n\tif b.idx == nil {\n\t\treturn bc\n\t}\n\tfor _, sp := range b.idx.spans {\n\t\tif sp.start \u003c= start \u0026\u0026 end \u003c= sp.end {\n\t\t\tbc = joinBreadcrumb(bc, strings.TrimSpace(sp.label+\" \"+sp.name))\n\t\t}\n\t}\n\treturn bc\n}",
-      "headingContext": "internal/chunk/code.go \u003e method Breadcrumb",
-      "startLine": 113,
-      "startCol": 1,
-      "endLine": 128,
-      "endCol": 2
+      "start": 6919,
+      "end": 8448
     },
     {
-      "text": "// sweeper performs the single recursive cAST pass over the parse tree. A\n// definition span (a @definition.* capture) is a hard break: entering or exiting\n// one force-flushes the current window, and the stack of active spans supplies\n// the breadcrumb. Plain nodes are packed into windows up to the byte budget.\ntype sweeper struct {\n\tsource      []byte\n\tbudget      int\n\tidx         *defIndex\n\tpathContext string\n\n\t// breadcrumbFn, when non-nil, overrides the def-span breadcrumb: it is\n\t// called at flush time with the window's byte range and returns the full\n\t// HeadingContext for the chunk. Used by the config chunker, which derives\n\t// breadcrumbs from a node's structural path rather than tags.scm spans.\n\tbreadcrumbFn func(lo, hi int) string\n\n\tstack []defSpan\n\n\t// current window, as a byte range [winStart, winEnd); winStart \u003c 0 means\n\t// the window is empty.\n\twinStart int\n\twinEnd   int\n\n\t// longLines are lines whose byte length exceeds the budget. They are never\n\t// digested: the first node that falls on one aborts and emits the line\n\t// trimmed to budget as a single chunk (tracked in emittedLong so a line\n\t// holding several definition spans is emitted exactly once).\n\tlongLines   []lineSpan\n\temittedLong map[int]bool\n\n\tout []ChunkInfo\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e type sweeper\n\n// sweeper performs the single recursive cAST pass over the parse tree. A\n// definition span (a @definition.* capture) is a hard break: entering or exiting\n// one force-flushes the current window, and the stack of active spans supplies\n// the breadcrumb. Plain nodes are packed into windows up to the byte budget.\ntype sweeper struct {\n\tsource      []byte\n\tbudget      int\n\tidx         *defIndex\n\tpathContext string\n\n\t// breadcrumbFn, when non-nil, overrides the def-span breadcrumb: it is\n\t// called at flush time with the window's byte range and returns the full\n\t// HeadingContext for the chunk. Used by the config chunker, which derives\n\t// breadcrumbs from a node's structural path rather than tags.scm spans.\n\tbreadcrumbFn func(lo, hi int) string\n\n\tstack []defSpan\n\n\t// current window, as a byte range [winStart, winEnd); winStart \u003c 0 means\n\t// the window is empty.\n\twinStart int\n\twinEnd   int\n\n\t// longLines are lines whose byte length exceeds the budget. They are never\n\t// digested: the first node that falls on one aborts and emits the line\n\t// trimmed to budget as a single chunk (tracked in emittedLong so a line\n\t// holding several definition spans is emitted exactly once).\n\tlongLines   []lineSpan\n\temittedLong map[int]bool\n\n\tout []ChunkInfo\n}",
-      "headingContext": "internal/chunk/code.go \u003e type sweeper",
-      "startLine": 130,
-      "startCol": 1,
-      "endLine": 161,
-      "endCol": 2
+      "start": 8450,
+      "end": 10036
     },
     {
-      "text": "// lineSpan is a half-open byte range [start, end) covering a single line,\n// excluding its trailing newline.\ntype lineSpan struct {\n\tstart int\n\tend   int\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e type lineSpan\n\n// lineSpan is a half-open byte range [start, end) covering a single line,\n// excluding its trailing newline.\ntype lineSpan struct {\n\tstart int\n\tend   int\n}",
-      "headingContext": "internal/chunk/code.go \u003e type lineSpan",
-      "startLine": 163,
-      "startCol": 1,
-      "endLine": 168,
-      "endCol": 2
+      "start": 10038,
+      "end": 11392
     },
     {
-      "text": "// sweepChildren visits the named children of node in source order, attaching a\n// contiguous run of leading comment (\"extra\") nodes to the node that\n// immediately follows it. The run's start byte is threaded into visitNode as\n// attachStart so the comment rides into the following node's chunk (a\n// definition span is extended; a plain node is packed as an indivisible unit).\n// A blank line between the run and the following node breaks the attachment:\n// the run is emitted as ordinary filler instead.\nfunc (s *sweeper) sweepChildren(node *tree_sitter.Node, leadStart int)",
-      "contextualizedText": "// internal/chunk/code.go \u003e method sweepChildren\n\n// sweepChildren visits the named children of node in source order, attaching a\n// contiguous run of leading comment (\"extra\") nodes to the node that\n// immediately follows it. The run's start byte is threaded into visitNode as\n// attachStart so the comment rides into the following node's chunk (a\n// definition span is extended; a plain node is packed as an indivisible unit).\n// A blank line between the run and the following node breaks the attachment:\n// the run is emitted as ordinary filler instead.\nfunc (s *sweeper) sweepChildren(node *tree_sitter.Node, leadStart int)",
-      "headingContext": "internal/chunk/code.go \u003e method sweepChildren",
-      "startLine": 170,
-      "startCol": 1,
-      "endLine": 177,
-      "endCol": 71
+      "start": 11394,
+      "end": 12876
     },
     {
-      "text": "{\n\tcount := node.NamedChildCount()\n\t// commentStart/commentEnd track a pending contiguous run of comment nodes;\n\t// commentStart \u003c 0 means no run is pending. leadStart \u003c node.StartByte()\n\t// means a comment run attached to a parent that recursed into this node;\n\t// seed the pending run so it can re-attach to the first inner node (e.g. a\n\t// Go doc comment whose sibling is `type_declaration` but whose definition\n\t// span is the nested `type_spec`).\n\tcommentStart, commentEnd := -1, -1\n\tif leadStart \u003c int(node.StartByte()) {\n\t\tcommentStart, commentEnd = leadStart, int(node.StartByte())\n\t}\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tchild := node.NamedChild(i)\n\t\tlo, hi := int(child.StartByte()), int(child.EndByte())\n\t\tif child.IsExtra() {\n\t\t\tswitch {\n\t\t\tcase commentStart \u003c 0:\n\t\t\t\tcommentStart, commentEnd = lo, hi\n\t\t\tcase adjacent(s.source, commentEnd, lo):\n\t\t\t\tcommentEnd = hi\n\t\t\tdefault:\n\t\t\t\t// A blank line broke the run: emit the prior run as filler and\n\t\t\t\t// start a fresh run at this comment.\n\t\t\t\ts.addRange(commentStart, commentEnd)\n\t\t\t\tcommentStart, commentEnd = lo, hi\n\t\t\t}\n\t\t\tcontinue\n\t\t}\n\n\t\tattachStart := lo\n\t\tif commentStart \u003e= 0 {\n\t\t\tif adjacent(s.source, commentEnd, lo) {\n\t\t\t\tattachStart = commentStart\n\t\t\t} else {\n\t\t\t\ts.addRange(commentStart, commentEnd)\n\t\t\t}\n\t\t\tcommentStart, commentEnd = -1, -1\n\t\t}\n\t\ts.visitNode(child, attachStart)\n\t}\n\t// A trailing comment run with no following sibling is emitted as filler so\n\t// it is never dropped.\n\tif commentStart \u003e= 0 {\n\t\ts.addRange(commentStart, commentEnd)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method sweepChildren\n\n{\n\tcount := node.NamedChildCount()\n\t// commentStart/commentEnd track a pending contiguous run of comment nodes;\n\t// commentStart \u003c 0 means no run is pending. leadStart \u003c node.StartByte()\n\t// means a comment run attached to a parent that recursed into this node;\n\t// seed the pending run so it can re-attach to the first inner node (e.g. a\n\t// Go doc comment whose sibling is `type_declaration` but whose definition\n\t// span is the nested `type_spec`).\n\tcommentStart, commentEnd := -1, -1\n\tif leadStart \u003c int(node.StartByte()) {\n\t\tcommentStart, commentEnd = leadStart, int(node.StartByte())\n\t}\n\tfor i := uint(0); i \u003c count; i++ {\n\t\tchild := node.NamedChild(i)\n\t\tlo, hi := int(child.StartByte()), int(child.EndByte())\n\t\tif child.IsExtra() {\n\t\t\tswitch {\n\t\t\tcase commentStart \u003c 0:\n\t\t\t\tcommentStart, commentEnd = lo, hi\n\t\t\tcase adjacent(s.source, commentEnd, lo):\n\t\t\t\tcommentEnd = hi\n\t\t\tdefault:\n\t\t\t\t// A blank line broke the run: emit the prior run as filler and\n\t\t\t\t// start a fresh run at this comment.\n\t\t\t\ts.addRange(commentStart, commentEnd)\n\t\t\t\tcommentStart, commentEnd = lo, hi\n\t\t\t}\n\t\t\tcontinue\n\t\t}\n\n\t\tattachStart := lo\n\t\tif commentStart \u003e= 0 {\n\t\t\tif adjacent(s.source, commentEnd, lo) {\n\t\t\t\tattachStart = commentStart\n\t\t\t} else {\n\t\t\t\ts.addRange(commentStart, commentEnd)\n\t\t\t}\n\t\t\tcommentStart, commentEnd = -1, -1\n\t\t}\n\t\ts.visitNode(child, attachStart)\n\t}\n\t// A trailing comment run with no following sibling is emitted as filler so\n\t// it is never dropped.\n\tif commentStart \u003e= 0 {\n\t\ts.addRange(commentStart, commentEnd)\n\t}\n}",
-      "headingContext": "internal/chunk/code.go \u003e method sweepChildren",
-      "startLine": 177,
-      "startCol": 72,
-      "endLine": 223,
-      "endCol": 2
+      "start": 12878,
+      "end": 14473
     },
     {
-      "text": "// visitNode applies the sweep rules to a single named node. attachStart is the\n// node's effective left edge: it equals the node's own start byte unless a\n// leading comment run attaches to it, in which case it points at the run start.\nfunc (s *sweeper) visitNode(node *tree_sitter.Node, attachStart int) {\n\tif span, ok := s.longLineAt(int(node.StartByte())); ok {\n\t\ts.emitLongLine(span)\n\t\treturn\n\t}\n\n\tif span, ok := s.spanFor(node); ok {\n\t\ts.enterSpan(span, node, attachStart)\n\t\treturn\n\t}\n\n\tlo, hi := int(node.StartByte()), int(node.EndByte())\n\tif hi-lo \u003c= s.budget \u0026\u0026 !s.containsSpan(node) {\n\t\ts.addRange(attachStart, hi)\n\t\treturn\n\t}\n\n\tif node.NamedChildCount() == 0 {\n\t\t// Childless leaf over budget: line-split as the final backstop, leading\n\t\t// with any attached comment so it is not lost.\n\t\ts.flush()\n\t\ts.lineSplitRange(attachStart, hi)\n\t\treturn\n\t}\n\t// Node that recurses (over budget, or containing a nested definition span):\n\t// thread attachStart in as the lead start so an attached comment re-attaches\n\t// to the first inner node instead of being dropped.\n\ts.sweepChildren(node, attachStart)\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method visitNode\n\n// visitNode applies the sweep rules to a single named node. attachStart is the\n// node's effective left edge: it equals the node's own start byte unless a\n// leading comment run attaches to it, in which case it points at the run start.\nfunc (s *sweeper) visitNode(node *tree_sitter.Node, attachStart int) {\n\tif span, ok := s.longLineAt(int(node.StartByte())); ok {\n\t\ts.emitLongLine(span)\n\t\treturn\n\t}\n\n\tif span, ok := s.spanFor(node); ok {\n\t\ts.enterSpan(span, node, attachStart)\n\t\treturn\n\t}\n\n\tlo, hi := int(node.StartByte()), int(node.EndByte())\n\tif hi-lo \u003c= s.budget \u0026\u0026 !s.containsSpan(node) {\n\t\ts.addRange(attachStart, hi)\n\t\treturn\n\t}\n\n\tif node.NamedChildCount() == 0 {\n\t\t// Childless leaf over budget: line-split as the final backstop, leading\n\t\t// with any attached comment so it is not lost.\n\t\ts.flush()\n\t\ts.lineSplitRange(attachStart, hi)\n\t\treturn\n\t}\n\t// Node that recurses (over budget, or containing a nested definition span):\n\t// thread attachStart in as the lead start so an attached comment re-attaches\n\t// to the first inner node instead of being dropped.\n\ts.sweepChildren(node, attachStart)\n}",
-      "headingContext": "internal/chunk/code.go \u003e method visitNode",
-      "startLine": 225,
-      "startCol": 1,
-      "endLine": 256,
-      "endCol": 2
+      "start": 14475,
+      "end": 16134
     },
     {
-      "text": "// enterSpan flushes the current window, pushes the span (extending its start\n// back over leading keywords/doc comments), packs the span's body, then flushes\n// and pops on exit. A span that fits entirely in one window is emitted whole.\nfunc (s *sweeper) enterSpan(span defSpan, node *tree_sitter.Node, attachStart int) {\n\tif attachStart \u003c span.extStart {\n\t\tspan.extStart = attachStart\n\t}\n\ts.trimWindowTo(span.extStart)\n\ts.flush()\n\ts.stack = append(s.stack, span)\n\n\t// Seed the window at the extended start so leading keywords (Go's `type `,\n\t// TS `export `) and the doc-comment run ride with the definition.\n\ts.winStart = span.extStart\n\ts.winEnd = int(node.StartByte())\n\n\ts.sweepChildren(node, int(node.StartByte()))\n\n\tif s.winStart \u003e= 0 \u0026\u0026 s.winEnd \u003c span.end {\n\t\ts.winEnd = span.end\n\t}\n\ts.flush()\n\ts.stack = s.stack[:len(s.stack)-1]\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method enterSpan\n\n// enterSpan flushes the current window, pushes the span (extending its start\n// back over leading keywords/doc comments), packs the span's body, then flushes\n// and pops on exit. A span that fits entirely in one window is emitted whole.\nfunc (s *sweeper) enterSpan(span defSpan, node *tree_sitter.Node, attachStart int) {\n\tif attachStart \u003c span.extStart {\n\t\tspan.extStart = attachStart\n\t}\n\ts.trimWindowTo(span.extStart)\n\ts.flush()\n\ts.stack = append(s.stack, span)\n\n\t// Seed the window at the extended start so leading keywords (Go's `type `,\n\t// TS `export `) and the doc-comment run ride with the definition.\n\ts.winStart = span.extStart\n\ts.winEnd = int(node.StartByte())\n\n\ts.sweepChildren(node, int(node.StartByte()))\n\n\tif s.winStart \u003e= 0 \u0026\u0026 s.winEnd \u003c span.end {\n\t\ts.winEnd = span.end\n\t}\n\ts.flush()\n\ts.stack = s.stack[:len(s.stack)-1]\n}",
-      "headingContext": "internal/chunk/code.go \u003e method enterSpan",
-      "startLine": 258,
-      "startCol": 1,
-      "endLine": 281,
-      "endCol": 2
-    },
-    {
-      "text": "// addRange adds a plain node's byte range to the current window, flushing first\n// if appending it would overflow the budget.\nfunc (s *sweeper) addRange(lo, hi int) {\n\tif s.winStart \u003c 0 {\n\t\ts.winStart, s.winEnd = lo, hi\n\t\treturn\n\t}\n\tif hi-s.winStart \u003e s.budget \u0026\u0026 s.winEnd \u003e s.winStart {\n\t\ts.flush()\n\t\ts.winStart, s.winEnd = lo, hi\n\t\treturn\n\t}\n\ts.winEnd = hi\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method addRange\n\n// addRange adds a plain node's byte range to the current window, flushing first\n// if appending it would overflow the budget.\nfunc (s *sweeper) addRange(lo, hi int) {\n\tif s.winStart \u003c 0 {\n\t\ts.winStart, s.winEnd = lo, hi\n\t\treturn\n\t}\n\tif hi-s.winStart \u003e s.budget \u0026\u0026 s.winEnd \u003e s.winStart {\n\t\ts.flush()\n\t\ts.winStart, s.winEnd = lo, hi\n\t\treturn\n\t}\n\ts.winEnd = hi\n}",
-      "headingContext": "internal/chunk/code.go \u003e method addRange",
-      "startLine": 283,
-      "startCol": 1,
-      "endLine": 296,
-      "endCol": 2
-    },
-    {
-      "text": "// trimWindowTo clamps the current window so it ends no later than byte b,\n// dropping it entirely if it would become empty. Used so a definition's doc run\n// (already inside the window as filler) is not emitted twice.\nfunc (s *sweeper) trimWindowTo(b int) {\n\tif s.winStart \u003c 0 {\n\t\treturn\n\t}\n\tif s.winStart \u003e= b {\n\t\ts.winStart = -1\n\t\treturn\n\t}\n\tif s.winEnd \u003e b {\n\t\ts.winEnd = b\n\t}\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method trimWindowTo\n\n// trimWindowTo clamps the current window so it ends no later than byte b,\n// dropping it entirely if it would become empty. Used so a definition's doc run\n// (already inside the window as filler) is not emitted twice.\nfunc (s *sweeper) trimWindowTo(b int) {\n\tif s.winStart \u003c 0 {\n\t\treturn\n\t}\n\tif s.winStart \u003e= b {\n\t\ts.winStart = -1\n\t\treturn\n\t}\n\tif s.winEnd \u003e b {\n\t\ts.winEnd = b\n\t}\n}",
-      "headingContext": "internal/chunk/code.go \u003e method trimWindowTo",
-      "startLine": 298,
-      "startCol": 1,
-      "endLine": 312,
-      "endCol": 2
-    },
-    {
-      "text": "// flush emits the current window as a chunk (dropping whitespace-only windows)\n// and resets it.\nfunc (s *sweeper) flush() {\n\tif s.winStart \u003c 0 {\n\t\treturn\n\t}\n\ttext := string(s.source[s.winStart:s.winEnd])\n\tif strings.TrimSpace(text) != \"\" {\n\t\tbc := s.breadcrumb()\n\t\tif s.breadcrumbFn != nil {\n\t\t\tbc = s.breadcrumbFn(s.winStart, s.winEnd)\n\t\t}\n\t\ts.out = append(s.out, ChunkInfo{\n\t\t\tText:           text,\n\t\t\tHeadingContext: bc,\n\t\t\tStart:          posFromByte(s.source, s.winStart),\n\t\t\tEnd:            posFromByte(s.source, s.winEnd),\n\t\t})\n\t}\n\ts.winStart = -1\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method flush\n\n// flush emits the current window as a chunk (dropping whitespace-only windows)\n// and resets it.\nfunc (s *sweeper) flush() {\n\tif s.winStart \u003c 0 {\n\t\treturn\n\t}\n\ttext := string(s.source[s.winStart:s.winEnd])\n\tif strings.TrimSpace(text) != \"\" {\n\t\tbc := s.breadcrumb()\n\t\tif s.breadcrumbFn != nil {\n\t\t\tbc = s.breadcrumbFn(s.winStart, s.winEnd)\n\t\t}\n\t\ts.out = append(s.out, ChunkInfo{\n\t\t\tText:           text,\n\t\t\tHeadingContext: bc,\n\t\t\tStart:          posFromByte(s.source, s.winStart),\n\t\t\tEnd:            posFromByte(s.source, s.winEnd),\n\t\t})\n\t}\n\ts.winStart = -1\n}",
-      "headingContext": "internal/chunk/code.go \u003e method flush",
-      "startLine": 314,
-      "startCol": 1,
-      "endLine": 334,
-      "endCol": 2
-    },
-    {
-      "text": "// lineSplitRange emits a byte range as one or more line-split chunks under the\n// current breadcrumb.\nfunc (s *sweeper) lineSplitRange(lo, hi int) {\n\ttext := string(s.source[lo:hi])\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn\n\t}\n\tbc := s.breadcrumb()\n\tif s.breadcrumbFn != nil {\n\t\tbc = s.breadcrumbFn(lo, hi)\n\t}\n\tfor _, sc := range splitCodeByLines(text, posFromByte(s.source, lo), s.budget) {\n\t\ts.out = append(s.out, ChunkInfo{\n\t\t\tText:           sc.text,\n\t\t\tHeadingContext: bc,\n\t\t\tStart:          sc.start,\n\t\t\tEnd:            sc.end,\n\t\t})\n\t}\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method lineSplitRange\n\n// lineSplitRange emits a byte range as one or more line-split chunks under the\n// current breadcrumb.\nfunc (s *sweeper) lineSplitRange(lo, hi int) {\n\ttext := string(s.source[lo:hi])\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn\n\t}\n\tbc := s.breadcrumb()\n\tif s.breadcrumbFn != nil {\n\t\tbc = s.breadcrumbFn(lo, hi)\n\t}\n\tfor _, sc := range splitCodeByLines(text, posFromByte(s.source, lo), s.budget) {\n\t\ts.out = append(s.out, ChunkInfo{\n\t\t\tText:           sc.text,\n\t\t\tHeadingContext: bc,\n\t\t\tStart:          sc.start,\n\t\t\tEnd:            sc.end,\n\t\t})\n\t}\n}",
-      "headingContext": "internal/chunk/code.go \u003e method lineSplitRange",
-      "startLine": 336,
-      "startCol": 1,
-      "endLine": 355,
-      "endCol": 2
-    },
-    {
-      "text": "// breadcrumb joins the file path with each active span's \"label name\".\nfunc (s *sweeper) breadcrumb() string {\n\tbc := s.pathContext\n\tfor _, sp := range s.stack {\n\t\tbc = joinBreadcrumb(bc, strings.TrimSpace(sp.label+\" \"+sp.name))\n\t}\n\treturn bc\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method breadcrumb\n\n// breadcrumb joins the file path with each active span's \"label name\".\nfunc (s *sweeper) breadcrumb() string {\n\tbc := s.pathContext\n\tfor _, sp := range s.stack {\n\t\tbc = joinBreadcrumb(bc, strings.TrimSpace(sp.label+\" \"+sp.name))\n\t}\n\treturn bc\n}",
-      "headingContext": "internal/chunk/code.go \u003e method breadcrumb",
-      "startLine": 357,
-      "startCol": 1,
-      "endLine": 364,
-      "endCol": 2
-    },
-    {
-      "text": "// spanFor returns the definition span captured at node, with its start extended\n// back to the beginning of its line.\nfunc (s *sweeper) spanFor(node *tree_sitter.Node) (defSpan, bool) {\n\tif s.idx == nil {\n\t\treturn defSpan{}, false\n\t}\n\tentry, ok := s.idx.entry(node)\n\tif !ok {\n\t\treturn defSpan{}, false\n\t}\n\tstart := int(node.StartByte())\n\textStart := lineStartByte(s.source, start)\n\treturn defSpan{defEntry: entry, start: start, end: int(node.EndByte()), extStart: extStart}, true\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method spanFor\n\n// spanFor returns the definition span captured at node, with its start extended\n// back to the beginning of its line.\nfunc (s *sweeper) spanFor(node *tree_sitter.Node) (defSpan, bool) {\n\tif s.idx == nil {\n\t\treturn defSpan{}, false\n\t}\n\tentry, ok := s.idx.entry(node)\n\tif !ok {\n\t\treturn defSpan{}, false\n\t}\n\tstart := int(node.StartByte())\n\textStart := lineStartByte(s.source, start)\n\treturn defSpan{defEntry: entry, start: start, end: int(node.EndByte()), extStart: extStart}, true\n}",
-      "headingContext": "internal/chunk/code.go \u003e method spanFor",
-      "startLine": 366,
-      "startCol": 1,
-      "endLine": 379,
-      "endCol": 2
-    },
-    {
-      "text": "// containsSpan reports whether any definition span begins strictly inside node.\nfunc (s *sweeper) containsSpan(node *tree_sitter.Node) bool {\n\tif s.idx == nil {\n\t\treturn false\n\t}\n\tlo, hi := int(node.StartByte()), int(node.EndByte())\n\tfor _, sp := range s.idx.spans {\n\t\t// Strictly inside: a span sharing node's start byte is either node\n\t\t// itself (handled by spanFor) or a child that coincides with the\n\t\t// already-active span boundary, neither of which is a nested span.\n\t\tif sp.start \u003e lo \u0026\u0026 sp.start \u003c hi {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method containsSpan\n\n// containsSpan reports whether any definition span begins strictly inside node.\nfunc (s *sweeper) containsSpan(node *tree_sitter.Node) bool {\n\tif s.idx == nil {\n\t\treturn false\n\t}\n\tlo, hi := int(node.StartByte()), int(node.EndByte())\n\tfor _, sp := range s.idx.spans {\n\t\t// Strictly inside: a span sharing node's start byte is either node\n\t\t// itself (handled by spanFor) or a child that coincides with the\n\t\t// already-active span boundary, neither of which is a nested span.\n\t\tif sp.start \u003e lo \u0026\u0026 sp.start \u003c hi {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}",
-      "headingContext": "internal/chunk/code.go \u003e method containsSpan",
-      "startLine": 381,
-      "startCol": 1,
-      "endLine": 396,
-      "endCol": 2
-    },
-    {
-      "text": "// adjacent reports whether the bytes in source[from:to] contain no blank line,\n// i.e. at most one newline. A blank-line gap means a leading comment run is a\n// standalone unit rather than documentation for the following node.\nfunc adjacent(source []byte, from, to int) bool {\n\tnewlines := 0\n\tfor i := from; i \u003c to \u0026\u0026 i \u003c len(source); i++ {\n\t\tif source[i] == '\\n' {\n\t\t\tnewlines++\n\t\t\tif newlines \u003e 1 {\n\t\t\t\treturn false\n\t\t\t}\n\t\t}\n\t}\n\treturn true\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function adjacent\n\n// adjacent reports whether the bytes in source[from:to] contain no blank line,\n// i.e. at most one newline. A blank-line gap means a leading comment run is a\n// standalone unit rather than documentation for the following node.\nfunc adjacent(source []byte, from, to int) bool {\n\tnewlines := 0\n\tfor i := from; i \u003c to \u0026\u0026 i \u003c len(source); i++ {\n\t\tif source[i] == '\\n' {\n\t\t\tnewlines++\n\t\t\tif newlines \u003e 1 {\n\t\t\t\treturn false\n\t\t\t}\n\t\t}\n\t}\n\treturn true\n}",
-      "headingContext": "internal/chunk/code.go \u003e function adjacent",
-      "startLine": 398,
-      "startCol": 1,
-      "endLine": 412,
-      "endCol": 2
-    },
-    {
-      "text": "// computeLongLines returns the byte ranges of lines whose length exceeds budget.\nfunc computeLongLines(source []byte, budget int) []lineSpan {\n\tvar out []lineSpan\n\tlineStart := 0\n\tfor i := 0; i \u003c= len(source); i++ {\n\t\tif i == len(source) || source[i] == '\\n' {\n\t\t\tif i-lineStart \u003e budget {\n\t\t\t\tout = append(out, lineSpan{start: lineStart, end: i})\n\t\t\t}\n\t\t\tlineStart = i + 1\n\t\t}\n\t}\n\treturn out\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function computeLongLines\n\n// computeLongLines returns the byte ranges of lines whose length exceeds budget.\nfunc computeLongLines(source []byte, budget int) []lineSpan {\n\tvar out []lineSpan\n\tlineStart := 0\n\tfor i := 0; i \u003c= len(source); i++ {\n\t\tif i == len(source) || source[i] == '\\n' {\n\t\t\tif i-lineStart \u003e budget {\n\t\t\t\tout = append(out, lineSpan{start: lineStart, end: i})\n\t\t\t}\n\t\t\tlineStart = i + 1\n\t\t}\n\t}\n\treturn out\n}",
-      "headingContext": "internal/chunk/code.go \u003e function computeLongLines",
-      "startLine": 414,
-      "startCol": 1,
-      "endLine": 427,
-      "endCol": 2
-    },
-    {
-      "text": "// longLineAt returns the over-budget line containing off, if any.\nfunc (s *sweeper) longLineAt(off int) (lineSpan, bool) {\n\tfor _, ls := range s.longLines {\n\t\tif ls.start \u003e off {\n\t\t\tbreak\n\t\t}\n\t\tif off \u003e= ls.start \u0026\u0026 off \u003c ls.end {\n\t\t\treturn ls, true\n\t\t}\n\t}\n\treturn lineSpan{}, false\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method longLineAt\n\n// longLineAt returns the over-budget line containing off, if any.\nfunc (s *sweeper) longLineAt(off int) (lineSpan, bool) {\n\tfor _, ls := range s.longLines {\n\t\tif ls.start \u003e off {\n\t\t\tbreak\n\t\t}\n\t\tif off \u003e= ls.start \u0026\u0026 off \u003c ls.end {\n\t\t\treturn ls, true\n\t\t}\n\t}\n\treturn lineSpan{}, false\n}",
-      "headingContext": "internal/chunk/code.go \u003e method longLineAt",
-      "startLine": 429,
-      "startCol": 1,
-      "endLine": 440,
-      "endCol": 2
-    },
-    {
-      "text": "// emitLongLine flushes the pending window and emits the line trimmed to budget\n// as a single chunk, at most once per line. The breadcrumb is the bare path\n// context: a long line is aborted before any definition span is entered, so it\n// never picks up a span breadcrumb.\nfunc (s *sweeper) emitLongLine(ls lineSpan) {\n\tif s.emittedLong[ls.start] {\n\t\treturn\n\t}\n\ts.emittedLong[ls.start] = true\n\ts.flush()\n\tend := ls.end\n\tif end-ls.start \u003e s.budget {\n\t\tend = ls.start + s.budget\n\t\tfor end \u003e ls.start \u0026\u0026 !utf8.RuneStart(s.source[end]) {\n\t\t\tend--\n\t\t}\n\t}\n\ttext := string(s.source[ls.start:end])\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn\n\t}\n\tbc := s.breadcrumb()\n\tif s.breadcrumbFn != nil {\n\t\tbc = s.breadcrumbFn(ls.start, end)\n\t}\n\ts.out = append(s.out, ChunkInfo{\n\t\tText:           text,\n\t\tHeadingContext: bc,\n\t\tStart:          posFromByte(s.source, ls.start),\n\t\tEnd:            posFromByte(s.source, end),\n\t})\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e method emitLongLine\n\n// emitLongLine flushes the pending window and emits the line trimmed to budget\n// as a single chunk, at most once per line. The breadcrumb is the bare path\n// context: a long line is aborted before any definition span is entered, so it\n// never picks up a span breadcrumb.\nfunc (s *sweeper) emitLongLine(ls lineSpan) {\n\tif s.emittedLong[ls.start] {\n\t\treturn\n\t}\n\ts.emittedLong[ls.start] = true\n\ts.flush()\n\tend := ls.end\n\tif end-ls.start \u003e s.budget {\n\t\tend = ls.start + s.budget\n\t\tfor end \u003e ls.start \u0026\u0026 !utf8.RuneStart(s.source[end]) {\n\t\t\tend--\n\t\t}\n\t}\n\ttext := string(s.source[ls.start:end])\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn\n\t}\n\tbc := s.breadcrumb()\n\tif s.breadcrumbFn != nil {\n\t\tbc = s.breadcrumbFn(ls.start, end)\n\t}\n\ts.out = append(s.out, ChunkInfo{\n\t\tText:           text,\n\t\tHeadingContext: bc,\n\t\tStart:          posFromByte(s.source, ls.start),\n\t\tEnd:            posFromByte(s.source, end),\n\t})\n}",
-      "headingContext": "internal/chunk/code.go \u003e method emitLongLine",
-      "startLine": 442,
-      "startCol": 1,
-      "endLine": 473,
-      "endCol": 2
-    },
-    {
-      "text": "// lineStartByte returns the byte offset of the beginning of the line containing\n// off (the byte just after the preceding newline, or 0).\nfunc lineStartByte(source []byte, off int) int {\n\tif off \u003e len(source) {\n\t\toff = len(source)\n\t}\n\tfor i := off - 1; i \u003e= 0; i-- {\n\t\tif source[i] == '\\n' {\n\t\t\treturn i + 1\n\t\t}\n\t}\n\treturn 0\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function lineStartByte\n\n// lineStartByte returns the byte offset of the beginning of the line containing\n// off (the byte just after the preceding newline, or 0).\nfunc lineStartByte(source []byte, off int) int {\n\tif off \u003e len(source) {\n\t\toff = len(source)\n\t}\n\tfor i := off - 1; i \u003e= 0; i-- {\n\t\tif source[i] == '\\n' {\n\t\t\treturn i + 1\n\t\t}\n\t}\n\treturn 0\n}",
-      "headingContext": "internal/chunk/code.go \u003e function lineStartByte",
-      "startLine": 475,
-      "startCol": 1,
-      "endLine": 487,
-      "endCol": 2
-    },
-    {
-      "text": "// PosFromByte computes a 1-based line/col Position for a byte offset in source.\n// It is the exported entry point used by the cache-sync reconstruction path to\n// derive chunk positions from stored byte offsets.\nfunc PosFromByte(source []byte, off int) Position {\n\treturn posFromByte(source, off)\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function PosFromByte\n\n// PosFromByte computes a 1-based line/col Position for a byte offset in source.\n// It is the exported entry point used by the cache-sync reconstruction path to\n// derive chunk positions from stored byte offsets.\nfunc PosFromByte(source []byte, off int) Position {\n\treturn posFromByte(source, off)\n}",
-      "headingContext": "internal/chunk/code.go \u003e function PosFromByte",
-      "startLine": 489,
-      "startCol": 1,
-      "endLine": 494,
-      "endCol": 2
-    },
-    {
-      "text": "// posFromByte computes a 1-based line/col Position for a byte offset in source.\nfunc posFromByte(source []byte, off int) Position {\n\tline, col := 1, 1\n\tfor i := 0; i \u003c off \u0026\u0026 i \u003c len(source); i++ {\n\t\tif source[i] == '\\n' {\n\t\t\tline++\n\t\t\tcol = 1\n\t\t} else {\n\t\t\tcol++\n\t\t}\n\t}\n\treturn Position{Line: line, Col: col}\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function posFromByte\n\n// posFromByte computes a 1-based line/col Position for a byte offset in source.\nfunc posFromByte(source []byte, off int) Position {\n\tline, col := 1, 1\n\tfor i := 0; i \u003c off \u0026\u0026 i \u003c len(source); i++ {\n\t\tif source[i] == '\\n' {\n\t\t\tline++\n\t\t\tcol = 1\n\t\t} else {\n\t\t\tcol++\n\t\t}\n\t}\n\treturn Position{Line: line, Col: col}\n}",
-      "headingContext": "internal/chunk/code.go \u003e function posFromByte",
-      "startLine": 496,
-      "startCol": 1,
-      "endLine": 508,
-      "endCol": 2
-    },
-    {
-      "text": "func joinBreadcrumb(prefix, desc string) string {\n\tif prefix == \"\" {\n\t\treturn desc\n\t}\n\tif desc == \"\" {\n\t\treturn prefix\n\t}\n\treturn prefix + \" \u003e \" + desc\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function joinBreadcrumb\n\nfunc joinBreadcrumb(prefix, desc string) string {\n\tif prefix == \"\" {\n\t\treturn desc\n\t}\n\tif desc == \"\" {\n\t\treturn prefix\n\t}\n\treturn prefix + \" \u003e \" + desc\n}",
-      "headingContext": "internal/chunk/code.go \u003e function joinBreadcrumb",
-      "startLine": 510,
-      "startCol": 1,
-      "endLine": 518,
-      "endCol": 2
-    },
-    {
-      "text": "// lineChunks splits raw content by lines into budget-sized chunks, used as the\n// fallback when no grammar applies or parsing fails.\nfunc lineChunks(content []byte, prefix string, maxChunkSize int) []ChunkInfo {\n\ttext := string(content)\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn nil\n\t}\n\tvar out []ChunkInfo\n\tfor _, sc := range splitCodeByLines(text, Position{Line: 1, Col: 1}, maxChunkSize) {\n\t\tout = append(out, ChunkInfo{\n\t\t\tText:           sc.text,\n\t\t\tHeadingContext: prefix,\n\t\t\tStart:          sc.start,\n\t\t\tEnd:            sc.end,\n\t\t})\n\t}\n\treturn out\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function lineChunks\n\n// lineChunks splits raw content by lines into budget-sized chunks, used as the\n// fallback when no grammar applies or parsing fails.\nfunc lineChunks(content []byte, prefix string, maxChunkSize int) []ChunkInfo {\n\ttext := string(content)\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn nil\n\t}\n\tvar out []ChunkInfo\n\tfor _, sc := range splitCodeByLines(text, Position{Line: 1, Col: 1}, maxChunkSize) {\n\t\tout = append(out, ChunkInfo{\n\t\t\tText:           sc.text,\n\t\t\tHeadingContext: prefix,\n\t\t\tStart:          sc.start,\n\t\t\tEnd:            sc.end,\n\t\t})\n\t}\n\treturn out\n}",
-      "headingContext": "internal/chunk/code.go \u003e function lineChunks",
-      "startLine": 520,
-      "startCol": 1,
-      "endLine": 537,
-      "endCol": 2
-    },
-    {
-      "text": "// splitCodeByLines splits text into chunks at line boundaries without exceeding\n// maxChunkSize, falling back to character splitting for individual oversized\n// lines. Ported from splitCodeBlockByLines in chunker.ts.\nfunc splitCodeByLines(text string, blockStart Position, maxChunkSize int) []softChunk {\n\tif len(text) \u003c= maxChunkSize {\n\t\tlines := strings.Split(text, \"\\n\")\n\t\tlastLine := lines[len(lines)-1]\n\t\treturn []softChunk{{\n\t\t\ttext:  text,\n\t\t\tstart: blockStart,\n\t\t\tend:   endPosOfLine(blockStart.Line+len(lines)-1, lastLine),\n\t\t}}\n\t}\n\n\tlines := strings.Split(text, \"\\n\")\n\tvar chunks []softChunk\n\tvar currentLines []string\n\tcurrentSize := 0\n\tchunkStartLineIdx := 0\n\n\tflushChunk := func() {\n\t\tif len(currentLines) == 0 {\n\t\t\treturn\n\t\t}\n\t\tchunkText := strings.Join(currentLines, \"\\n\")\n\t\tlastLine := currentLines[len(currentLines)-1]\n\t\tchunks = append(chunks, softChunk{\n\t\t\ttext:  chunkText,\n\t\t\tstart: Position{Line: blockStart.Line + chunkStartLineIdx, Col: 1},\n\t\t\tend:   endPosOfLine(blockStart.Line+chunkStartLineIdx+len(currentLines)-1, lastLine),\n\t\t})\n\t\tcurrentLines = nil\n\t\tcurrentSize = 0\n\t}\n\n\tfor i, line := range lines {\n\t\taddedSize := len(line)\n\t\tif len(currentLines) \u003e 0 {\n\t\t\taddedSize++\n\t\t}\n\t\tif currentSize+addedSize \u003e maxChunkSize \u0026\u0026 len(currentLines) \u003e 0 {\n\t\t\tflushChunk()\n\t\t\tchunkStartLineIdx = i\n\t\t}\n\t\tif len(line) \u003c= maxChunkSize {\n\t\t\tcurrentLines = append(currentLines, line)\n\t\t\tcurrentSize += addedSize\n\t\t} else {\n\t\t\tflushChunk()\n\t\t\tlineStart := Position{Line: blockStart.Line + i, Col: 1}\n\t\t\tchunks = append(chunks, splitByCharacters(line, lineStart, maxChunkSize, characterSplitOverlap)...)\n\t\t\tchunkStartLineIdx = i + 1\n\t\t}\n\t}\n\n\tflushChunk()\n\treturn chunks\n}",
-      "contextualizedText": "// internal/chunk/code.go \u003e function splitCodeByLines\n\n// splitCodeByLines splits text into chunks at line boundaries without exceeding\n// maxChunkSize, falling back to character splitting for individual oversized\n// lines. Ported from splitCodeBlockByLines in chunker.ts.\nfunc splitCodeByLines(text string, blockStart Position, maxChunkSize int) []softChunk {\n\tif len(text) \u003c= maxChunkSize {\n\t\tlines := strings.Split(text, \"\\n\")\n\t\tlastLine := lines[len(lines)-1]\n\t\treturn []softChunk{{\n\t\t\ttext:  text,\n\t\t\tstart: blockStart,\n\t\t\tend:   endPosOfLine(blockStart.Line+len(lines)-1, lastLine),\n\t\t}}\n\t}\n\n\tlines := strings.Split(text, \"\\n\")\n\tvar chunks []softChunk\n\tvar currentLines []string\n\tcurrentSize := 0\n\tchunkStartLineIdx := 0\n\n\tflushChunk := func() {\n\t\tif len(currentLines) == 0 {\n\t\t\treturn\n\t\t}\n\t\tchunkText := strings.Join(currentLines, \"\\n\")\n\t\tlastLine := currentLines[len(currentLines)-1]\n\t\tchunks = append(chunks, softChunk{\n\t\t\ttext:  chunkText,\n\t\t\tstart: Position{Line: blockStart.Line + chunkStartLineIdx, Col: 1},\n\t\t\tend:   endPosOfLine(blockStart.Line+chunkStartLineIdx+len(currentLines)-1, lastLine),\n\t\t})\n\t\tcurrentLines = nil\n\t\tcurrentSize = 0\n\t}\n\n\tfor i, line := range lines {\n\t\taddedSize := len(line)\n\t\tif len(currentLines) \u003e 0 {\n\t\t\taddedSize++\n\t\t}\n\t\tif currentSize+addedSize \u003e maxChunkSize \u0026\u0026 len(currentLines) \u003e 0 {\n\t\t\tflushChunk()\n\t\t\tchunkStartLineIdx = i\n\t\t}\n\t\tif len(line) \u003c= maxChunkSize {\n\t\t\tcurrentLines = append(currentLines, line)\n\t\t\tcurrentSize += addedSize\n\t\t} else {\n\t\t\tflushChunk()\n\t\t\tlineStart := Position{Line: blockStart.Line + i, Col: 1}\n\t\t\tchunks = append(chunks, splitByCharacters(line, lineStart, maxChunkSize, characterSplitOverlap)...)\n\t\t\tchunkStartLineIdx = i + 1\n\t\t}\n\t}\n\n\tflushChunk()\n\treturn chunks\n}",
-      "headingContext": "internal/chunk/code.go \u003e function splitCodeByLines",
-      "startLine": 539,
-      "startCol": 1,
-      "endLine": 596,
-      "endCol": 2
+      "start": 16136,
+      "end": 17819
     }
   ]
 }

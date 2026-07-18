@@ -3,67 +3,12 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)",
-      "contextualizedText": "// internal/chunk/breadcrumb_test.go\n\npackage chunk\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)",
-      "headingContext": "internal/chunk/breadcrumb_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 6,
-      "endCol": 2
+      "start": 0,
+      "end": 1344
     },
     {
-      "text": "func TestCodeBreadcrumberEnclosingSpan(t *testing.T) {\n\tsrc := \"const top = 1;\\n\" +\n\t\t\"export function foo() {\\n\" +\n\t\t\"  const x = 1;\\n\" +\n\t\t\"  return x;\\n\" +\n\t\t\"}\\n\"\n\tb, err := NewCodeBreadcrumber([]byte(src), \"typescript\", \"a/b.ts\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\tinside := strings.Index(src, \"const x = 1;\")\n\tif got := b.Breadcrumb(inside, inside+len(\"const x = 1;\")); got != \"a/b.ts \u003e function foo\" {\n\t\tt.Fatalf(\"inside foo: got %q\", got)\n\t}\n\n\ttop := strings.Index(src, \"const top = 1;\")\n\tif got := b.Breadcrumb(top, top+len(\"const top = 1;\")); got != \"a/b.ts\" {\n\t\tt.Fatalf(\"top-level: got %q\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/breadcrumb_test.go \u003e function TestCodeBreadcrumberEnclosingSpan\n\nfunc TestCodeBreadcrumberEnclosingSpan(t *testing.T) {\n\tsrc := \"const top = 1;\\n\" +\n\t\t\"export function foo() {\\n\" +\n\t\t\"  const x = 1;\\n\" +\n\t\t\"  return x;\\n\" +\n\t\t\"}\\n\"\n\tb, err := NewCodeBreadcrumber([]byte(src), \"typescript\", \"a/b.ts\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\n\tinside := strings.Index(src, \"const x = 1;\")\n\tif got := b.Breadcrumb(inside, inside+len(\"const x = 1;\")); got != \"a/b.ts \u003e function foo\" {\n\t\tt.Fatalf(\"inside foo: got %q\", got)\n\t}\n\n\ttop := strings.Index(src, \"const top = 1;\")\n\tif got := b.Breadcrumb(top, top+len(\"const top = 1;\")); got != \"a/b.ts\" {\n\t\tt.Fatalf(\"top-level: got %q\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/breadcrumb_test.go \u003e function TestCodeBreadcrumberEnclosingSpan",
-      "startLine": 8,
-      "startCol": 1,
-      "endLine": 28,
-      "endCol": 2
-    },
-    {
-      "text": "func TestCodeBreadcrumberNested(t *testing.T) {\n\tsrc := \"export class Foo {\\n\" +\n\t\t\"  alpha() {\\n\" +\n\t\t\"    return 1;\\n\" +\n\t\t\"  }\\n\" +\n\t\t\"}\\n\"\n\tb, err := NewCodeBreadcrumber([]byte(src), \"typescript\", \"c.ts\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tinside := strings.Index(src, \"return 1;\")\n\tif got := b.Breadcrumb(inside, inside+len(\"return 1;\")); got != \"c.ts \u003e class Foo \u003e method alpha\" {\n\t\tt.Fatalf(\"nested: got %q\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/breadcrumb_test.go \u003e function TestCodeBreadcrumberNested\n\nfunc TestCodeBreadcrumberNested(t *testing.T) {\n\tsrc := \"export class Foo {\\n\" +\n\t\t\"  alpha() {\\n\" +\n\t\t\"    return 1;\\n\" +\n\t\t\"  }\\n\" +\n\t\t\"}\\n\"\n\tb, err := NewCodeBreadcrumber([]byte(src), \"typescript\", \"c.ts\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tinside := strings.Index(src, \"return 1;\")\n\tif got := b.Breadcrumb(inside, inside+len(\"return 1;\")); got != \"c.ts \u003e class Foo \u003e method alpha\" {\n\t\tt.Fatalf(\"nested: got %q\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/breadcrumb_test.go \u003e function TestCodeBreadcrumberNested",
-      "startLine": 30,
-      "startCol": 1,
-      "endLine": 44,
-      "endCol": 2
-    },
-    {
-      "text": "func TestCodeBreadcrumberUnknownGrammar(t *testing.T) {\n\tb, err := NewCodeBreadcrumber([]byte(\"hello world\"), \"cobol\", \"x.cbl\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif got := b.Breadcrumb(0, 5); got != \"x.cbl\" {\n\t\tt.Fatalf(\"fallback: got %q\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/breadcrumb_test.go \u003e function TestCodeBreadcrumberUnknownGrammar\n\nfunc TestCodeBreadcrumberUnknownGrammar(t *testing.T) {\n\tb, err := NewCodeBreadcrumber([]byte(\"hello world\"), \"cobol\", \"x.cbl\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif got := b.Breadcrumb(0, 5); got != \"x.cbl\" {\n\t\tt.Fatalf(\"fallback: got %q\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/breadcrumb_test.go \u003e function TestCodeBreadcrumberUnknownGrammar",
-      "startLine": 46,
-      "startCol": 1,
-      "endLine": 54,
-      "endCol": 2
-    },
-    {
-      "text": "func TestMarkdownBreadcrumbMatchesChunkMarkdown(t *testing.T) {\n\ttext := \"# Title\\n\\nintro para\\n\\n## Sub\\n\\nbody para\\n\"\n\tchunks := ChunkMarkdown(text, \"doc.md\", TargetChunkSize)\n\tif len(chunks) == 0 {\n\t\tt.Fatal(\"no chunks\")\n\t}\n\tfor _, c := range chunks {\n\t\toff := strings.Index(text, c.Text)\n\t\tif off \u003c 0 {\n\t\t\tt.Fatalf(\"chunk text not found: %q\", c.Text)\n\t\t}\n\t\tif got := MarkdownBreadcrumb(text, \"doc.md\", off); got != c.HeadingContext {\n\t\t\tt.Fatalf(\"breadcrumb mismatch for %q: got %q want %q\", c.Text, got, c.HeadingContext)\n\t\t}\n\t}\n}",
-      "contextualizedText": "// internal/chunk/breadcrumb_test.go \u003e function TestMarkdownBreadcrumbMatchesChunkMarkdown\n\nfunc TestMarkdownBreadcrumbMatchesChunkMarkdown(t *testing.T) {\n\ttext := \"# Title\\n\\nintro para\\n\\n## Sub\\n\\nbody para\\n\"\n\tchunks := ChunkMarkdown(text, \"doc.md\", TargetChunkSize)\n\tif len(chunks) == 0 {\n\t\tt.Fatal(\"no chunks\")\n\t}\n\tfor _, c := range chunks {\n\t\toff := strings.Index(text, c.Text)\n\t\tif off \u003c 0 {\n\t\t\tt.Fatalf(\"chunk text not found: %q\", c.Text)\n\t\t}\n\t\tif got := MarkdownBreadcrumb(text, \"doc.md\", off); got != c.HeadingContext {\n\t\t\tt.Fatalf(\"breadcrumb mismatch for %q: got %q want %q\", c.Text, got, c.HeadingContext)\n\t\t}\n\t}\n}",
-      "headingContext": "internal/chunk/breadcrumb_test.go \u003e function TestMarkdownBreadcrumbMatchesChunkMarkdown",
-      "startLine": 56,
-      "startCol": 1,
-      "endLine": 71,
-      "endCol": 2
-    },
-    {
-      "text": "func TestMarkdownBreadcrumbBeforeAnyHeading(t *testing.T) {\n\ttext := \"intro\\n\\n# H\\n\\nbody\\n\"\n\tif got := MarkdownBreadcrumb(text, \"doc.md\", 0); got != \"doc.md\" {\n\t\tt.Fatalf(\"pre-heading: got %q\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/breadcrumb_test.go \u003e function TestMarkdownBreadcrumbBeforeAnyHeading\n\nfunc TestMarkdownBreadcrumbBeforeAnyHeading(t *testing.T) {\n\ttext := \"intro\\n\\n# H\\n\\nbody\\n\"\n\tif got := MarkdownBreadcrumb(text, \"doc.md\", 0); got != \"doc.md\" {\n\t\tt.Fatalf(\"pre-heading: got %q\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/breadcrumb_test.go \u003e function TestMarkdownBreadcrumbBeforeAnyHeading",
-      "startLine": 73,
-      "startCol": 1,
-      "endLine": 78,
-      "endCol": 2
-    },
-    {
-      "text": "func TestPosFromByteMatchesPositionAtOffset(t *testing.T) {\n\tsrc := \"ab\\ncde\\nf\"\n\toff := strings.Index(src, \"cde\")\n\tgot := PosFromByte([]byte(src), off)\n\twant := positionAtOffset(src, Position{Line: 1, Col: 1}, off)\n\tif got != want {\n\t\tt.Fatalf(\"pos mismatch: got %+v want %+v\", got, want)\n\t}\n\tif got.Line != 2 || got.Col != 1 {\n\t\tt.Fatalf(\"unexpected pos %+v\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/breadcrumb_test.go \u003e function TestPosFromByteMatchesPositionAtOffset\n\nfunc TestPosFromByteMatchesPositionAtOffset(t *testing.T) {\n\tsrc := \"ab\\ncde\\nf\"\n\toff := strings.Index(src, \"cde\")\n\tgot := PosFromByte([]byte(src), off)\n\twant := positionAtOffset(src, Position{Line: 1, Col: 1}, off)\n\tif got != want {\n\t\tt.Fatalf(\"pos mismatch: got %+v want %+v\", got, want)\n\t}\n\tif got.Line != 2 || got.Col != 1 {\n\t\tt.Fatalf(\"unexpected pos %+v\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/breadcrumb_test.go \u003e function TestPosFromByteMatchesPositionAtOffset",
-      "startLine": 80,
-      "startCol": 1,
-      "endLine": 91,
-      "endCol": 2
+      "start": 1346,
+      "end": 2463
     }
   ]
 }

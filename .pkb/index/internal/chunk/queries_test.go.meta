@@ -3,31 +3,8 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport (\n\t\"testing\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
-      "contextualizedText": "// internal/chunk/queries_test.go\n\npackage chunk\n\nimport (\n\t\"testing\"\n\n\ttree_sitter \"github.com/tree-sitter/go-tree-sitter\"\n)",
-      "headingContext": "internal/chunk/queries_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 7,
-      "endCol": 2
-    },
-    {
-      "text": "func TestVendoredQueriesCompile(t *testing.T) {\n\tfor name := range grammars {\n\t\tsrc := queryFor(name)\n\t\tif src == \"\" {\n\t\t\t// A grammar with no vendored tags.scm is chunked by the\n\t\t\t// whole-file cAST sweep instead.\n\t\t\tcontinue\n\t\t}\n\t\tlang := languageFor(name)\n\t\tif lang == nil {\n\t\t\tt.Errorf(\"grammar %q: nil language\", name)\n\t\t\tcontinue\n\t\t}\n\t\tq, qErr := tree_sitter.NewQuery(lang, src)\n\t\tif qErr != nil {\n\t\t\tt.Errorf(\"grammar %q: query failed to compile: %v\", name, qErr)\n\t\t\tcontinue\n\t\t}\n\t\tif q.PatternCount() == 0 {\n\t\t\tt.Errorf(\"grammar %q: query has zero patterns\", name)\n\t\t}\n\t\tq.Close()\n\t}\n}",
-      "contextualizedText": "// internal/chunk/queries_test.go \u003e function TestVendoredQueriesCompile\n\nfunc TestVendoredQueriesCompile(t *testing.T) {\n\tfor name := range grammars {\n\t\tsrc := queryFor(name)\n\t\tif src == \"\" {\n\t\t\t// A grammar with no vendored tags.scm is chunked by the\n\t\t\t// whole-file cAST sweep instead.\n\t\t\tcontinue\n\t\t}\n\t\tlang := languageFor(name)\n\t\tif lang == nil {\n\t\t\tt.Errorf(\"grammar %q: nil language\", name)\n\t\t\tcontinue\n\t\t}\n\t\tq, qErr := tree_sitter.NewQuery(lang, src)\n\t\tif qErr != nil {\n\t\t\tt.Errorf(\"grammar %q: query failed to compile: %v\", name, qErr)\n\t\t\tcontinue\n\t\t}\n\t\tif q.PatternCount() == 0 {\n\t\t\tt.Errorf(\"grammar %q: query has zero patterns\", name)\n\t\t}\n\t\tq.Close()\n\t}\n}",
-      "headingContext": "internal/chunk/queries_test.go \u003e function TestVendoredQueriesCompile",
-      "startLine": 9,
-      "startCol": 1,
-      "endLine": 32,
-      "endCol": 2
-    },
-    {
-      "text": "func TestQueryForUnknownGrammar(t *testing.T) {\n\tif got := queryFor(\"nonexistent\"); got != \"\" {\n\t\tt.Errorf(\"queryFor(unknown) = %q, want empty\", got)\n\t}\n}",
-      "contextualizedText": "// internal/chunk/queries_test.go \u003e function TestQueryForUnknownGrammar\n\nfunc TestQueryForUnknownGrammar(t *testing.T) {\n\tif got := queryFor(\"nonexistent\"); got != \"\" {\n\t\tt.Errorf(\"queryFor(unknown) = %q, want empty\", got)\n\t}\n}",
-      "headingContext": "internal/chunk/queries_test.go \u003e function TestQueryForUnknownGrammar",
-      "startLine": 34,
-      "startCol": 1,
-      "endLine": 38,
-      "endCol": 2
+      "start": 0,
+      "end": 842
     }
   ]
 }

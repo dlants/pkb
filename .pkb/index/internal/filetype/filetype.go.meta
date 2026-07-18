@@ -3,85 +3,12 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "// Package filetype routes a file extension to a FileType (code or text) and,\n// for code, the tree-sitter grammar name used to chunk it. The type also\n// selects which embedding model embeds the file.\npackage filetype\n\nimport (\n\t\"path/filepath\"\n\t\"strings\"\n)",
-      "contextualizedText": "// internal/filetype/filetype.go\n\n// Package filetype routes a file extension to a FileType (code or text) and,\n// for code, the tree-sitter grammar name used to chunk it. The type also\n// selects which embedding model embeds the file.\npackage filetype\n\nimport (\n\t\"path/filepath\"\n\t\"strings\"\n)",
-      "headingContext": "internal/filetype/filetype.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 9,
-      "endCol": 2
+      "start": 0,
+      "end": 1200
     },
     {
-      "text": "// FileType distinguishes prose (text) from source code.\ntype FileType int",
-      "contextualizedText": "// internal/filetype/filetype.go \u003e type FileType\n\n// FileType distinguishes prose (text) from source code.\ntype FileType int",
-      "headingContext": "internal/filetype/filetype.go \u003e type FileType",
-      "startLine": 11,
-      "startCol": 1,
-      "endLine": 12,
-      "endCol": 18
-    },
-    {
-      "text": "const (\n\t// Text is markdown/plaintext/prose, chunked structurally and embedded by\n\t// the text model.\n\tText FileType = iota\n\t// Code is recognized source code, chunked by tree-sitter and embedded by\n\t// the code model.\n\tCode\n)",
-      "contextualizedText": "// internal/filetype/filetype.go\n\nconst (\n\t// Text is markdown/plaintext/prose, chunked structurally and embedded by\n\t// the text model.\n\tText FileType = iota\n\t// Code is recognized source code, chunked by tree-sitter and embedded by\n\t// the code model.\n\tCode\n)",
-      "headingContext": "internal/filetype/filetype.go",
-      "startLine": 14,
-      "startCol": 1,
-      "endLine": 21,
-      "endCol": 2
-    },
-    {
-      "text": "func (t FileType) String() string {\n\tswitch t {\n\tcase Code:\n\t\treturn \"code\"\n\tdefault:\n\t\treturn \"text\"\n\t}\n}",
-      "contextualizedText": "// internal/filetype/filetype.go \u003e method String\n\nfunc (t FileType) String() string {\n\tswitch t {\n\tcase Code:\n\t\treturn \"code\"\n\tdefault:\n\t\treturn \"text\"\n\t}\n}",
-      "headingContext": "internal/filetype/filetype.go \u003e method String",
-      "startLine": 23,
-      "startCol": 1,
-      "endLine": 30,
-      "endCol": 2
-    },
-    {
-      "text": "// Route describes how a file should be handled.\ntype Route struct {\n\tType FileType\n\t// Grammar is the tree-sitter grammar name for code files; empty for text.\n\tGrammar string\n}",
-      "contextualizedText": "// internal/filetype/filetype.go \u003e type Route\n\n// Route describes how a file should be handled.\ntype Route struct {\n\tType FileType\n\t// Grammar is the tree-sitter grammar name for code files; empty for text.\n\tGrammar string\n}",
-      "headingContext": "internal/filetype/filetype.go \u003e type Route",
-      "startLine": 32,
-      "startCol": 1,
-      "endLine": 37,
-      "endCol": 2
-    },
-    {
-      "text": "// codeExts maps recognized source extensions to grammar names.\nvar codeExts = map[string]string{\n\t\".ts\":   \"typescript\",\n\t\".tsx\":  \"tsx\",\n\t\".js\":   \"javascript\",\n\t\".jsx\":  \"javascript\",\n\t\".go\":   \"go\",\n\t\".py\":   \"python\",\n\t\".rs\":   \"rust\",\n\t\".hcl\":  \"hcl\",\n\t\".tf\":   \"hcl\",\n\t\".json\": \"json\",\n\t\".toml\": \"toml\",\n\t\".yaml\": \"yaml\",\n\t\".yml\":  \"yaml\",\n}\n\n// lineComments maps recognized source extensions to their single-line comment\n// prefix. It is used to render chunk metadata (breadcrumb / augmentation) as a\n// comment in the file's own language, which keeps the embedded text in\n// distribution for code embedding models. Extensions without a natural line\n// comment (notably JSON) borrow \"//\" since the text is only ever embedded, never\n// parsed.\nvar lineComments = map[string]string{\n\t\".ts\":   \"//\",\n\t\".tsx\":  \"//\",\n\t\".js\":   \"//\",\n\t\".jsx\":  \"//\",\n\t\".go\":   \"//\",\n\t\".rs\":   \"//\",\n\t\".json\": \"//\",\n\t\".py\":   \"#\",\n\t\".hcl\":  \"#\",\n\t\".tf\":   \"#\",\n\t\".toml\": \"#\",\n\t\".yaml\": \"#\",\n\t\".yml\":  \"#\",\n}",
-      "contextualizedText": "// internal/filetype/filetype.go\n\n// codeExts maps recognized source extensions to grammar names.\nvar codeExts = map[string]string{\n\t\".ts\":   \"typescript\",\n\t\".tsx\":  \"tsx\",\n\t\".js\":   \"javascript\",\n\t\".jsx\":  \"javascript\",\n\t\".go\":   \"go\",\n\t\".py\":   \"python\",\n\t\".rs\":   \"rust\",\n\t\".hcl\":  \"hcl\",\n\t\".tf\":   \"hcl\",\n\t\".json\": \"json\",\n\t\".toml\": \"toml\",\n\t\".yaml\": \"yaml\",\n\t\".yml\":  \"yaml\",\n}\n\n// lineComments maps recognized source extensions to their single-line comment\n// prefix. It is used to render chunk metadata (breadcrumb / augmentation) as a\n// comment in the file's own language, which keeps the embedded text in\n// distribution for code embedding models. Extensions without a natural line\n// comment (notably JSON) borrow \"//\" since the text is only ever embedded, never\n// parsed.\nvar lineComments = map[string]string{\n\t\".ts\":   \"//\",\n\t\".tsx\":  \"//\",\n\t\".js\":   \"//\",\n\t\".jsx\":  \"//\",\n\t\".go\":   \"//\",\n\t\".rs\":   \"//\",\n\t\".json\": \"//\",\n\t\".py\":   \"#\",\n\t\".hcl\":  \"#\",\n\t\".tf\":   \"#\",\n\t\".toml\": \"#\",\n\t\".yaml\": \"#\",\n\t\".yml\":  \"#\",\n}",
-      "headingContext": "internal/filetype/filetype.go",
-      "startLine": 39,
-      "startCol": 1,
-      "endLine": 76,
-      "endCol": 2
-    },
-    {
-      "text": "// LineComment returns the single-line comment prefix for a file path's\n// extension, or \"\" if none is known (e.g. markdown/plaintext).\nfunc LineComment(path string) string {\n\treturn lineComments[strings.ToLower(filepath.Ext(path))]\n}",
-      "contextualizedText": "// internal/filetype/filetype.go \u003e function LineComment\n\n// LineComment returns the single-line comment prefix for a file path's\n// extension, or \"\" if none is known (e.g. markdown/plaintext).\nfunc LineComment(path string) string {\n\treturn lineComments[strings.ToLower(filepath.Ext(path))]\n}",
-      "headingContext": "internal/filetype/filetype.go \u003e function LineComment",
-      "startLine": 78,
-      "startCol": 1,
-      "endLine": 82,
-      "endCol": 2
-    },
-    {
-      "text": "// RouteExt returns the Route for a file extension (including the leading dot).\nfunc RouteExt(ext string) Route {\n\tif grammar, ok := codeExts[strings.ToLower(ext)]; ok {\n\t\treturn Route{Type: Code, Grammar: grammar}\n\t}\n\treturn Route{Type: Text}\n}",
-      "contextualizedText": "// internal/filetype/filetype.go \u003e function RouteExt\n\n// RouteExt returns the Route for a file extension (including the leading dot).\nfunc RouteExt(ext string) Route {\n\tif grammar, ok := codeExts[strings.ToLower(ext)]; ok {\n\t\treturn Route{Type: Code, Grammar: grammar}\n\t}\n\treturn Route{Type: Text}\n}",
-      "headingContext": "internal/filetype/filetype.go \u003e function RouteExt",
-      "startLine": 84,
-      "startCol": 1,
-      "endLine": 90,
-      "endCol": 2
-    },
-    {
-      "text": "// RoutePath returns the Route for a file path based on its extension.\nfunc RoutePath(path string) Route {\n\treturn RouteExt(filepath.Ext(path))\n}",
-      "contextualizedText": "// internal/filetype/filetype.go \u003e function RoutePath\n\n// RoutePath returns the Route for a file path based on its extension.\nfunc RoutePath(path string) Route {\n\treturn RouteExt(filepath.Ext(path))\n}",
-      "headingContext": "internal/filetype/filetype.go \u003e function RoutePath",
-      "startLine": 92,
-      "startCol": 1,
-      "endLine": 95,
-      "endCol": 2
+      "start": 1202,
+      "end": 2474
     }
   ]
 }

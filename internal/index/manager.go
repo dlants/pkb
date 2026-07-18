@@ -116,13 +116,6 @@ func (o *Options) route(path paths.GitRootRelativePath) filetype.FileType {
 	return filetype.RoutePath(string(path)).Type
 }
 
-// grammarFor returns the tree-sitter grammar name for a code path (empty if the
-// extension has no recognized grammar, in which case ChunkCode falls back to
-// line-based chunking).
-func (o *Options) grammarFor(path paths.GitRootRelativePath) string {
-	return filetype.RoutePath(string(path)).Grammar
-}
-
 // textExts is the allowlist of indexable text extensions.
 var textExts = map[string]struct{}{
 	".md":       {},
@@ -586,7 +579,6 @@ func (o *Options) treeIndexed(models []embed.EmbeddingModel) (map[paths.GitRootR
 	return out, nil
 }
 
-
 // syncCache reconciles the derived SQLite store against the mirror tree: it
 // (re)writes any artifact whose blob sha or model differs from the cache and
 // evicts cache rows for artifacts no longer in the tree. It is the single load
@@ -646,7 +638,6 @@ func (o *Options) syncCache(models []embed.EmbeddingModel) error {
 	}
 	return nil
 }
-
 
 // Auto-chunk windowing: a text file's estimated token count (chars/charsPerAutoChunkToken)
 // is compared against autoChunkTokenLimit. Files at or under the limit are sent
@@ -726,7 +717,6 @@ func autoChunkWindows(document string) []string {
 	}
 	return windows
 }
-
 
 // writeFile persists a fully embedded file in a single transaction. The
 // expensive embedding work is already done, so the write is quick. A crash

@@ -3,148 +3,44 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package embed\n\nimport (\n\t\"encoding/json\"\n\t\"io\"\n\t\"net/http\"\n\t\"net/http/httptest\"\n\t\"strings\"\n\t\"testing\"\n)",
-      "contextualizedText": "// internal/embed/voyage_test.go\n\npackage embed\n\nimport (\n\t\"encoding/json\"\n\t\"io\"\n\t\"net/http\"\n\t\"net/http/httptest\"\n\t\"strings\"\n\t\"testing\"\n)",
-      "headingContext": "internal/embed/voyage_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 10,
-      "endCol": 2
+      "start": 0,
+      "end": 1600
     },
     {
-      "text": "func newFakeVoyageServer(t *testing.T, dims int) *httptest.Server {\n\tt.Helper()\n\treturn httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/embeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageEmbeddingRequest\n\t\tif err := json.Unmarshal(body, \u0026req); err != nil {\n\t\t\thttp.Error(w, err.Error(), http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif req.InputType != \"document\" \u0026\u0026 req.InputType != \"query\" {\n\t\t\thttp.Error(w, \"missing input_type\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tvar resp voyageEmbeddingResponse\n\t\tfor i := range req.Input {\n\t\t\tvec := make([]float32, dims)\n\t\t\tfor j := range vec {\n\t\t\t\tvec[j] = float32(i*dims + j)\n\t\t\t}\n\t\t\tresp.Data = append(resp.Data, struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t}{Embedding: vec})\n\t\t}\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function newFakeVoyageServer\n\nfunc newFakeVoyageServer(t *testing.T, dims int) *httptest.Server {\n\tt.Helper()\n\treturn httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/embeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageEmbeddingRequest\n\t\tif err := json.Unmarshal(body, \u0026req); err != nil {\n\t\t\thttp.Error(w, err.Error(), http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif req.InputType != \"document\" \u0026\u0026 req.InputType != \"query\" {\n\t\t\thttp.Error(w, \"missing input_type\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tvar resp voyageEmbeddingResponse\n\t\tfor i := range req.Input {\n\t\t\tvec := make([]float32, dims)\n\t\t\tfor j := range vec {\n\t\t\t\tvec[j] = float32(i*dims + j)\n\t\t\t}\n\t\t\tresp.Data = append(resp.Data, struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t}{Embedding: vec})\n\t\t}\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function newFakeVoyageServer",
-      "startLine": 12,
-      "startCol": 1,
-      "endLine": 42,
-      "endCol": 2
+      "start": 1603,
+      "end": 2026
     },
     {
-      "text": "func TestVoyageEmbed(t *testing.T) {\n\tsrv := newFakeVoyageServer(t, 4)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif m.ModelName() != \"voyage-code-3@4\" {\n\t\tt.Fatalf(\"unexpected name %q\", m.ModelName())\n\t}\n\tif m.Dimensions() != 4 {\n\t\tt.Fatalf(\"unexpected dims %d\", m.Dimensions())\n\t}\n\n\tchunk, err := m.EmbedChunk(\"hello\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunk) != 4 {\n\t\tt.Fatalf(\"expected 4 dims, got %d\", len(chunk))\n\t}\n\n\tq, err := m.EmbedQuery(\"query\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(q) != 4 {\n\t\tt.Fatalf(\"expected 4 dims, got %d\", len(q))\n\t}\n\n\tbatch, err := m.EmbedChunks([]string{\"a\", \"b\", \"c\"})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(batch) != 3 {\n\t\tt.Fatalf(\"expected 3 embeddings, got %d\", len(batch))\n\t}\n\tfor i, e := range batch {\n\t\tif len(e) != 4 {\n\t\t\tt.Fatalf(\"embedding %d: expected 4 dims, got %d\", i, len(e))\n\t\t}\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageEmbed\n\nfunc TestVoyageEmbed(t *testing.T) {\n\tsrv := newFakeVoyageServer(t, 4)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif m.ModelName() != \"voyage-code-3@4\" {\n\t\tt.Fatalf(\"unexpected name %q\", m.ModelName())\n\t}\n\tif m.Dimensions() != 4 {\n\t\tt.Fatalf(\"unexpected dims %d\", m.Dimensions())\n\t}\n\n\tchunk, err := m.EmbedChunk(\"hello\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunk) != 4 {\n\t\tt.Fatalf(\"expected 4 dims, got %d\", len(chunk))\n\t}\n\n\tq, err := m.EmbedQuery(\"query\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(q) != 4 {\n\t\tt.Fatalf(\"expected 4 dims, got %d\", len(q))\n\t}\n\n\tbatch, err := m.EmbedChunks([]string{\"a\", \"b\", \"c\"})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(batch) != 3 {\n\t\tt.Fatalf(\"expected 3 embeddings, got %d\", len(batch))\n\t}\n\tfor i, e := range batch {\n\t\tif len(e) != 4 {\n\t\t\tt.Fatalf(\"embedding %d: expected 4 dims, got %d\", i, len(e))\n\t\t}\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageEmbed",
-      "startLine": 44,
-      "startCol": 1,
-      "endLine": 87,
-      "endCol": 2
+      "start": 2028,
+      "end": 3671
     },
     {
-      "text": "func newFakeVoyageContextServer(t *testing.T, dims int, chunks []string) *httptest.Server {\n\tt.Helper()\n\treturn httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/contextualizedembeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageContextRequest\n\t\tif err := json.Unmarshal(body, \u0026req); err != nil {\n\t\t\thttp.Error(w, err.Error(), http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif !req.EnableAutoChunking {\n\t\t\thttp.Error(w, \"expected enable_auto_chunking\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif len(req.Inputs) != 1 || len(req.Inputs[0]) != 1 {\n\t\t\thttp.Error(w, \"expected a single whole-document input\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tvar resp voyageContextResponse\n\t\tvar group struct {\n\t\t\tData []struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\tText      string    `json:\"text\"`\n\t\t\t} `json:\"data\"`\n\t\t}\n\t\tfor i, text := range chunks {\n\t\t\tvec := make([]float32, dims)\n\t\t\tfor j := range vec {\n\t\t\t\tvec[j] = float32(i*dims + j)\n\t\t\t}\n\t\t\tgroup.Data = append(group.Data, struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\tText      string    `json:\"text\"`\n\t\t\t}{Embedding: vec, Index: i, Text: text})\n\t\t}\n\t\tresp.Data = append(resp.Data, group)\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function newFakeVoyageContextServer\n\nfunc newFakeVoyageContextServer(t *testing.T, dims int, chunks []string) *httptest.Server {\n\tt.Helper()\n\treturn httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/contextualizedembeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageContextRequest\n\t\tif err := json.Unmarshal(body, \u0026req); err != nil {\n\t\t\thttp.Error(w, err.Error(), http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif !req.EnableAutoChunking {\n\t\t\thttp.Error(w, \"expected enable_auto_chunking\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif len(req.Inputs) != 1 || len(req.Inputs[0]) != 1 {\n\t\t\thttp.Error(w, \"expected a single whole-document input\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tvar resp voyageContextResponse\n\t\tvar group struct {\n\t\t\tData []struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\tText      string    `json:\"text\"`\n\t\t\t} `json:\"data\"`\n\t\t}\n\t\tfor i, text := range chunks {\n\t\t\tvec := make([]float32, dims)\n\t\t\tfor j := range vec {\n\t\t\t\tvec[j] = float32(i*dims + j)\n\t\t\t}\n\t\t\tgroup.Data = append(group.Data, struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\tText      string    `json:\"text\"`\n\t\t\t}{Embedding: vec, Index: i, Text: text})\n\t\t}\n\t\tresp.Data = append(resp.Data, group)\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function newFakeVoyageContextServer",
-      "startLine": 89,
-      "startCol": 1,
-      "endLine": 133,
-      "endCol": 2
+      "start": 3674,
+      "end": 5182
     },
     {
-      "text": "func TestVoyageEmbedDocument(t *testing.T) {\n\twant := []string{\"chunk one\", \"chunk two\", \"chunk three\"}\n\tsrv := newFakeVoyageContextServer(t, 4, want)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tchunks, err := m.EmbedDocument(\"some whole document\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != len(want) {\n\t\tt.Fatalf(\"expected %d chunks, got %d\", len(want), len(chunks))\n\t}\n\tfor i, c := range chunks {\n\t\tif c.Text != want[i] {\n\t\t\tt.Fatalf(\"chunk %d: expected text %q, got %q\", i, want[i], c.Text)\n\t\t}\n\t\tif len(c.Embedding) != 4 {\n\t\t\tt.Fatalf(\"chunk %d: expected 4 dims, got %d\", i, len(c.Embedding))\n\t\t}\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocument\n\nfunc TestVoyageEmbedDocument(t *testing.T) {\n\twant := []string{\"chunk one\", \"chunk two\", \"chunk three\"}\n\tsrv := newFakeVoyageContextServer(t, 4, want)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tchunks, err := m.EmbedDocument(\"some whole document\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(chunks) != len(want) {\n\t\tt.Fatalf(\"expected %d chunks, got %d\", len(want), len(chunks))\n\t}\n\tfor i, c := range chunks {\n\t\tif c.Text != want[i] {\n\t\t\tt.Fatalf(\"chunk %d: expected text %q, got %q\", i, want[i], c.Text)\n\t\t}\n\t\tif len(c.Embedding) != 4 {\n\t\t\tt.Fatalf(\"chunk %d: expected 4 dims, got %d\", i, len(c.Embedding))\n\t\t}\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocument",
-      "startLine": 135,
-      "startCol": 1,
-      "endLine": 159,
-      "endCol": 2
+      "start": 5185,
+      "end": 6443
     },
     {
-      "text": "func TestVoyageEmbedDocumentIsContextualModel(t *testing.T) {\n\tm, err := NewVoyage(\"http://example.invalid\", \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, ok := interface{}(m).(ContextualEmbeddingModel); !ok {\n\t\tt.Fatal(\"Voyage should implement ContextualEmbeddingModel\")\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocumentIsContextualModel\n\nfunc TestVoyageEmbedDocumentIsContextualModel(t *testing.T) {\n\tm, err := NewVoyage(\"http://example.invalid\", \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, ok := interface{}(m).(ContextualEmbeddingModel); !ok {\n\t\tt.Fatal(\"Voyage should implement ContextualEmbeddingModel\")\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocumentIsContextualModel",
-      "startLine": 161,
-      "startCol": 1,
-      "endLine": 169,
-      "endCol": 2
+      "start": 6445,
+      "end": 8259
     },
     {
-      "text": "func TestVoyageEmbedDocumentErrorStatus(t *testing.T) {\n\tsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\tw.WriteHeader(http.StatusUnauthorized)\n\t\t_, _ = w.Write([]byte(`{\"detail\":\"bad key\"}`))\n\t}))\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedDocument(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on non-2xx status\")\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocumentErrorStatus\n\nfunc TestVoyageEmbedDocumentErrorStatus(t *testing.T) {\n\tsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\tw.WriteHeader(http.StatusUnauthorized)\n\t\t_, _ = w.Write([]byte(`{\"detail\":\"bad key\"}`))\n\t}))\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedDocument(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on non-2xx status\")\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocumentErrorStatus",
-      "startLine": 171,
-      "startCol": 1,
-      "endLine": 186,
-      "endCol": 2
+      "start": 8262,
+      "end": 9357
     },
     {
-      "text": "func TestVoyageEmbedDocumentDimensionMismatch(t *testing.T) {\n\tsrv := newFakeVoyageContextServer(t, 8, []string{\"a\", \"b\"})\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedDocument(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on dimension mismatch\")\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocumentDimensionMismatch\n\nfunc TestVoyageEmbedDocumentDimensionMismatch(t *testing.T) {\n\tsrv := newFakeVoyageContextServer(t, 8, []string{\"a\", \"b\"})\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedDocument(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on dimension mismatch\")\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageEmbedDocumentDimensionMismatch",
-      "startLine": 188,
-      "startCol": 1,
-      "endLine": 199,
-      "endCol": 2
+      "start": 9360,
+      "end": 10216
     },
     {
-      "text": "func TestVoyageErrorStatus(t *testing.T) {\n\tsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\tw.WriteHeader(http.StatusUnauthorized)\n\t\t_, _ = w.Write([]byte(`{\"detail\":\"bad key\"}`))\n\t}))\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedChunk(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on non-2xx status\")\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageErrorStatus\n\nfunc TestVoyageErrorStatus(t *testing.T) {\n\tsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\tw.WriteHeader(http.StatusUnauthorized)\n\t\t_, _ = w.Write([]byte(`{\"detail\":\"bad key\"}`))\n\t}))\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedChunk(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on non-2xx status\")\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageErrorStatus",
-      "startLine": 201,
-      "startCol": 1,
-      "endLine": 216,
-      "endCol": 2
+      "start": 10219,
+      "end": 11933
     },
     {
-      "text": "func TestVoyageDimensionMismatch(t *testing.T) {\n\tsrv := newFakeVoyageServer(t, 8)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedChunk(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on dimension mismatch\")\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageDimensionMismatch\n\nfunc TestVoyageDimensionMismatch(t *testing.T) {\n\tsrv := newFakeVoyageServer(t, 8)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedChunk(\"x\"); err == nil {\n\t\tt.Fatal(\"expected error on dimension mismatch\")\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageDimensionMismatch",
-      "startLine": 218,
-      "startCol": 1,
-      "endLine": 229,
-      "endCol": 2
-    },
-    {
-      "text": "// capturedContextReq records the shape of one contextualized-endpoint request\n// so tests can assert routing, auto-chunk mode, and batch splitting.\ntype capturedContextReq struct {\n\tinputType  string\n\tautoChunk  bool\n\tgroupSizes []int\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e type capturedContextReq\n\n// capturedContextReq records the shape of one contextualized-endpoint request\n// so tests can assert routing, auto-chunk mode, and batch splitting.\ntype capturedContextReq struct {\n\tinputType  string\n\tautoChunk  bool\n\tgroupSizes []int\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e type capturedContextReq",
-      "startLine": 231,
-      "startCol": 1,
-      "endLine": 237,
-      "endCol": 2
-    },
-    {
-      "text": "// newFakeVoyagePrechunkServer serves /v1/contextualizedembeddings for the\n// pre-chunked (auto-chunk disabled) path, echoing one vector per input chunk\n// and recording each request into captured.\nfunc newFakeVoyagePrechunkServer(t *testing.T, dims int, captured *[]capturedContextReq) *httptest.Server {\n\tt.Helper()\n\treturn httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/contextualizedembeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageContextRequest\n\t\tif err := json.Unmarshal(body, \u0026req); err != nil {\n\t\t\thttp.Error(w, err.Error(), http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\trec := capturedContextReq{inputType: req.InputType, autoChunk: req.EnableAutoChunking}\n\t\tvar resp voyageContextResponse\n\t\tfor gi, group := range req.Inputs {\n\t\t\trec.groupSizes = append(rec.groupSizes, len(group))\n\t\t\tvar g struct {\n\t\t\t\tData []struct {\n\t\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\t\tText      string    `json:\"text\"`\n\t\t\t\t} `json:\"data\"`\n\t\t\t}\n\t\t\tfor ci, text := range group {\n\t\t\t\tvec := make([]float32, dims)\n\t\t\t\tfor j := range vec {\n\t\t\t\t\tvec[j] = float32(gi*dims + ci + j)\n\t\t\t\t}\n\t\t\t\tg.Data = append(g.Data, struct {\n\t\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\t\tText      string    `json:\"text\"`\n\t\t\t\t}{Embedding: vec, Index: ci, Text: text})\n\t\t\t}\n\t\t\tresp.Data = append(resp.Data, g)\n\t\t}\n\t\t*captured = append(*captured, rec)\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function newFakeVoyagePrechunkServer\n\n// newFakeVoyagePrechunkServer serves /v1/contextualizedembeddings for the\n// pre-chunked (auto-chunk disabled) path, echoing one vector per input chunk\n// and recording each request into captured.\nfunc newFakeVoyagePrechunkServer(t *testing.T, dims int, captured *[]capturedContextReq) *httptest.Server {\n\tt.Helper()\n\treturn httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/contextualizedembeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageContextRequest\n\t\tif err := json.Unmarshal(body, \u0026req); err != nil {\n\t\t\thttp.Error(w, err.Error(), http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\trec := capturedContextReq{inputType: req.InputType, autoChunk: req.EnableAutoChunking}\n\t\tvar resp voyageContextResponse\n\t\tfor gi, group := range req.Inputs {\n\t\t\trec.groupSizes = append(rec.groupSizes, len(group))\n\t\t\tvar g struct {\n\t\t\t\tData []struct {\n\t\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\t\tText      string    `json:\"text\"`\n\t\t\t\t} `json:\"data\"`\n\t\t\t}\n\t\t\tfor ci, text := range group {\n\t\t\t\tvec := make([]float32, dims)\n\t\t\t\tfor j := range vec {\n\t\t\t\t\tvec[j] = float32(gi*dims + ci + j)\n\t\t\t\t}\n\t\t\t\tg.Data = append(g.Data, struct {\n\t\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t\t\tIndex     int       `json:\"index\"`\n\t\t\t\t\tText      string    `json:\"text\"`\n\t\t\t\t}{Embedding: vec, Index: ci, Text: text})\n\t\t\t}\n\t\t\tresp.Data = append(resp.Data, g)\n\t\t}\n\t\t*captured = append(*captured, rec)\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function newFakeVoyagePrechunkServer",
-      "startLine": 239,
-      "startCol": 1,
-      "endLine": 283,
-      "endCol": 2
-    },
-    {
-      "text": "func TestVoyageContextModelRoutesChunks(t *testing.T) {\n\tvar captured []capturedContextReq\n\tsrv := newFakeVoyagePrechunkServer(t, 4, \u0026captured)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tbatch, err := m.EmbedChunks([]string{\"a\", \"b\", \"c\"})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(batch) != 3 {\n\t\tt.Fatalf(\"expected 3 embeddings, got %d\", len(batch))\n\t}\n\tfor i, e := range batch {\n\t\tif len(e) != 4 {\n\t\t\tt.Fatalf(\"embedding %d: expected 4 dims, got %d\", i, len(e))\n\t\t}\n\t}\n\tif len(captured) != 1 {\n\t\tt.Fatalf(\"expected 1 request, got %d\", len(captured))\n\t}\n\treq := captured[0]\n\tif req.autoChunk {\n\t\tt.Fatal(\"expected auto-chunking disabled for pre-chunked code path\")\n\t}\n\tif req.inputType != \"document\" {\n\t\tt.Fatalf(\"expected input_type document, got %q\", req.inputType)\n\t}\n\tif len(req.groupSizes) != 3 {\n\t\tt.Fatalf(\"expected 3 single-chunk groups, got %v\", req.groupSizes)\n\t}\n\tfor _, sz := range req.groupSizes {\n\t\tif sz != 1 {\n\t\t\tt.Fatalf(\"expected isolated single-chunk groups, got %v\", req.groupSizes)\n\t\t}\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageContextModelRoutesChunks\n\nfunc TestVoyageContextModelRoutesChunks(t *testing.T) {\n\tvar captured []capturedContextReq\n\tsrv := newFakeVoyagePrechunkServer(t, 4, \u0026captured)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tbatch, err := m.EmbedChunks([]string{\"a\", \"b\", \"c\"})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(batch) != 3 {\n\t\tt.Fatalf(\"expected 3 embeddings, got %d\", len(batch))\n\t}\n\tfor i, e := range batch {\n\t\tif len(e) != 4 {\n\t\t\tt.Fatalf(\"embedding %d: expected 4 dims, got %d\", i, len(e))\n\t\t}\n\t}\n\tif len(captured) != 1 {\n\t\tt.Fatalf(\"expected 1 request, got %d\", len(captured))\n\t}\n\treq := captured[0]\n\tif req.autoChunk {\n\t\tt.Fatal(\"expected auto-chunking disabled for pre-chunked code path\")\n\t}\n\tif req.inputType != \"document\" {\n\t\tt.Fatalf(\"expected input_type document, got %q\", req.inputType)\n\t}\n\tif len(req.groupSizes) != 3 {\n\t\tt.Fatalf(\"expected 3 single-chunk groups, got %v\", req.groupSizes)\n\t}\n\tfor _, sz := range req.groupSizes {\n\t\tif sz != 1 {\n\t\t\tt.Fatalf(\"expected isolated single-chunk groups, got %v\", req.groupSizes)\n\t\t}\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageContextModelRoutesChunks",
-      "startLine": 285,
-      "startCol": 1,
-      "endLine": 324,
-      "endCol": 2
-    },
-    {
-      "text": "func TestVoyageContextModelEmbedQuery(t *testing.T) {\n\tvar captured []capturedContextReq\n\tsrv := newFakeVoyagePrechunkServer(t, 4, \u0026captured)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tq, err := m.EmbedQuery(\"some query\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(q) != 4 {\n\t\tt.Fatalf(\"expected 4 dims, got %d\", len(q))\n\t}\n\tif len(captured) != 1 {\n\t\tt.Fatalf(\"expected 1 request, got %d\", len(captured))\n\t}\n\tif captured[0].inputType != \"query\" {\n\t\tt.Fatalf(\"expected input_type query, got %q\", captured[0].inputType)\n\t}\n\tif captured[0].autoChunk {\n\t\tt.Fatal(\"expected auto-chunking disabled for query\")\n\t}\n\tif len(captured[0].groupSizes) != 1 || captured[0].groupSizes[0] != 1 {\n\t\tt.Fatalf(\"expected a single single-chunk group, got %v\", captured[0].groupSizes)\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageContextModelEmbedQuery\n\nfunc TestVoyageContextModelEmbedQuery(t *testing.T) {\n\tvar captured []capturedContextReq\n\tsrv := newFakeVoyagePrechunkServer(t, 4, \u0026captured)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tq, err := m.EmbedQuery(\"some query\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(q) != 4 {\n\t\tt.Fatalf(\"expected 4 dims, got %d\", len(q))\n\t}\n\tif len(captured) != 1 {\n\t\tt.Fatalf(\"expected 1 request, got %d\", len(captured))\n\t}\n\tif captured[0].inputType != \"query\" {\n\t\tt.Fatalf(\"expected input_type query, got %q\", captured[0].inputType)\n\t}\n\tif captured[0].autoChunk {\n\t\tt.Fatal(\"expected auto-chunking disabled for query\")\n\t}\n\tif len(captured[0].groupSizes) != 1 || captured[0].groupSizes[0] != 1 {\n\t\tt.Fatalf(\"expected a single single-chunk group, got %v\", captured[0].groupSizes)\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageContextModelEmbedQuery",
-      "startLine": 326,
-      "startCol": 1,
-      "endLine": 354,
-      "endCol": 2
-    },
-    {
-      "text": "func TestVoyageContextModelSplitsLargeBatch(t *testing.T) {\n\tvar captured []capturedContextReq\n\tsrv := newFakeVoyagePrechunkServer(t, 4, \u0026captured)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\t// Each chunk is 2/3 of the per-request char budget, so at most one chunk\n\t// fits per request and the batch must split into one request per chunk.\n\tbig := strings.Repeat(\"x\", voyageContextMaxBatchChars*2/3)\n\tchunks := []string{big, big, big}\n\tbatch, err := m.EmbedChunks(chunks)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(batch) != len(chunks) {\n\t\tt.Fatalf(\"expected %d embeddings, got %d\", len(chunks), len(batch))\n\t}\n\tif len(captured) != len(chunks) {\n\t\tt.Fatalf(\"expected %d split requests, got %d\", len(chunks), len(captured))\n\t}\n\ttotal := 0\n\tfor _, req := range captured {\n\t\ttotal += len(req.groupSizes)\n\t}\n\tif total != len(chunks) {\n\t\tt.Fatalf(\"expected %d total groups across requests, got %d\", len(chunks), total)\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageContextModelSplitsLargeBatch\n\nfunc TestVoyageContextModelSplitsLargeBatch(t *testing.T) {\n\tvar captured []capturedContextReq\n\tsrv := newFakeVoyagePrechunkServer(t, 4, \u0026captured)\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-context-4\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\t// Each chunk is 2/3 of the per-request char budget, so at most one chunk\n\t// fits per request and the batch must split into one request per chunk.\n\tbig := strings.Repeat(\"x\", voyageContextMaxBatchChars*2/3)\n\tchunks := []string{big, big, big}\n\tbatch, err := m.EmbedChunks(chunks)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif len(batch) != len(chunks) {\n\t\tt.Fatalf(\"expected %d embeddings, got %d\", len(chunks), len(batch))\n\t}\n\tif len(captured) != len(chunks) {\n\t\tt.Fatalf(\"expected %d split requests, got %d\", len(chunks), len(captured))\n\t}\n\ttotal := 0\n\tfor _, req := range captured {\n\t\ttotal += len(req.groupSizes)\n\t}\n\tif total != len(chunks) {\n\t\tt.Fatalf(\"expected %d total groups across requests, got %d\", len(chunks), total)\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageContextModelSplitsLargeBatch",
-      "startLine": 356,
-      "startCol": 1,
-      "endLine": 386,
-      "endCol": 2
-    },
-    {
-      "text": "func TestVoyageStandardModelUsesEmbeddingsEndpoint(t *testing.T) {\n\tvar contextHit bool\n\tsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif strings.HasSuffix(r.URL.Path, \"/v1/contextualizedembeddings\") {\n\t\t\tcontextHit = true\n\t\t\thttp.Error(w, \"context endpoint should not be hit\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/embeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageEmbeddingRequest\n\t\t_ = json.Unmarshal(body, \u0026req)\n\t\tvar resp voyageEmbeddingResponse\n\t\tfor range req.Input {\n\t\t\tresp.Data = append(resp.Data, struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t}{Embedding: make([]float32, 4)})\n\t\t}\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedChunks([]string{\"a\", \"b\"}); err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif contextHit {\n\t\tt.Fatal(\"standard model must not use the contextualized endpoint\")\n\t}\n}",
-      "contextualizedText": "// internal/embed/voyage_test.go \u003e function TestVoyageStandardModelUsesEmbeddingsEndpoint\n\nfunc TestVoyageStandardModelUsesEmbeddingsEndpoint(t *testing.T) {\n\tvar contextHit bool\n\tsrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tif strings.HasSuffix(r.URL.Path, \"/v1/contextualizedembeddings\") {\n\t\t\tcontextHit = true\n\t\t\thttp.Error(w, \"context endpoint should not be hit\", http.StatusBadRequest)\n\t\t\treturn\n\t\t}\n\t\tif !strings.HasSuffix(r.URL.Path, \"/v1/embeddings\") {\n\t\t\thttp.Error(w, \"not found\", http.StatusNotFound)\n\t\t\treturn\n\t\t}\n\t\tbody, _ := io.ReadAll(r.Body)\n\t\tvar req voyageEmbeddingRequest\n\t\t_ = json.Unmarshal(body, \u0026req)\n\t\tvar resp voyageEmbeddingResponse\n\t\tfor range req.Input {\n\t\t\tresp.Data = append(resp.Data, struct {\n\t\t\t\tEmbedding []float32 `json:\"embedding\"`\n\t\t\t}{Embedding: make([]float32, 4)})\n\t\t}\n\t\tw.Header().Set(\"Content-Type\", \"application/json\")\n\t\t_ = json.NewEncoder(w).Encode(resp)\n\t}))\n\tdefer srv.Close()\n\n\tm, err := NewVoyage(srv.URL, \"VOYAGE_API_KEY\", \"voyage-code-3\", 4)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif _, err := m.EmbedChunks([]string{\"a\", \"b\"}); err != nil {\n\t\tt.Fatal(err)\n\t}\n\tif contextHit {\n\t\tt.Fatal(\"standard model must not use the contextualized endpoint\")\n\t}\n}",
-      "headingContext": "internal/embed/voyage_test.go \u003e function TestVoyageStandardModelUsesEmbeddingsEndpoint",
-      "startLine": 388,
-      "startCol": 1,
-      "endLine": 424,
-      "endCol": 2
+      "start": 11936,
+      "end": 12208
     }
   ]
 }

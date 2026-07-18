@@ -3,58 +3,12 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package config\n\nimport (\n\t\"os\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t\"github.com/stretchr/testify/require\"\n)",
-      "contextualizedText": "// internal/config/config_test.go\n\npackage config\n\nimport (\n\t\"os\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t\"github.com/stretchr/testify/require\"\n)",
-      "headingContext": "internal/config/config_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 9,
-      "endCol": 2
+      "start": 0,
+      "end": 1520
     },
     {
-      "text": "func TestMissingConfigReturnsDefaults(t *testing.T) {\n\tcfg, err := Load(t.TempDir())\n\trequire.NoError(t, err)\n\trequire.Equal(t, Default(), cfg)\n}",
-      "contextualizedText": "// internal/config/config_test.go \u003e function TestMissingConfigReturnsDefaults\n\nfunc TestMissingConfigReturnsDefaults(t *testing.T) {\n\tcfg, err := Load(t.TempDir())\n\trequire.NoError(t, err)\n\trequire.Equal(t, Default(), cfg)\n}",
-      "headingContext": "internal/config/config_test.go \u003e function TestMissingConfigReturnsDefaults",
-      "startLine": 11,
-      "startCol": 1,
-      "endLine": 15,
-      "endCol": 2
-    },
-    {
-      "text": "func TestLoadMergesOverDefaults(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \"pkb.toml\"), []byte(`\n[embedding]\nprovider = \"voyage\"\nmodel = \"my-model\"\ndimensions = 512\n`), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"my-model\", cfg.Embedding.Model)\n\trequire.Equal(t, 512, cfg.Embedding.Dimensions)\n}",
-      "contextualizedText": "// internal/config/config_test.go \u003e function TestLoadMergesOverDefaults\n\nfunc TestLoadMergesOverDefaults(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \"pkb.toml\"), []byte(`\n[embedding]\nprovider = \"voyage\"\nmodel = \"my-model\"\ndimensions = 512\n`), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"my-model\", cfg.Embedding.Model)\n\trequire.Equal(t, 512, cfg.Embedding.Dimensions)\n}",
-      "headingContext": "internal/config/config_test.go \u003e function TestLoadMergesOverDefaults",
-      "startLine": 17,
-      "startCol": 1,
-      "endLine": 30,
-      "endCol": 2
-    },
-    {
-      "text": "func TestLoadHTTPFields(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \"pkb.toml\"), []byte(`\n[embedding]\nprovider = \"voyage\"\nmodel = \"voyage-context-3\"\ndimensions = 256\nbaseurl = \"https://api.voyageai.com\"\napikeyenv = \"VOYAGE_API_KEY\"\n`), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"https://api.voyageai.com\", cfg.Embedding.BaseURL)\n\trequire.Equal(t, \"VOYAGE_API_KEY\", cfg.Embedding.APIKeyEnv)\n}",
-      "contextualizedText": "// internal/config/config_test.go \u003e function TestLoadHTTPFields\n\nfunc TestLoadHTTPFields(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \"pkb.toml\"), []byte(`\n[embedding]\nprovider = \"voyage\"\nmodel = \"voyage-context-3\"\ndimensions = 256\nbaseurl = \"https://api.voyageai.com\"\napikeyenv = \"VOYAGE_API_KEY\"\n`), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"https://api.voyageai.com\", cfg.Embedding.BaseURL)\n\trequire.Equal(t, \"VOYAGE_API_KEY\", cfg.Embedding.APIKeyEnv)\n}",
-      "headingContext": "internal/config/config_test.go \u003e function TestLoadHTTPFields",
-      "startLine": 32,
-      "startCol": 1,
-      "endLine": 47,
-      "endCol": 2
-    },
-    {
-      "text": "func TestStrayInferenceKeysAreTolerated(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \"pkb.toml\"), []byte(`\n[embedding]\nprovider = \"voyage\"\nmodel = \"voyage-context-3\"\ndimensions = 256\ncontextualizeText = true\n\n[inference]\nprovider = \"openai\"\nmodel = \"gpt-4o-mini\"\n`), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"voyage-context-3\", cfg.Embedding.Model)\n}",
-      "contextualizedText": "// internal/config/config_test.go \u003e function TestStrayInferenceKeysAreTolerated\n\nfunc TestStrayInferenceKeysAreTolerated(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \"pkb.toml\"), []byte(`\n[embedding]\nprovider = \"voyage\"\nmodel = \"voyage-context-3\"\ndimensions = 256\ncontextualizeText = true\n\n[inference]\nprovider = \"openai\"\nmodel = \"gpt-4o-mini\"\n`), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"voyage-context-3\", cfg.Embedding.Model)\n}",
-      "headingContext": "internal/config/config_test.go \u003e function TestStrayInferenceKeysAreTolerated",
-      "startLine": 49,
-      "startCol": 1,
-      "endLine": 66,
-      "endCol": 2
-    },
-    {
-      "text": "func TestNestedConfigPath(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.MkdirAll(filepath.Join(dir, \".pkb\"), 0o755))\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \".pkb\", \"config.toml\"),\n\t\t[]byte(\"[embedding]\\nmodel = \\\"txt\\\"\\n\"), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"txt\", cfg.Embedding.Model)\n}",
-      "contextualizedText": "// internal/config/config_test.go \u003e function TestNestedConfigPath\n\nfunc TestNestedConfigPath(t *testing.T) {\n\tdir := t.TempDir()\n\trequire.NoError(t, os.MkdirAll(filepath.Join(dir, \".pkb\"), 0o755))\n\trequire.NoError(t, os.WriteFile(filepath.Join(dir, \".pkb\", \"config.toml\"),\n\t\t[]byte(\"[embedding]\\nmodel = \\\"txt\\\"\\n\"), 0o644))\n\n\tcfg, err := Load(dir)\n\trequire.NoError(t, err)\n\trequire.Equal(t, \"txt\", cfg.Embedding.Model)\n}",
-      "headingContext": "internal/config/config_test.go \u003e function TestNestedConfigPath",
-      "startLine": 68,
-      "startCol": 1,
-      "endLine": 77,
-      "endCol": 2
+      "start": 1522,
+      "end": 1876
     }
   ]
 }

@@ -3,76 +3,12 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "#!/usr/bin/env python3\n\"\"\"Minimal OpenAI-compatible /v1/embeddings server backed by MLX.\n\nWhy this exists: general-purpose local runners (LM Studio, Ollama) currently\nmisclassify MLX embedding models (e.g. Qwen3-Embedding) as generative LLMs and\nroute them through a text-generation path with no pooling head, so their\n/v1/embeddings endpoint rejects the model. This shim uses the `mlx_embeddings`\nlibrary directly (correct mean/last-token pooling + L2 normalization) and\nexposes it on the OpenAI wire format that pkb's `openai` provider speaks.\n\nSee MLX_EMBEDDINGS.md at the repo root for the full rationale and setup.\n\nRun (no install needed) with uv:\n\n    uvx --with mlx-embeddings --with fastapi --with uvicorn \\\\\n        python scripts/mlx_embed_server.py --port 8788\n\nThen point pkb at it:\n\n    [embedding]\n    provider   = \"openai\"\n    baseurl    = \"http://localhost:8788\"\n    model      = \"mlx-community/Qwen3-Embedding-0.6B-mxfp8\"\n    dimensions = 1024\n\"\"\"\nimport argparse\nimport os\nfrom typing import List, Union\n\nimport mlx.core as mx\nimport uvicorn\nfrom fastapi import FastAPI\nfrom mlx_embeddings import generate, load\nfrom pydantic import BaseModel\n\nDEFAULT_MODEL = \"mlx-community/Qwen3-Embedding-0.6B-mxfp8\"\nMODEL = os.environ.get(\"MLX_EMBED_MODEL\", DEFAULT_MODEL)\n# Cap how many texts are run through the model at once. Peak memory scales with\n# batch_size * seq_len^2 (attention), and the batch is padded to its longest\n# member, so an unbounded batch with one long chunk can balloon RSS into tens of\n# GB. Sub-batching keeps the working set small and steady.\nMAX_BATCH = int(os.environ.get(\"MLX_EMBED_MAX_BATCH\", \"8\"))\n\napp = FastAPI()\nprint(f\"loading {MODEL} ...\", flush=True)\n_model, _tokenizer = load(MODEL)\nprint(\"model loaded\", flush=True)",
-      "contextualizedText": "# scripts/mlx_embed_server.py\n\n#!/usr/bin/env python3\n\"\"\"Minimal OpenAI-compatible /v1/embeddings server backed by MLX.\n\nWhy this exists: general-purpose local runners (LM Studio, Ollama) currently\nmisclassify MLX embedding models (e.g. Qwen3-Embedding) as generative LLMs and\nroute them through a text-generation path with no pooling head, so their\n/v1/embeddings endpoint rejects the model. This shim uses the `mlx_embeddings`\nlibrary directly (correct mean/last-token pooling + L2 normalization) and\nexposes it on the OpenAI wire format that pkb's `openai` provider speaks.\n\nSee MLX_EMBEDDINGS.md at the repo root for the full rationale and setup.\n\nRun (no install needed) with uv:\n\n    uvx --with mlx-embeddings --with fastapi --with uvicorn \\\\\n        python scripts/mlx_embed_server.py --port 8788\n\nThen point pkb at it:\n\n    [embedding]\n    provider   = \"openai\"\n    baseurl    = \"http://localhost:8788\"\n    model      = \"mlx-community/Qwen3-Embedding-0.6B-mxfp8\"\n    dimensions = 1024\n\"\"\"\nimport argparse\nimport os\nfrom typing import List, Union\n\nimport mlx.core as mx\nimport uvicorn\nfrom fastapi import FastAPI\nfrom mlx_embeddings import generate, load\nfrom pydantic import BaseModel\n\nDEFAULT_MODEL = \"mlx-community/Qwen3-Embedding-0.6B-mxfp8\"\nMODEL = os.environ.get(\"MLX_EMBED_MODEL\", DEFAULT_MODEL)\n# Cap how many texts are run through the model at once. Peak memory scales with\n# batch_size * seq_len^2 (attention), and the batch is padded to its longest\n# member, so an unbounded batch with one long chunk can balloon RSS into tens of\n# GB. Sub-batching keeps the working set small and steady.\nMAX_BATCH = int(os.environ.get(\"MLX_EMBED_MAX_BATCH\", \"8\"))\n\napp = FastAPI()\nprint(f\"loading {MODEL} ...\", flush=True)\n_model, _tokenizer = load(MODEL)\nprint(\"model loaded\", flush=True)",
-      "headingContext": "scripts/mlx_embed_server.py",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 47,
-      "endCol": 34
+      "start": 0,
+      "end": 1854
     },
     {
-      "text": "class EmbeddingRequest(BaseModel):\n    input: Union[str, List[str]]\n    model: str = MODEL",
-      "contextualizedText": "# scripts/mlx_embed_server.py \u003e class EmbeddingRequest\n\nclass EmbeddingRequest(BaseModel):\n    input: Union[str, List[str]]\n    model: str = MODEL",
-      "headingContext": "scripts/mlx_embed_server.py \u003e class EmbeddingRequest",
-      "startLine": 50,
-      "startCol": 1,
-      "endLine": 52,
-      "endCol": 23
-    },
-    {
-      "text": "@app.get(\"/v1/models\")",
-      "contextualizedText": "# scripts/mlx_embed_server.py\n\n@app.get(\"/v1/models\")",
-      "headingContext": "scripts/mlx_embed_server.py",
-      "startLine": 55,
-      "startCol": 1,
-      "endLine": 55,
-      "endCol": 23
-    },
-    {
-      "text": "def list_models():\n    return {\"object\": \"list\", \"data\": [{\"id\": MODEL, \"object\": \"model\", \"owned_by\": \"mlx\"}]}",
-      "contextualizedText": "# scripts/mlx_embed_server.py \u003e function list_models\n\ndef list_models():\n    return {\"object\": \"list\", \"data\": [{\"id\": MODEL, \"object\": \"model\", \"owned_by\": \"mlx\"}]}",
-      "headingContext": "scripts/mlx_embed_server.py \u003e function list_models",
-      "startLine": 56,
-      "startCol": 1,
-      "endLine": 57,
-      "endCol": 93
-    },
-    {
-      "text": "@app.post(\"/v1/embeddings\")",
-      "contextualizedText": "# scripts/mlx_embed_server.py\n\n@app.post(\"/v1/embeddings\")",
-      "headingContext": "scripts/mlx_embed_server.py",
-      "startLine": 60,
-      "startCol": 1,
-      "endLine": 60,
-      "endCol": 28
-    },
-    {
-      "text": "def create_embeddings(req: EmbeddingRequest):\n    texts = [req.input] if isinstance(req.input, str) else req.input\n    vectors = []\n    for start in range(0, len(texts), MAX_BATCH):\n        batch = texts[start : start + MAX_BATCH]\n        out = generate(_model, _tokenizer, texts=batch)\n        vectors.extend(out.text_embeds.tolist())\n        # MLX retains freed buffers in a cache that otherwise grows unbounded\n        # across requests; release them so RSS tracks the live working set.\n        del out\n        mx.clear_cache()\n    data = [\n        {\"object\": \"embedding\", \"index\": i, \"embedding\": vec}\n        for i, vec in enumerate(vectors)\n    ]\n    return {\n        \"object\": \"list\",\n        \"data\": data,\n        \"model\": req.model,\n        \"usage\": {\"prompt_tokens\": 0, \"total_tokens\": 0},\n    }",
-      "contextualizedText": "# scripts/mlx_embed_server.py \u003e function create_embeddings\n\ndef create_embeddings(req: EmbeddingRequest):\n    texts = [req.input] if isinstance(req.input, str) else req.input\n    vectors = []\n    for start in range(0, len(texts), MAX_BATCH):\n        batch = texts[start : start + MAX_BATCH]\n        out = generate(_model, _tokenizer, texts=batch)\n        vectors.extend(out.text_embeds.tolist())\n        # MLX retains freed buffers in a cache that otherwise grows unbounded\n        # across requests; release them so RSS tracks the live working set.\n        del out\n        mx.clear_cache()\n    data = [\n        {\"object\": \"embedding\", \"index\": i, \"embedding\": vec}\n        for i, vec in enumerate(vectors)\n    ]\n    return {\n        \"object\": \"list\",\n        \"data\": data,\n        \"model\": req.model,\n        \"usage\": {\"prompt_tokens\": 0, \"total_tokens\": 0},\n    }",
-      "headingContext": "scripts/mlx_embed_server.py \u003e function create_embeddings",
-      "startLine": 61,
-      "startCol": 1,
-      "endLine": 81,
-      "endCol": 6
-    },
-    {
-      "text": "def main():\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument(\"--port\", type=int, default=int(os.environ.get(\"MLX_EMBED_PORT\", \"8788\")))\n    parser.add_argument(\"--host\", default=os.environ.get(\"MLX_EMBED_HOST\", \"127.0.0.1\"))\n    args = parser.parse_args()\n    uvicorn.run(app, host=args.host, port=args.port)",
-      "contextualizedText": "# scripts/mlx_embed_server.py \u003e function main\n\ndef main():\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument(\"--port\", type=int, default=int(os.environ.get(\"MLX_EMBED_PORT\", \"8788\")))\n    parser.add_argument(\"--host\", default=os.environ.get(\"MLX_EMBED_HOST\", \"127.0.0.1\"))\n    args = parser.parse_args()\n    uvicorn.run(app, host=args.host, port=args.port)",
-      "headingContext": "scripts/mlx_embed_server.py \u003e function main",
-      "startLine": 84,
-      "startCol": 1,
-      "endLine": 89,
-      "endCol": 53
-    },
-    {
-      "text": "if __name__ == \"__main__\":\n    main()",
-      "contextualizedText": "# scripts/mlx_embed_server.py\n\nif __name__ == \"__main__\":\n    main()",
-      "headingContext": "scripts/mlx_embed_server.py",
-      "startLine": 92,
-      "startCol": 1,
-      "endLine": 93,
-      "endCol": 11
+      "start": 1857,
+      "end": 3211
     }
   ]
 }

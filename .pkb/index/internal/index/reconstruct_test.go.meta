@@ -3,40 +3,12 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package index\n\nimport (\n\t\"strings\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/paths\"\n)",
-      "contextualizedText": "// internal/index/reconstruct_test.go\n\npackage index\n\nimport (\n\t\"strings\"\n\t\"testing\"\n\n\t\"github.com/dlants/pkb/internal/chunk\"\n\t\"github.com/dlants/pkb/internal/filetype\"\n\t\"github.com/dlants/pkb/internal/paths\"\n)",
-      "headingContext": "internal/index/reconstruct_test.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 10,
-      "endCol": 2
+      "start": 0,
+      "end": 1546
     },
     {
-      "text": "func TestReconstructMarkdownMatchesChunker(t *testing.T) {\n\ttext := \"# Title\\n\\nintro para\\n\\n## Sub\\n\\nbody para\\n\"\n\tpath := paths.GitRootRelativePath(\"doc.md\")\n\tcontent := []byte(text)\n\n\tchunks := chunk.ChunkMarkdown(text, string(path), chunk.TargetChunkSize)\n\trawSpans, err := resolveSpans(path, content, chunks)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tspans := make([]byteSpan, len(rawSpans))\n\tfor i, s := range rawSpans {\n\t\tspans[i] = byteSpan{Start: s[0], End: s[1]}\n\t}\n\n\trecons, err := Reconstruct(path, content, spans)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tcomment := filetype.LineComment(string(path))\n\tfor i, c := range chunks {\n\t\tif recons[i].Text != c.Text {\n\t\t\tt.Fatalf(\"chunk %d text mismatch: %q vs %q\", i, recons[i].Text, c.Text)\n\t\t}\n\t\tif recons[i].HeadingContext != c.HeadingContext {\n\t\t\tt.Fatalf(\"chunk %d breadcrumb: %q vs %q\", i, recons[i].HeadingContext, c.HeadingContext)\n\t\t}\n\t\twant := Contextualize(comment, c.HeadingContext, c.Text)\n\t\tif recons[i].Contextualized != want {\n\t\t\tt.Fatalf(\"chunk %d contextualized: %q vs %q\", i, recons[i].Contextualized, want)\n\t\t}\n\t}\n}",
-      "contextualizedText": "// internal/index/reconstruct_test.go \u003e function TestReconstructMarkdownMatchesChunker\n\nfunc TestReconstructMarkdownMatchesChunker(t *testing.T) {\n\ttext := \"# Title\\n\\nintro para\\n\\n## Sub\\n\\nbody para\\n\"\n\tpath := paths.GitRootRelativePath(\"doc.md\")\n\tcontent := []byte(text)\n\n\tchunks := chunk.ChunkMarkdown(text, string(path), chunk.TargetChunkSize)\n\trawSpans, err := resolveSpans(path, content, chunks)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tspans := make([]byteSpan, len(rawSpans))\n\tfor i, s := range rawSpans {\n\t\tspans[i] = byteSpan{Start: s[0], End: s[1]}\n\t}\n\n\trecons, err := Reconstruct(path, content, spans)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tcomment := filetype.LineComment(string(path))\n\tfor i, c := range chunks {\n\t\tif recons[i].Text != c.Text {\n\t\t\tt.Fatalf(\"chunk %d text mismatch: %q vs %q\", i, recons[i].Text, c.Text)\n\t\t}\n\t\tif recons[i].HeadingContext != c.HeadingContext {\n\t\t\tt.Fatalf(\"chunk %d breadcrumb: %q vs %q\", i, recons[i].HeadingContext, c.HeadingContext)\n\t\t}\n\t\twant := Contextualize(comment, c.HeadingContext, c.Text)\n\t\tif recons[i].Contextualized != want {\n\t\t\tt.Fatalf(\"chunk %d contextualized: %q vs %q\", i, recons[i].Contextualized, want)\n\t\t}\n\t}\n}",
-      "headingContext": "internal/index/reconstruct_test.go \u003e function TestReconstructMarkdownMatchesChunker",
-      "startLine": 12,
-      "startCol": 1,
-      "endLine": 44,
-      "endCol": 2
-    },
-    {
-      "text": "func TestReconstructCodeEnclosingDefinition(t *testing.T) {\n\tsrc := \"package p\\n\\nfunc Outer() {\\n\\tx := 1\\n\\t_ = x\\n}\\n\"\n\tpath := paths.GitRootRelativePath(\"p.go\")\n\tcontent := []byte(src)\n\n\tstart := strings.Index(src, \"x := 1\")\n\tspan := byteSpan{Start: start, End: start + len(\"x := 1\")}\n\n\trecons, err := Reconstruct(path, content, []byteSpan{span})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot := recons[0]\n\tif got.Text != \"x := 1\" {\n\t\tt.Fatalf(\"text: %q\", got.Text)\n\t}\n\tif got.HeadingContext != \"p.go \u003e function Outer\" {\n\t\tt.Fatalf(\"breadcrumb: %q\", got.HeadingContext)\n\t}\n\tif got.Start != chunk.PosFromByte(content, span.Start) {\n\t\tt.Fatalf(\"start pos: %+v\", got.Start)\n\t}\n\twant := Contextualize(filetype.LineComment(\"p.go\"), \"p.go \u003e function Outer\", \"x := 1\")\n\tif got.Contextualized != want {\n\t\tt.Fatalf(\"contextualized: %q vs %q\", got.Contextualized, want)\n\t}\n}",
-      "contextualizedText": "// internal/index/reconstruct_test.go \u003e function TestReconstructCodeEnclosingDefinition\n\nfunc TestReconstructCodeEnclosingDefinition(t *testing.T) {\n\tsrc := \"package p\\n\\nfunc Outer() {\\n\\tx := 1\\n\\t_ = x\\n}\\n\"\n\tpath := paths.GitRootRelativePath(\"p.go\")\n\tcontent := []byte(src)\n\n\tstart := strings.Index(src, \"x := 1\")\n\tspan := byteSpan{Start: start, End: start + len(\"x := 1\")}\n\n\trecons, err := Reconstruct(path, content, []byteSpan{span})\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tgot := recons[0]\n\tif got.Text != \"x := 1\" {\n\t\tt.Fatalf(\"text: %q\", got.Text)\n\t}\n\tif got.HeadingContext != \"p.go \u003e function Outer\" {\n\t\tt.Fatalf(\"breadcrumb: %q\", got.HeadingContext)\n\t}\n\tif got.Start != chunk.PosFromByte(content, span.Start) {\n\t\tt.Fatalf(\"start pos: %+v\", got.Start)\n\t}\n\twant := Contextualize(filetype.LineComment(\"p.go\"), \"p.go \u003e function Outer\", \"x := 1\")\n\tif got.Contextualized != want {\n\t\tt.Fatalf(\"contextualized: %q vs %q\", got.Contextualized, want)\n\t}\n}",
-      "headingContext": "internal/index/reconstruct_test.go \u003e function TestReconstructCodeEnclosingDefinition",
-      "startLine": 46,
-      "startCol": 1,
-      "endLine": 72,
-      "endCol": 2
-    },
-    {
-      "text": "func TestReconstructOutOfRangeSpanFails(t *testing.T) {\n\tpath := paths.GitRootRelativePath(\"p.go\")\n\tcontent := []byte(\"package p\\n\")\n\t_, err := Reconstruct(path, content, []byteSpan{{Start: 0, End: len(content) + 5}})\n\tif err == nil {\n\t\tt.Fatal(\"expected out-of-range error\")\n\t}\n}",
-      "contextualizedText": "// internal/index/reconstruct_test.go \u003e function TestReconstructOutOfRangeSpanFails\n\nfunc TestReconstructOutOfRangeSpanFails(t *testing.T) {\n\tpath := paths.GitRootRelativePath(\"p.go\")\n\tcontent := []byte(\"package p\\n\")\n\t_, err := Reconstruct(path, content, []byteSpan{{Start: 0, End: len(content) + 5}})\n\tif err == nil {\n\t\tt.Fatal(\"expected out-of-range error\")\n\t}\n}",
-      "headingContext": "internal/index/reconstruct_test.go \u003e function TestReconstructOutOfRangeSpanFails",
-      "startLine": 74,
-      "startCol": 1,
-      "endLine": 81,
-      "endCol": 2
+      "start": 1549,
+      "end": 2402
     }
   ]
 }

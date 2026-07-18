@@ -3,148 +3,28 @@
   "modelName": "voyage-context-4@256",
   "chunks": [
     {
-      "text": "package chunk\n\nimport \"strings\"\n\n// TargetChunkSize is the default max chunk size (~500 tokens ≈ 2000 chars).\nconst TargetChunkSize = 2000\n\nconst characterSplitOverlap = 200",
-      "contextualizedText": "// internal/chunk/markdown.go\n\npackage chunk\n\nimport \"strings\"\n\n// TargetChunkSize is the default max chunk size (~500 tokens ≈ 2000 chars).\nconst TargetChunkSize = 2000\n\nconst characterSplitOverlap = 200",
-      "headingContext": "internal/chunk/markdown.go",
-      "startLine": 1,
-      "startCol": 1,
-      "endLine": 8,
-      "endCol": 34
+      "start": 0,
+      "end": 1616
     },
     {
-      "text": "type hardBlock struct {\n\ttext           string\n\tstart          Position\n\tend            Position\n\theadingContext string\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e type hardBlock\n\ntype hardBlock struct {\n\ttext           string\n\tstart          Position\n\tend            Position\n\theadingContext string\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e type hardBlock",
-      "startLine": 10,
-      "startCol": 1,
-      "endLine": 15,
-      "endCol": 2
+      "start": 1619,
+      "end": 3182
     },
     {
-      "text": "type softChunk struct {\n\ttext  string\n\tstart Position\n\tend   Position\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e type softChunk\n\ntype softChunk struct {\n\ttext  string\n\tstart Position\n\tend   Position\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e type softChunk",
-      "startLine": 17,
-      "startCol": 1,
-      "endLine": 21,
-      "endCol": 2
+      "start": 3184,
+      "end": 4482
     },
     {
-      "text": "type paragraph struct {\n\tlines        []string\n\tstartLineIdx int\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e type paragraph\n\ntype paragraph struct {\n\tlines        []string\n\tstartLineIdx int\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e type paragraph",
-      "startLine": 23,
-      "startCol": 1,
-      "endLine": 26,
-      "endCol": 2
+      "start": 4485,
+      "end": 5792
     },
     {
-      "text": "func endPosOfLine(lineNum int, line string) Position {\n\tcol := len(line)\n\tif col == 0 {\n\t\tcol = 1\n\t}\n\treturn Position{Line: lineNum, Col: col}\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function endPosOfLine\n\nfunc endPosOfLine(lineNum int, line string) Position {\n\tcol := len(line)\n\tif col == 0 {\n\t\tcol = 1\n\t}\n\treturn Position{Line: lineNum, Col: col}\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function endPosOfLine",
-      "startLine": 28,
-      "startCol": 1,
-      "endLine": 34,
-      "endCol": 2
+      "start": 5794,
+      "end": 7483
     },
     {
-      "text": "type heading struct {\n\tdepth int\n\ttitle string\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e type heading\n\ntype heading struct {\n\tdepth int\n\ttitle string\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e type heading",
-      "startLine": 36,
-      "startCol": 1,
-      "endLine": 39,
-      "endCol": 2
-    },
-    {
-      "text": "func parseHeading(line string) (heading, bool) {\n\thashCount := 0\n\tfor i := 0; i \u003c len(line) \u0026\u0026 i \u003c 7; i++ {\n\t\tif line[i] == '#' {\n\t\t\thashCount++\n\t\t} else {\n\t\t\tbreak\n\t\t}\n\t}\n\tif hashCount \u003e 0 \u0026\u0026 hashCount \u003c= 6 \u0026\u0026 len(line) \u003e hashCount \u0026\u0026 line[hashCount] == ' ' {\n\t\treturn heading{depth: hashCount, title: strings.TrimSpace(line[hashCount+1:])}, true\n\t}\n\treturn heading{}, false\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function parseHeading\n\nfunc parseHeading(line string) (heading, bool) {\n\thashCount := 0\n\tfor i := 0; i \u003c len(line) \u0026\u0026 i \u003c 7; i++ {\n\t\tif line[i] == '#' {\n\t\t\thashCount++\n\t\t} else {\n\t\t\tbreak\n\t\t}\n\t}\n\tif hashCount \u003e 0 \u0026\u0026 hashCount \u003c= 6 \u0026\u0026 len(line) \u003e hashCount \u0026\u0026 line[hashCount] == ' ' {\n\t\treturn heading{depth: hashCount, title: strings.TrimSpace(line[hashCount+1:])}, true\n\t}\n\treturn heading{}, false\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function parseHeading",
-      "startLine": 41,
-      "startCol": 1,
-      "endLine": 54,
-      "endCol": 2
-    },
-    {
-      "text": "func isCodeFence(line string) bool {\n\treturn strings.HasPrefix(line, \"```\")\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function isCodeFence\n\nfunc isCodeFence(line string) bool {\n\treturn strings.HasPrefix(line, \"```\")\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function isCodeFence",
-      "startLine": 56,
-      "startCol": 1,
-      "endLine": 58,
-      "endCol": 2
-    },
-    {
-      "text": "func getHeadingContext(hierarchy map[int]string) string {\n\tvar parts []string\n\tfor i := 1; i \u003c= 6; i++ {\n\t\tif title, ok := hierarchy[i]; ok \u0026\u0026 title != \"\" {\n\t\t\tparts = append(parts, strings.Repeat(\"#\", i)+\" \"+title)\n\t\t} else {\n\t\t\tbreak\n\t\t}\n\t}\n\treturn strings.Join(parts, \" \u003e \")\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function getHeadingContext\n\nfunc getHeadingContext(hierarchy map[int]string) string {\n\tvar parts []string\n\tfor i := 1; i \u003c= 6; i++ {\n\t\tif title, ok := hierarchy[i]; ok \u0026\u0026 title != \"\" {\n\t\t\tparts = append(parts, strings.Repeat(\"#\", i)+\" \"+title)\n\t\t} else {\n\t\t\tbreak\n\t\t}\n\t}\n\treturn strings.Join(parts, \" \u003e \")\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function getHeadingContext",
-      "startLine": 60,
-      "startCol": 1,
-      "endLine": 70,
-      "endCol": 2
-    },
-    {
-      "text": "func splitIntoHardBlocks(text string) []hardBlock {\n\tlines := strings.Split(text, \"\\n\")\n\tvar blocks []hardBlock\n\thierarchy := map[int]string{}\n\n\tvar currentBlock []string\n\tblockStartLine := 1\n\tblockHeadingContext := \"\"\n\tinCodeBlock := false\n\n\tflushBlock := func(endLineNum int) {\n\t\tif len(currentBlock) \u003e 0 {\n\t\t\tlastLine := currentBlock[len(currentBlock)-1]\n\t\t\tblocks = append(blocks, hardBlock{\n\t\t\t\ttext:           strings.Join(currentBlock, \"\\n\"),\n\t\t\t\tstart:          Position{Line: blockStartLine, Col: 1},\n\t\t\t\tend:            endPosOfLine(endLineNum, lastLine),\n\t\t\t\theadingContext: blockHeadingContext,\n\t\t\t})\n\t\t\tcurrentBlock = nil\n\t\t}\n\t}\n\n\tfor i, line := range lines {\n\t\tlineNum := i + 1\n\n\t\tif isCodeFence(line) {\n\t\t\tinCodeBlock = !inCodeBlock\n\t\t\tcurrentBlock = append(currentBlock, line)\n\t\t\tcontinue\n\t\t}\n\t\tif inCodeBlock {\n\t\t\tcurrentBlock = append(currentBlock, line)\n\t\t\tcontinue\n\t\t}\n\n\t\tif h, ok := parseHeading(line); ok {\n\t\t\tflushBlock(lineNum - 1)\n\t\t\thierarchy[h.depth] = h.title\n\t\t\tfor d := h.depth + 1; d \u003c= 6; d++ {\n\t\t\t\tdelete(hierarchy, d)\n\t\t\t}\n\t\t\tcurrentBlock = []string{line}\n\t\t\tblockStartLine = lineNum\n\t\t\tblockHeadingContext = getHeadingContext(hierarchy)\n\t\t\tcontinue\n\t\t}\n\n\t\tcurrentBlock = append(currentBlock, line)\n\t}\n\n\tflushBlock(len(lines))\n\treturn blocks\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function splitIntoHardBlocks\n\nfunc splitIntoHardBlocks(text string) []hardBlock {\n\tlines := strings.Split(text, \"\\n\")\n\tvar blocks []hardBlock\n\thierarchy := map[int]string{}\n\n\tvar currentBlock []string\n\tblockStartLine := 1\n\tblockHeadingContext := \"\"\n\tinCodeBlock := false\n\n\tflushBlock := func(endLineNum int) {\n\t\tif len(currentBlock) \u003e 0 {\n\t\t\tlastLine := currentBlock[len(currentBlock)-1]\n\t\t\tblocks = append(blocks, hardBlock{\n\t\t\t\ttext:           strings.Join(currentBlock, \"\\n\"),\n\t\t\t\tstart:          Position{Line: blockStartLine, Col: 1},\n\t\t\t\tend:            endPosOfLine(endLineNum, lastLine),\n\t\t\t\theadingContext: blockHeadingContext,\n\t\t\t})\n\t\t\tcurrentBlock = nil\n\t\t}\n\t}\n\n\tfor i, line := range lines {\n\t\tlineNum := i + 1\n\n\t\tif isCodeFence(line) {\n\t\t\tinCodeBlock = !inCodeBlock\n\t\t\tcurrentBlock = append(currentBlock, line)\n\t\t\tcontinue\n\t\t}\n\t\tif inCodeBlock {\n\t\t\tcurrentBlock = append(currentBlock, line)\n\t\t\tcontinue\n\t\t}\n\n\t\tif h, ok := parseHeading(line); ok {\n\t\t\tflushBlock(lineNum - 1)\n\t\t\thierarchy[h.depth] = h.title\n\t\t\tfor d := h.depth + 1; d \u003c= 6; d++ {\n\t\t\t\tdelete(hierarchy, d)\n\t\t\t}\n\t\t\tcurrentBlock = []string{line}\n\t\t\tblockStartLine = lineNum\n\t\t\tblockHeadingContext = getHeadingContext(hierarchy)\n\t\t\tcontinue\n\t\t}\n\n\t\tcurrentBlock = append(currentBlock, line)\n\t}\n\n\tflushBlock(len(lines))\n\treturn blocks\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function splitIntoHardBlocks",
-      "startLine": 72,
-      "startCol": 1,
-      "endLine": 125,
-      "endCol": 2
-    },
-    {
-      "text": "func splitIntoParagraphs(lines []string) []paragraph {\n\tvar paragraphs []paragraph\n\tvar current []string\n\tstartIdx := 0\n\n\tfor i, line := range lines {\n\t\tif strings.TrimSpace(line) == \"\" {\n\t\t\tif len(current) \u003e 0 {\n\t\t\t\tparagraphs = append(paragraphs, paragraph{lines: current, startLineIdx: startIdx})\n\t\t\t\tcurrent = nil\n\t\t\t}\n\t\t\tstartIdx = i + 1\n\t\t} else {\n\t\t\tcurrent = append(current, line)\n\t\t}\n\t}\n\tif len(current) \u003e 0 {\n\t\tparagraphs = append(paragraphs, paragraph{lines: current, startLineIdx: startIdx})\n\t}\n\treturn paragraphs\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function splitIntoParagraphs\n\nfunc splitIntoParagraphs(lines []string) []paragraph {\n\tvar paragraphs []paragraph\n\tvar current []string\n\tstartIdx := 0\n\n\tfor i, line := range lines {\n\t\tif strings.TrimSpace(line) == \"\" {\n\t\t\tif len(current) \u003e 0 {\n\t\t\t\tparagraphs = append(paragraphs, paragraph{lines: current, startLineIdx: startIdx})\n\t\t\t\tcurrent = nil\n\t\t\t}\n\t\t\tstartIdx = i + 1\n\t\t} else {\n\t\t\tcurrent = append(current, line)\n\t\t}\n\t}\n\tif len(current) \u003e 0 {\n\t\tparagraphs = append(paragraphs, paragraph{lines: current, startLineIdx: startIdx})\n\t}\n\treturn paragraphs\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function splitIntoParagraphs",
-      "startLine": 127,
-      "startCol": 1,
-      "endLine": 147,
-      "endCol": 2
-    },
-    {
-      "text": "func positionAtOffset(text string, start Position, offset int) Position {\n\tline := start.Line\n\tcol := start.Col\n\tfor i := 0; i \u003c offset \u0026\u0026 i \u003c len(text); i++ {\n\t\tif text[i] == '\\n' {\n\t\t\tline++\n\t\t\tcol = 1\n\t\t} else {\n\t\t\tcol++\n\t\t}\n\t}\n\treturn Position{Line: line, Col: col}\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function positionAtOffset\n\nfunc positionAtOffset(text string, start Position, offset int) Position {\n\tline := start.Line\n\tcol := start.Col\n\tfor i := 0; i \u003c offset \u0026\u0026 i \u003c len(text); i++ {\n\t\tif text[i] == '\\n' {\n\t\t\tline++\n\t\t\tcol = 1\n\t\t} else {\n\t\t\tcol++\n\t\t}\n\t}\n\treturn Position{Line: line, Col: col}\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function positionAtOffset",
-      "startLine": 149,
-      "startCol": 1,
-      "endLine": 161,
-      "endCol": 2
-    },
-    {
-      "text": "func splitByCharacters(text string, start Position, maxChunkSize, overlap int) []softChunk {\n\tvar chunks []softChunk\n\tstep := maxChunkSize - overlap\n\tif step \u003c= 0 {\n\t\tstep = maxChunkSize\n\t}\n\ti := 0\n\tfor i \u003c len(text) {\n\t\tend := i + maxChunkSize\n\t\tif end \u003e len(text) {\n\t\t\tend = len(text)\n\t\t}\n\t\tchunkText := text[i:end]\n\t\tchunkStart := positionAtOffset(text, start, i)\n\t\tchunkEnd := positionAtOffset(text, start, i+len(chunkText)-1)\n\t\tchunks = append(chunks, softChunk{text: chunkText, start: chunkStart, end: chunkEnd})\n\t\ti += step\n\t}\n\treturn chunks\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function splitByCharacters\n\nfunc splitByCharacters(text string, start Position, maxChunkSize, overlap int) []softChunk {\n\tvar chunks []softChunk\n\tstep := maxChunkSize - overlap\n\tif step \u003c= 0 {\n\t\tstep = maxChunkSize\n\t}\n\ti := 0\n\tfor i \u003c len(text) {\n\t\tend := i + maxChunkSize\n\t\tif end \u003e len(text) {\n\t\t\tend = len(text)\n\t\t}\n\t\tchunkText := text[i:end]\n\t\tchunkStart := positionAtOffset(text, start, i)\n\t\tchunkEnd := positionAtOffset(text, start, i+len(chunkText)-1)\n\t\tchunks = append(chunks, softChunk{text: chunkText, start: chunkStart, end: chunkEnd})\n\t\ti += step\n\t}\n\treturn chunks\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function splitByCharacters",
-      "startLine": 163,
-      "startCol": 1,
-      "endLine": 182,
-      "endCol": 2
-    },
-    {
-      "text": "func softSplitBlock(text string, blockStart Position, maxChunkSize int) []softChunk {\n\tif len(text) \u003c= maxChunkSize {\n\t\tlines := strings.Split(text, \"\\n\")\n\t\tlastLine := lines[len(lines)-1]\n\t\treturn []softChunk{{\n\t\t\ttext:  text,\n\t\t\tstart: blockStart,\n\t\t\tend:   endPosOfLine(blockStart.Line+len(lines)-1, lastLine),\n\t\t}}\n\t}\n\n\tvar chunks []softChunk\n\tlines := strings.Split(text, \"\\n\")\n\tparagraphs := splitIntoParagraphs(lines)\n\n\tvar currentParas []paragraph\n\tcurrentSize := 0\n\n\tflushChunk := func() {\n\t\tif len(currentParas) == 0 {\n\t\t\treturn\n\t\t}\n\t\tvar chunkLines []string\n\t\tfor i, p := range currentParas {\n\t\t\tif i \u003e 0 {\n\t\t\t\tchunkLines = append(chunkLines, \"\")\n\t\t\t}\n\t\t\tchunkLines = append(chunkLines, p.lines...)\n\t\t}\n\t\tstartLine := blockStart.Line + currentParas[0].startLineIdx\n\t\tlastPara := currentParas[len(currentParas)-1]\n\t\tendLineIdx := lastPara.startLineIdx + len(lastPara.lines) - 1\n\t\tendLine := blockStart.Line + endLineIdx\n\t\tchunks = append(chunks, softChunk{\n\t\t\ttext:  strings.Join(chunkLines, \"\\n\"),\n\t\t\tstart: Position{Line: startLine, Col: 1},\n\t\t\tend:   endPosOfLine(endLine, lastPara.lines[len(lastPara.lines)-1]),\n\t\t})\n\t\tcurrentParas = nil\n\t\tcurrentSize = 0\n\t}\n\n\tfor _, para := range paragraphs {\n\t\tparaText := strings.Join(para.lines, \"\\n\")\n\t\taddedSize := len(paraText)\n\t\tif len(currentParas) \u003e 0 {\n\t\t\taddedSize += 2\n\t\t}\n\n\t\tif currentSize+addedSize \u003e maxChunkSize \u0026\u0026 len(currentParas) \u003e 0 {\n\t\t\tflushChunk()\n\t\t}\n\n\t\tif len(paraText) \u003c= maxChunkSize {\n\t\t\tcurrentParas = append(currentParas, para)\n\t\t\tcurrentSize += addedSize\n\t\t} else {\n\t\t\tflushChunk()\n\t\t\tparaStart := Position{Line: blockStart.Line + para.startLineIdx, Col: 1}\n\t\t\tchunks = append(chunks, splitByCharacters(paraText, paraStart, maxChunkSize, characterSplitOverlap)...)\n\t\t}\n\t}\n\n\tflushChunk()\n\treturn chunks\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function softSplitBlock\n\nfunc softSplitBlock(text string, blockStart Position, maxChunkSize int) []softChunk {\n\tif len(text) \u003c= maxChunkSize {\n\t\tlines := strings.Split(text, \"\\n\")\n\t\tlastLine := lines[len(lines)-1]\n\t\treturn []softChunk{{\n\t\t\ttext:  text,\n\t\t\tstart: blockStart,\n\t\t\tend:   endPosOfLine(blockStart.Line+len(lines)-1, lastLine),\n\t\t}}\n\t}\n\n\tvar chunks []softChunk\n\tlines := strings.Split(text, \"\\n\")\n\tparagraphs := splitIntoParagraphs(lines)\n\n\tvar currentParas []paragraph\n\tcurrentSize := 0\n\n\tflushChunk := func() {\n\t\tif len(currentParas) == 0 {\n\t\t\treturn\n\t\t}\n\t\tvar chunkLines []string\n\t\tfor i, p := range currentParas {\n\t\t\tif i \u003e 0 {\n\t\t\t\tchunkLines = append(chunkLines, \"\")\n\t\t\t}\n\t\t\tchunkLines = append(chunkLines, p.lines...)\n\t\t}\n\t\tstartLine := blockStart.Line + currentParas[0].startLineIdx\n\t\tlastPara := currentParas[len(currentParas)-1]\n\t\tendLineIdx := lastPara.startLineIdx + len(lastPara.lines) - 1\n\t\tendLine := blockStart.Line + endLineIdx\n\t\tchunks = append(chunks, softChunk{\n\t\t\ttext:  strings.Join(chunkLines, \"\\n\"),\n\t\t\tstart: Position{Line: startLine, Col: 1},\n\t\t\tend:   endPosOfLine(endLine, lastPara.lines[len(lastPara.lines)-1]),\n\t\t})\n\t\tcurrentParas = nil\n\t\tcurrentSize = 0\n\t}\n\n\tfor _, para := range paragraphs {\n\t\tparaText := strings.Join(para.lines, \"\\n\")\n\t\taddedSize := len(paraText)\n\t\tif len(currentParas) \u003e 0 {\n\t\t\taddedSize += 2\n\t\t}\n\n\t\tif currentSize+addedSize \u003e maxChunkSize \u0026\u0026 len(currentParas) \u003e 0 {\n\t\t\tflushChunk()\n\t\t}\n\n\t\tif len(paraText) \u003c= maxChunkSize {\n\t\t\tcurrentParas = append(currentParas, para)\n\t\t\tcurrentSize += addedSize\n\t\t} else {\n\t\t\tflushChunk()\n\t\t\tparaStart := Position{Line: blockStart.Line + para.startLineIdx, Col: 1}\n\t\t\tchunks = append(chunks, splitByCharacters(paraText, paraStart, maxChunkSize, characterSplitOverlap)...)\n\t\t}\n\t}\n\n\tflushChunk()\n\treturn chunks\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function softSplitBlock",
-      "startLine": 184,
-      "startCol": 1,
-      "endLine": 249,
-      "endCol": 2
-    },
-    {
-      "text": "// MarkdownBreadcrumb returns the heading breadcrumb in effect at byte offset\n// within text: the path context joined with the enclosing header hierarchy\n// (# h1 \u003e ## h2 \u003e ...), matching the HeadingContext ChunkMarkdown attaches to a\n// chunk that begins at that offset. It walks the same heading/code-fence state\n// machine as splitIntoHardBlocks so the reconstruction path reproduces the\n// original breadcrumb from a stored offset without re-chunking. An offset before\n// any heading yields just the path context.\nfunc MarkdownBreadcrumb(text, pathContext string, offset int) string {\n\thierarchy := map[int]string{}\n\thc := \"\"\n\tinCodeBlock := false\n\tpos := 0\n\tfor _, line := range strings.Split(text, \"\\n\") {\n\t\tlineEnd := pos + len(line)\n\t\treached := offset \u003c= lineEnd\n\t\tif isCodeFence(line) {\n\t\t\tinCodeBlock = !inCodeBlock\n\t\t} else if !inCodeBlock {\n\t\t\tif h, ok := parseHeading(line); ok {\n\t\t\t\thierarchy[h.depth] = h.title\n\t\t\t\tfor d := h.depth + 1; d \u003c= 6; d++ {\n\t\t\t\t\tdelete(hierarchy, d)\n\t\t\t\t}\n\t\t\t\thc = getHeadingContext(hierarchy)\n\t\t\t}\n\t\t}\n\t\tif reached {\n\t\t\tbreak\n\t\t}\n\t\tpos = lineEnd + 1\n\t}\n\treturn joinBreadcrumb(pathContext, hc)\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function MarkdownBreadcrumb\n\n// MarkdownBreadcrumb returns the heading breadcrumb in effect at byte offset\n// within text: the path context joined with the enclosing header hierarchy\n// (# h1 \u003e ## h2 \u003e ...), matching the HeadingContext ChunkMarkdown attaches to a\n// chunk that begins at that offset. It walks the same heading/code-fence state\n// machine as splitIntoHardBlocks so the reconstruction path reproduces the\n// original breadcrumb from a stored offset without re-chunking. An offset before\n// any heading yields just the path context.\nfunc MarkdownBreadcrumb(text, pathContext string, offset int) string {\n\thierarchy := map[int]string{}\n\thc := \"\"\n\tinCodeBlock := false\n\tpos := 0\n\tfor _, line := range strings.Split(text, \"\\n\") {\n\t\tlineEnd := pos + len(line)\n\t\treached := offset \u003c= lineEnd\n\t\tif isCodeFence(line) {\n\t\t\tinCodeBlock = !inCodeBlock\n\t\t} else if !inCodeBlock {\n\t\t\tif h, ok := parseHeading(line); ok {\n\t\t\t\thierarchy[h.depth] = h.title\n\t\t\t\tfor d := h.depth + 1; d \u003c= 6; d++ {\n\t\t\t\t\tdelete(hierarchy, d)\n\t\t\t\t}\n\t\t\t\thc = getHeadingContext(hierarchy)\n\t\t\t}\n\t\t}\n\t\tif reached {\n\t\t\tbreak\n\t\t}\n\t\tpos = lineEnd + 1\n\t}\n\treturn joinBreadcrumb(pathContext, hc)\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function MarkdownBreadcrumb",
-      "startLine": 251,
-      "startCol": 1,
-      "endLine": 283,
-      "endCol": 2
-    },
-    {
-      "text": "// ChunkMarkdown splits markdown text into chunks along heading and paragraph\n// boundaries, carrying heading breadcrumbs as HeadingContext. pathContext seeds\n// the breadcrumb (typically the file's relative path) so the file path is part\n// of the embedded context, mirroring ChunkCode.\nfunc ChunkMarkdown(text string, pathContext string, maxChunkSize int) []ChunkInfo {\n\tif maxChunkSize \u003c= 0 {\n\t\tmaxChunkSize = TargetChunkSize\n\t}\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn nil\n\t}\n\n\thardBlocks := splitIntoHardBlocks(text)\n\tvar chunks []ChunkInfo\n\n\tfor _, block := range hardBlocks {\n\t\tblockText := block.text\n\t\tblockStart := block.start\n\t\tfirstLine := strings.SplitN(blockText, \"\\n\", 2)[0]\n\t\tif _, ok := parseHeading(firstLine); ok {\n\t\t\tnewlineIdx := strings.Index(blockText, \"\\n\")\n\t\t\tif newlineIdx != -1 {\n\t\t\t\tblockText = blockText[newlineIdx+1:]\n\t\t\t\tblockStart = Position{Line: block.start.Line + 1, Col: 1}\n\t\t\t} else {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t}\n\n\t\tif strings.TrimSpace(blockText) == \"\" {\n\t\t\tcontinue\n\t\t}\n\n\t\tfor _, sub := range softSplitBlock(blockText, blockStart, maxChunkSize) {\n\t\t\tchunks = append(chunks, ChunkInfo{\n\t\t\t\tText:           sub.text,\n\t\t\t\tHeadingContext: joinBreadcrumb(pathContext, block.headingContext),\n\t\t\t\tStart:          sub.start,\n\t\t\t\tEnd:            sub.end,\n\t\t\t})\n\t\t}\n\t}\n\n\treturn chunks\n}",
-      "contextualizedText": "// internal/chunk/markdown.go \u003e function ChunkMarkdown\n\n// ChunkMarkdown splits markdown text into chunks along heading and paragraph\n// boundaries, carrying heading breadcrumbs as HeadingContext. pathContext seeds\n// the breadcrumb (typically the file's relative path) so the file path is part\n// of the embedded context, mirroring ChunkCode.\nfunc ChunkMarkdown(text string, pathContext string, maxChunkSize int) []ChunkInfo {\n\tif maxChunkSize \u003c= 0 {\n\t\tmaxChunkSize = TargetChunkSize\n\t}\n\tif strings.TrimSpace(text) == \"\" {\n\t\treturn nil\n\t}\n\n\thardBlocks := splitIntoHardBlocks(text)\n\tvar chunks []ChunkInfo\n\n\tfor _, block := range hardBlocks {\n\t\tblockText := block.text\n\t\tblockStart := block.start\n\t\tfirstLine := strings.SplitN(blockText, \"\\n\", 2)[0]\n\t\tif _, ok := parseHeading(firstLine); ok {\n\t\t\tnewlineIdx := strings.Index(blockText, \"\\n\")\n\t\t\tif newlineIdx != -1 {\n\t\t\t\tblockText = blockText[newlineIdx+1:]\n\t\t\t\tblockStart = Position{Line: block.start.Line + 1, Col: 1}\n\t\t\t} else {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t}\n\n\t\tif strings.TrimSpace(blockText) == \"\" {\n\t\t\tcontinue\n\t\t}\n\n\t\tfor _, sub := range softSplitBlock(blockText, blockStart, maxChunkSize) {\n\t\t\tchunks = append(chunks, ChunkInfo{\n\t\t\t\tText:           sub.text,\n\t\t\t\tHeadingContext: joinBreadcrumb(pathContext, block.headingContext),\n\t\t\t\tStart:          sub.start,\n\t\t\t\tEnd:            sub.end,\n\t\t\t})\n\t\t}\n\t}\n\n\treturn chunks\n}",
-      "headingContext": "internal/chunk/markdown.go \u003e function ChunkMarkdown",
-      "startLine": 285,
-      "startCol": 1,
-      "endLine": 329,
-      "endCol": 2
+      "start": 7486,
+      "end": 8247
     }
   ]
 }
