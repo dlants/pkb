@@ -944,9 +944,69 @@ func TestPrepareFileDropsStraddleChunk(t *testing.T) {
 	}
 }
 
+// tokenLimitModel wraps MockModel and rejects any EmbedDocument input larger
+// than Limit bytes with a ContextTokenLimitError, modeling Voyage's per-request
+// token cap so backoff can be exercised without the network.
+type tokenLimitModel struct {
+	*embed.MockModel
+	Limit int
+	calls int
+}
+
+func (m *tokenLimitModel) EmbedDocument(document string) ([]embed.ContextualChunk, error) {
+	m.calls++
+	if len(document) > m.Limit {
+		return nil, &embed.ContextTokenLimitError{
+			Status:  400,
+			Message: "The max allowed tokens per submitted batch is 120000. Your batch has too many tokens.",
+		}
+	}
+	return m.MockModel.EmbedDocument(document)
+}
+
+// TestPrepareFileBacksOffOnTokenLimit verifies that a window rejected for
+// exceeding the token cap is retried as smaller sub-windows until it fits, and
+// that the file is still fully covered afterward.
+func TestPrepareFileBacksOffOnTokenLimit(t *testing.T) {
+	h := newHarness(t)
+	h.write("big.md", largeMarkdown())
+	h.commit("init")
+
+	// A limit below the default window/body budget forces at least one split.
+	model := &tokenLimitModel{MockModel: embed.NewMockModel("mock", 8), Limit: autoChunkBodyBudget / 2}
+	o, st := h.opts(t, model)
+	defer st.Close()
+
+	_, err := Reindex(o)
+	require.NoError(t, err, "over-budget windows must be split and retried, not fail the run")
+	require.Greater(t, model.calls, 1, "backoff must have retried with smaller windows")
+
+	tree := mirror.NewTree(paths.AbsPath(h.root))
+	a, ok, err := tree.TryRead("big.md")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	content, err := o.Repo.CatBlob(a.BlobSha)
+	require.NoError(t, err)
+	require.NotEmpty(t, a.Chunks)
+	minStart, maxEnd := len(content), 0
+	for _, c := range a.Chunks {
+		if int(c.Start) < minStart {
+			minStart = int(c.Start)
+		}
+		if int(c.End) > maxEnd {
+			maxEnd = int(c.End)
+		}
+	}
+	// The accepted chunks span from the head to the tail of the file, so backoff
+	// did not drop a region.
+	require.Less(t, minStart, 100, "coverage starts at the head")
+	require.Greater(t, maxEnd, len(content)-100, "coverage reaches the tail")
+}
+
 func TestAutoChunkWindowsSmallDocument(t *testing.T) {
 	doc := "the whole document fits in one window"
-	windows, err := autoChunkWindows("doc.txt", doc)
+	_, windows, err := autoChunkWindows("doc.txt", doc)
 	require.NoError(t, err)
 	require.Len(t, windows, 1)
 	require.Equal(t, doc, windows[0].input)
@@ -956,7 +1016,7 @@ func TestAutoChunkWindowsSmallDocument(t *testing.T) {
 
 func TestAutoChunkWindowsLargeDocumentBodiesCoverBlob(t *testing.T) {
 	doc := strings.Repeat("abcdefghij", (2*autoChunkMaxWindowByte)/10)
-	windows, err := autoChunkWindows("doc.txt", doc)
+	_, windows, err := autoChunkWindows("doc.txt", doc)
 	require.NoError(t, err)
 	require.Greater(t, len(windows), 1)
 
@@ -998,7 +1058,7 @@ func TestAutoChunkWindowsCodePrefixHasHeadAndBreadcrumb(t *testing.T) {
 	}
 	doc := b.String()
 
-	windows, err := autoChunkWindows("big.go", doc)
+	_, windows, err := autoChunkWindows("big.go", doc)
 	require.NoError(t, err)
 	require.Greater(t, len(windows), 1)
 
@@ -1021,7 +1081,7 @@ func TestAutoChunkWindowsMarkdownPrefixCarriesHeaderHierarchy(t *testing.T) {
 	}
 	doc := b.String()
 
-	windows, err := autoChunkWindows("big.md", doc)
+	_, windows, err := autoChunkWindows("big.md", doc)
 	require.NoError(t, err)
 	require.Greater(t, len(windows), 1)
 

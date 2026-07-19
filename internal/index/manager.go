@@ -6,6 +6,7 @@ package index
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -648,8 +649,10 @@ func (o *Options) syncCache(models []embed.EmbeddingModel) error {
 const (
 	// charsPerAutoChunkToken deliberately underestimates real chars-per-token
 	// (English prose is ~4-5, dense code can be ~3.5) so the byte-sized window
-	// stays comfortably under the endpoint's token cap. Underestimating makes
-	// windows smaller and safer; the only cost is more requests for huge files.
+	// usually stays under the endpoint's token cap on the first try. It is only a
+	// starting estimate: a window that still tokenizes over the cap is retried
+	// with progressively smaller sub-windows (see prepareFile backoff), so a
+	// dense outlier never hard-fails the run.
 	charsPerAutoChunkToken = 3
 	// autoChunkTokenLimit is the per-window token budget. It sits below Voyage's
 	// hard 120000-tokens-per-batch limit so a window never trips the cap even
@@ -700,15 +703,31 @@ func (o *Options) prepareFile(path paths.GitRootRelativePath, blobSha string, cm
 	if err != nil {
 		return nil, err
 	}
-	windows, err := autoChunkWindows(path, string(content))
+	wr, windows, err := autoChunkWindows(path, string(content))
 	if err != nil {
 		return nil, err
 	}
 	pf := &preparedFile{path: path, blobSha: blobSha}
 	var covered coveredRanges
-	for _, w := range windows {
+	// Process windows as a queue so an over-budget window can be replaced in
+	// place by smaller sub-windows (token-limit backoff) before the queue moves
+	// on to the file's remaining default-sized windows.
+	for len(windows) > 0 {
+		w := windows[0]
+		windows = windows[1:]
 		chunks, err := cm.EmbedDocument(w.input)
 		if err != nil {
+			var tle *embed.ContextTokenLimitError
+			if errors.As(err, &tle) {
+				subs, ok, splitErr := wr.split(w)
+				if splitErr != nil {
+					return nil, splitErr
+				}
+				if ok {
+					windows = append(subs, windows...)
+					continue
+				}
+			}
 			return nil, err
 		}
 		input := []byte(w.input)
@@ -819,27 +838,25 @@ func (c *coveredRanges) add(start, end mirror.RawOffset) {
 // embedding. The whole transformed input stays under the per-request cap because
 // bodies are sized against the fixed autoChunkPrefixReserveByte and each real
 // prefix is asserted to fit within that reserve.
-func autoChunkWindows(path paths.GitRootRelativePath, document string) ([]autoChunkWindow, error) {
+func autoChunkWindows(path paths.GitRootRelativePath, document string) (*windower, []autoChunkWindow, error) {
+	wr, err := newWindower(path, document)
+	if err != nil {
+		return nil, nil, err
+	}
 	if len(document) <= autoChunkMaxWindowByte {
-		return []autoChunkWindow{{input: document}}, nil
-	}
-
-	route := filetype.RoutePath(string(path))
-	comment := filetype.LineComment(string(path))
-	isCode := route.Type == filetype.Code
-	var coder *chunk.CodeBreadcrumber
-	if isCode {
-		var err error
-		coder, err = chunk.NewCodeBreadcrumber([]byte(document), route.Grammar, string(path))
+		w, err := wr.window(0, len(document))
 		if err != nil {
-			return nil, fmt.Errorf("index: window %s: %w", path, err)
+			return nil, nil, err
 		}
+		return wr, []autoChunkWindow{w}, nil
 	}
-
-	head := headSection(document)
 
 	// First window: full budget, no prefix (its body already contains the head).
-	windows := []autoChunkWindow{{input: document[:autoChunkMaxWindowByte]}}
+	first, err := wr.window(0, autoChunkMaxWindowByte)
+	if err != nil {
+		return nil, nil, err
+	}
+	windows := []autoChunkWindow{first}
 
 	step := autoChunkBodyBudget - autoChunkOverlapByte
 	for bodyStart := autoChunkMaxWindowByte - autoChunkOverlapByte; bodyStart < len(document); bodyStart += step {
@@ -847,30 +864,105 @@ func autoChunkWindows(path paths.GitRootRelativePath, document string) ([]autoCh
 		if bodyEnd > len(document) {
 			bodyEnd = len(document)
 		}
-		var breadcrumb string
-		if isCode {
-			breadcrumb = coder.Breadcrumb(bodyStart, bodyStart)
-		} else {
-			breadcrumb = chunk.MarkdownBreadcrumb(document, string(path), bodyStart)
+		w, err := wr.window(bodyStart, bodyEnd)
+		if err != nil {
+			return nil, nil, err
 		}
-		prefix := head
-		if breadcrumb != "" {
-			prefix += "\n" + metaBlock(comment, breadcrumb)
-		}
-		prefix += "\n\n"
-		if InputOffset(len(prefix)) > autoChunkPrefixReserveByte {
-			return nil, fmt.Errorf("index: window %s: context prefix of %d bytes exceeds reserve %d", path, len(prefix), autoChunkPrefixReserveByte)
-		}
-		windows = append(windows, autoChunkWindow{
-			input:     prefix + document[bodyStart:bodyEnd],
-			prefixLen: InputOffset(len(prefix)),
-			bodyStart: mirror.RawOffset(bodyStart),
-		})
+		windows = append(windows, w)
 		if bodyEnd == len(document) {
 			break
 		}
 	}
-	return windows, nil
+	return wr, windows, nil
+}
+
+// windower builds autoChunkWindows for arbitrary body ranges of one document.
+// It is captured once per file (parsing the AST / computing the head section
+// eagerly) so both the initial window layout and token-limit backoff splits
+// reuse the same structural context.
+type windower struct {
+	path     paths.GitRootRelativePath
+	document string
+	comment  string
+	isCode   bool
+	coder    *chunk.CodeBreadcrumber
+	head     string
+}
+
+func newWindower(path paths.GitRootRelativePath, document string) (*windower, error) {
+	route := filetype.RoutePath(string(path))
+	isCode := route.Type == filetype.Code
+	var coder *chunk.CodeBreadcrumber
+	if isCode {
+		c, err := chunk.NewCodeBreadcrumber([]byte(document), route.Grammar, string(path))
+		if err != nil {
+			return nil, fmt.Errorf("index: window %s: %w", path, err)
+		}
+		coder = c
+	}
+	return &windower{
+		path:     path,
+		document: document,
+		comment:  filetype.LineComment(string(path)),
+		isCode:   isCode,
+		coder:    coder,
+		head:     headSection(document),
+	}, nil
+}
+
+// window builds the window covering body range [bodyStart, bodyEnd). A body that
+// begins at offset 0 carries no prefix (it already contains the head); any later
+// body is prefixed with the file's head section plus a structural breadcrumb
+// locating the body in the file. The synthetic prefix has no raw preimage and is
+// dropped after embedding.
+func (b *windower) window(bodyStart, bodyEnd int) (autoChunkWindow, error) {
+	if bodyStart == 0 {
+		return autoChunkWindow{input: b.document[:bodyEnd]}, nil
+	}
+	var breadcrumb string
+	if b.isCode {
+		breadcrumb = b.coder.Breadcrumb(bodyStart, bodyStart)
+	} else {
+		breadcrumb = chunk.MarkdownBreadcrumb(b.document, string(b.path), bodyStart)
+	}
+	prefix := b.head
+	if breadcrumb != "" {
+		prefix += "\n" + metaBlock(b.comment, breadcrumb)
+	}
+	prefix += "\n\n"
+	if InputOffset(len(prefix)) > autoChunkPrefixReserveByte {
+		return autoChunkWindow{}, fmt.Errorf("index: window %s: context prefix of %d bytes exceeds reserve %d", b.path, len(prefix), autoChunkPrefixReserveByte)
+	}
+	return autoChunkWindow{
+		input:     prefix + b.document[bodyStart:bodyEnd],
+		prefixLen: InputOffset(len(prefix)),
+		bodyStart: mirror.RawOffset(bodyStart),
+	}, nil
+}
+
+// split divides an over-budget window's body range into two smaller overlapping
+// windows so a token-limit retry fits under the cap. The two bodies overlap by
+// autoChunkOverlapByte so no chunk boundary is lost, and dedup by covered raw
+// range collapses the resulting duplicate chunks. It returns ok=false when the
+// body is already too small to be worth splitting (so the caller surfaces the
+// original token-limit error rather than looping forever); the guard also keeps
+// each sub-body strictly smaller than the input, guaranteeing termination.
+func (b *windower) split(w autoChunkWindow) ([]autoChunkWindow, bool, error) {
+	bodyStart := int(w.bodyStart)
+	bodyEnd := bodyStart + (len(w.input) - int(w.prefixLen))
+	if bodyEnd-bodyStart <= 2*autoChunkOverlapByte {
+		return nil, false, nil
+	}
+	half := (bodyEnd - bodyStart) / 2
+	left, err := b.window(bodyStart, bodyStart+half)
+	if err != nil {
+		return nil, false, err
+	}
+	right, err := b.window(bodyStart+half-autoChunkOverlapByte, bodyEnd)
+	if err != nil {
+		return nil, false, err
+	}
+	return []autoChunkWindow{left, right}, true, nil
 }
 
 // headSection returns the file's leading bytes (at most autoChunkHeadByte),

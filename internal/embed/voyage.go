@@ -43,6 +43,19 @@ type voyageEmbeddingRequest struct {
 // chars/token that is ~96K chars, so we keep a margin.
 const voyageContextMaxBatchChars = 90000
 
+// ContextTokenLimitError reports that a contextualized-endpoint request exceeded
+// the per-request token cap (HTTP 400). It is distinguished from other request
+// errors so callers can retry with a smaller input (e.g. splitting a document
+// window) instead of failing the run.
+type ContextTokenLimitError struct {
+	Status  int
+	Message string
+}
+
+func (e *ContextTokenLimitError) Error() string {
+	return fmt.Sprintf("voyage contextualizedembeddings status %d: %s", e.Status, e.Message)
+}
+
 type voyageContextRequest struct {
 	Model              string     `json:"model"`
 	Inputs             [][]string `json:"inputs"`
@@ -256,14 +269,23 @@ func (v *Voyage) postContext(reqBody voyageContextRequest) (*voyageContextRespon
 		return nil, fmt.Errorf("decoding voyage response (status %d): %w", resp.StatusCode, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var msg string
 		switch {
 		case parsed.Error != nil && parsed.Error.Message != "":
-			return nil, fmt.Errorf("voyage contextualizedembeddings status %d: %s", resp.StatusCode, parsed.Error.Message)
+			msg = parsed.Error.Message
 		case parsed.Detail != "":
-			return nil, fmt.Errorf("voyage contextualizedembeddings status %d: %s", resp.StatusCode, parsed.Detail)
-		default:
-			return nil, fmt.Errorf("voyage contextualizedembeddings status %d", resp.StatusCode)
+			msg = parsed.Detail
 		}
+		// A 400 whose message mentions tokens is the per-request token cap; return
+		// a typed error so the caller can retry with a smaller input rather than
+		// treating it as a fatal request error.
+		if resp.StatusCode == http.StatusBadRequest && strings.Contains(strings.ToLower(msg), "token") {
+			return nil, &ContextTokenLimitError{Status: resp.StatusCode, Message: msg}
+		}
+		if msg != "" {
+			return nil, fmt.Errorf("voyage contextualizedembeddings status %d: %s", resp.StatusCode, msg)
+		}
+		return nil, fmt.Errorf("voyage contextualizedembeddings status %d", resp.StatusCode)
 	}
 	return &parsed, nil
 }
